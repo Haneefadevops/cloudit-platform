@@ -1,0 +1,26 @@
+api:
+  dashboard: true
+  insecure: true
+
+ping:
+  entryPoint: "traefik"
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+  traefik:
+    address: ":8080"
+
+providers:
+  file:
+    directory: /dynamic
+    watch: true
+
+log:
+  level: DEBUG
+  format: json
+
+accessLog:
+  format: json

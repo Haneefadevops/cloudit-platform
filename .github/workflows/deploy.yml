@@ -1,0 +1,60 @@
+name: Deploy to Hetzner
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          ssh ${SERVER_USER}@${SERVER_IP} '
+            set -e
+            cd /opt/cloudit || {
+              echo "Creating /opt/cloudit..."
+              sudo mkdir -p /opt/cloudit
+              sudo chown ${USER}:${USER} /opt/cloudit
+              git clone ${{ github.server_url }}/${{ github.repository }}.git /opt/cloudit
+            }
+            cd /opt/cloudit
+            git pull origin main
+
+            # Ensure .env files exist
+            for svc in traefik postgres redis n8n uptime-kuma; do
+              if [[ ! -f infra/$svc/.env && -f infra/$svc/.env.example ]]; then
+                cp infra/$svc/.env.example infra/$svc/.env
+              fi
+            done
+
+            # Start/restart services
+            ./infra/scripts/start.sh
+
+            echo "Deployment complete!"
+          '
+
+      - name: Health check
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+        run: |
+          echo "Checking deployed services..."
+          # Give services a moment to start
+          sleep 5
+          curl -sf https://${{ vars.DOMAIN }} || echo "Main domain not responding (expected if DNS not set)"

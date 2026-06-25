@@ -1,0 +1,19 @@
+# Ignore all real .env files (secrets)
+**/.env
+
+# Ignore backup files
+infra/backups/*.sql.gz
+infra/backups/*.gpg
+
+# Ignore Traefik acme certs (auto-generated)
+infra/traefik/certs/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log

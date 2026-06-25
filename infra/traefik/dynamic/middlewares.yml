@@ -1,0 +1,16 @@
+http:
+  middlewares:
+    auth:
+      basicAuth:
+        users:
+          - "${DASHBOARD_AUTH}"
+    security-headers:
+      headers:
+        frameDeny: true
+        sslRedirect: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customFrameOptionsValue: "SAMEORIGIN"
