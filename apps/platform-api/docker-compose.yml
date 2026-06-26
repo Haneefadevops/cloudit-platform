@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  platform-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: platform-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    networks:
+      - cloudit
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.platform-api.rule=Host(`api-platform.cloudit.lk`)"
+      - "traefik.http.routers.platform-api.entrypoints=websecure"
+      - "traefik.http.routers.platform-api.tls.certresolver=cloudflare"
+      - "traefik.http.services.platform-api.loadbalancer.server.port=3001"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+networks:
+  cloudit:
+    external: true

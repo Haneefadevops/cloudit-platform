@@ -8,3 +8,7 @@ GRANT ALL PRIVILEGES ON DATABASE n8n TO cloudit;
 -- uptime-kuma database
 CREATE DATABASE uptimekuma;
 GRANT ALL PRIVILEGES ON DATABASE uptimekuma TO cloudit;
+
+-- platform database
+CREATE DATABASE platform;
+GRANT ALL PRIVILEGES ON DATABASE platform TO cloudit;
