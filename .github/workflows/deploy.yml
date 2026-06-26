@@ -1,8 +1,11 @@
+cd C:\Project\cloudit-platform\.github\workflows
+
+@'
 name: Deploy to Hetzner
 
 on:
   push:
-    branches: [main]
+    branches: [master]
 
 jobs:
   deploy:
@@ -28,25 +31,25 @@ jobs:
         run: |
           ssh ${SERVER_USER}@${SERVER_IP} '
             set -e
-            cd /opt/cloudit || {
-              echo "Creating /opt/cloudit..."
-              sudo mkdir -p /opt/cloudit
-              sudo chown ${USER}:${USER} /opt/cloudit
-              git clone ${{ github.server_url }}/${{ github.repository }}.git /opt/cloudit
-            }
-            cd /opt/cloudit
-            git pull origin main
+            cd /opt/cloudit/cloudit-platform
+            git pull origin master
 
-            # Ensure .env files exist
-            for svc in traefik postgres redis n8n uptime-kuma; do
-              if [[ ! -f infra/$svc/.env && -f infra/$svc/.env.example ]]; then
-                cp infra/$svc/.env.example infra/$svc/.env
-              fi
-            done
+            # Restart infrastructure services
+            docker compose -f infra/traefik/docker-compose.yml up -d
+            docker compose -f infra/postgres/docker-compose.yml up -d
+            docker compose -f infra/redis/docker-compose.yml up -d
+            docker compose -f infra/n8n/docker-compose.yml up -d
+            docker compose -f infra/uptime-kuma/docker-compose.yml up -d
 
-            # Start/restart services
-            ./infra/scripts/start.sh
+            # Restart app services if they exist
+            if [ -f apps/platform-api/docker-compose.yml ]; then
+              docker compose -f apps/platform-api/docker-compose.yml up -d
+            fi
+            if [ -f apps/platform-web/docker-compose.yml ]; then
+              docker compose -f apps/platform-web/docker-compose.yml up -d
+            fi
 
+            docker ps
             echo "Deployment complete!"
           '
 
@@ -55,6 +58,6 @@ jobs:
           SERVER_IP: ${{ secrets.SERVER_IP }}
         run: |
           echo "Checking deployed services..."
-          # Give services a moment to start
-          sleep 5
-          curl -sf https://${{ vars.DOMAIN }} || echo "Main domain not responding (expected if DNS not set)"
+          sleep 10
+          curl -sf http://${{ secrets.SERVER_IP }} || echo "Server not responding"
+'@ | Set-Content deploy.yml -Encoding UTF8
