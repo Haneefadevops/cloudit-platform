@@ -1,6 +1,9 @@
 api:
   dashboard: true
-  insecure: false
+  insecure: true
+
+ping:
+  entryPoint: "traefik"
 
 entryPoints:
   web:
@@ -10,38 +13,26 @@ entryPoints:
         entryPoint:
           to: websecure
           scheme: https
-          permanent: true
-
   websecure:
     address: ":443"
-    http:
-      tls:
-        certResolver: cloudflare
+  traefik:
+    address: ":8080"
 
 providers:
   docker:
     exposedByDefault: false
-    network: cloudit
-  file:
-    directory: /dynamic
-    watch: true
+    endpoint: "unix:///var/run/docker.sock"
 
 certificatesResolvers:
   cloudflare:
     acme:
-      email: ${ACME_EMAIL}
+      email: tfkadmin@cloudit.lk
       storage: /letsencrypt/acme.json
-      caServer: "https://acme-v02.api.letsencrypt.org/directory"
       dnsChallenge:
         provider: cloudflare
         resolvers:
           - "1.1.1.1:53"
           - "1.0.0.1:53"
-        delayBeforeCheck: 10
 
 log:
-  level: ${LOG_LEVEL:-INFO}
-  format: json
-
-accessLog:
-  format: json
+  level: INFO

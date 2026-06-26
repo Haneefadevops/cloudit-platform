@@ -5,35 +5,29 @@ services:
     image: louislam/uptime-kuma:1
     container_name: uptime-kuma
     restart: unless-stopped
-    environment:
-      - UPTIME_KUMA_HOST=${UPTIME_KUMA_HOST}
+    ports:
+      - "3005:3001"
     volumes:
-      - uptime_kuma_data:/app/data
+      - uptime-kuma-data:/app/data
     networks:
       - cloudit
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.uptime-kuma.rule=Host(`${UPTIME_KUMA_HOST}`)"
+      - "traefik.http.routers.uptime-kuma.rule=Host(`uptime.cloudit.lk`)"
       - "traefik.http.routers.uptime-kuma.entrypoints=websecure"
       - "traefik.http.routers.uptime-kuma.tls.certresolver=cloudflare"
-      - "traefik.http.routers.uptime-kuma.tls.domains[0].main=${UPTIME_KUMA_HOST}"
+      - "traefik.http.routers.uptime-kuma.tls.domains[0].main=cloudit.lk"
+      - "traefik.http.routers.uptime-kuma.tls.domains[0].sans=*.cloudit.lk"
       - "traefik.http.services.uptime-kuma.loadbalancer.server.port=3001"
     healthcheck:
-      test: ["CMD", "node", "extra/healthcheck.js"]
-      interval: 15s
-      timeout: 5s
+      test: ["CMD-SHELL", "node extra/healthcheck.js"]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 128M
+      start_period: 30s
 
 volumes:
-  uptime_kuma_data:
-    name: cloudit_uptime_kuma
+  uptime-kuma-data:
 
 networks:
   cloudit:
