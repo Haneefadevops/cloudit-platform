@@ -1,10 +1,3 @@
-cd C:\Project\cloudit-platform\.github\workflows
-
-# Remove the broken file
-Remove-Item deploy.yml -ErrorAction SilentlyContinue
-
-# Create the file with proper content
-$workflowContent = @'
 name: Deploy to Hetzner
 
 on:
@@ -38,27 +31,11 @@ jobs:
             set -e
             cd /opt/cloudit/cloudit-platform
             git pull origin master
-
-            # Restart infrastructure services
             docker compose -f infra/traefik/docker-compose.yml up -d
             docker compose -f infra/postgres/docker-compose.yml up -d
             docker compose -f infra/redis/docker-compose.yml up -d
             docker compose -f infra/n8n/docker-compose.yml up -d
             docker compose -f infra/uptime-kuma/docker-compose.yml up -d
-
-            # Restart app services if they exist
-            if [ -f apps/platform-api/docker-compose.yml ]; then
-              docker compose -f apps/platform-api/docker-compose.yml up -d
-            fi
-            if [ -f apps/platform-web/docker-compose.yml ]; then
-              docker compose -f apps/platform-web/docker-compose.yml up -d
-            fi
-
             docker ps
             echo "Deployment complete!"
           '
-'@
-
-# Write with UTF-8 encoding and Unix line endings
-$bytes = [System.Text.Encoding]::UTF8.GetBytes($workflowContent -replace "`r`n", "`n")
-[System.IO.File]::WriteAllBytes((Resolve-Path .).Path + "\deploy.yml", $bytes)
