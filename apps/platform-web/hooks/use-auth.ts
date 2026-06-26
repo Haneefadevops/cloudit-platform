@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { User, Organization } from "@/types";
-import { me, logout, switchOrganization, getStoredUser, getStoredOrganization, getStoredOrganizations } from "@/lib/auth";
+import { me, logout, getStoredUser, getStoredOrganization, getStoredOrganizations } from "@/lib/auth";
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -26,8 +26,9 @@ export function useAuth() {
       const data = await me();
       if (data) {
         setUser(data.user);
-        setOrganization(data.organization);
         setOrganizations(data.organizations);
+        const currentOrg = data.organizations[0] || null;
+        setOrganization(currentOrg);
       }
     } finally {
       setIsLoading(false);
@@ -42,12 +43,14 @@ export function useAuth() {
     window.location.href = "/login";
   }, []);
 
-  const handleSwitchOrg = useCallback(async (orgId: string) => {
-    const data = await switchOrganization(orgId);
-    setUser(data.user);
-    setOrganization(data.organization);
-    window.location.reload();
-  }, []);
+  const handleSwitchOrg = useCallback((orgId: string) => {
+    const org = organizations.find((o) => o.id === orgId);
+    if (org && typeof window !== "undefined") {
+      localStorage.setItem("organization", JSON.stringify(org));
+      setOrganization(org);
+      window.location.reload();
+    }
+  }, [organizations]);
 
   return {
     user,

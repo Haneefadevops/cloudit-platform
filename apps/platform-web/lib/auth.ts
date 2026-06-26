@@ -3,30 +3,46 @@ import type { User, Organization, LoginCredentials, RegisterData } from "@/types
 
 export interface AuthResponse {
   user: User;
-  token: string;
-  organization: Organization;
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface MeResponse {
+  user: User;
   organizations: Organization[];
+}
+
+function setTokens(accessToken: string, refreshToken: string) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("token", accessToken);
+    localStorage.setItem("refreshToken", refreshToken);
+  }
+}
+
+function setUserData(user: User, organizations: Organization[]) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("user", JSON.stringify(user));
+    localStorage.setItem("organizations", JSON.stringify(organizations));
+    const currentOrg = organizations[0] || null;
+    if (currentOrg) {
+      localStorage.setItem("organization", JSON.stringify(currentOrg));
+    }
+  }
 }
 
 export async function login(credentials: LoginCredentials): Promise<AuthResponse> {
   const data = await api.post<AuthResponse>("/auth/login", credentials);
-  if (typeof window !== "undefined") {
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    localStorage.setItem("organization", JSON.stringify(data.organization));
-    localStorage.setItem("organizations", JSON.stringify(data.organizations));
-  }
+  setTokens(data.accessToken, data.refreshToken);
+  const orgs = (data.user as any).members?.map((m: any) => m.organization) || [];
+  setUserData(data.user, orgs);
   return data;
 }
 
 export async function register(data: RegisterData): Promise<AuthResponse> {
   const response = await api.post<AuthResponse>("/auth/register", data);
-  if (typeof window !== "undefined") {
-    localStorage.setItem("token", response.token);
-    localStorage.setItem("user", JSON.stringify(response.user));
-    localStorage.setItem("organization", JSON.stringify(response.organization));
-    localStorage.setItem("organizations", JSON.stringify(response.organizations));
-  }
+  setTokens(response.accessToken, response.refreshToken);
+  const orgs = (response.user as any).members?.map((m: any) => m.organization) || [];
+  setUserData(response.user, orgs);
   return response;
 }
 
@@ -39,13 +55,17 @@ export async function resetPassword(token: string, password: string): Promise<vo
 }
 
 export async function logout(): Promise<void> {
+  const refreshToken = typeof window !== "undefined" ? localStorage.getItem("refreshToken") : null;
   try {
-    await api.post("/auth/logout", {});
+    if (refreshToken) {
+      await api.post("/auth/logout", { refreshToken });
+    }
   } catch {
     // ignore
   } finally {
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
       localStorage.removeItem("organization");
       localStorage.removeItem("organizations");
@@ -53,27 +73,21 @@ export async function logout(): Promise<void> {
   }
 }
 
-export async function me(): Promise<{ user: User; organization: Organization; organizations: Organization[] } | null> {
+export async function me(): Promise<MeResponse | null> {
   try {
-    const data = await api.get<{ user: User; organization: Organization; organizations: Organization[] }>("/auth/me");
+    const data = await api.get<MeResponse>("/auth/me");
     if (typeof window !== "undefined") {
       localStorage.setItem("user", JSON.stringify(data.user));
-      localStorage.setItem("organization", JSON.stringify(data.organization));
       localStorage.setItem("organizations", JSON.stringify(data.organizations));
+      const currentOrg = data.organizations[0] || null;
+      if (currentOrg) {
+        localStorage.setItem("organization", JSON.stringify(currentOrg));
+      }
     }
     return data;
   } catch {
     return null;
   }
-}
-
-export async function switchOrganization(orgId: string): Promise<{ user: User; organization: Organization }> {
-  const data = await api.post<{ user: User; organization: Organization }>("/auth/switch-org", { organizationId: orgId });
-  if (typeof window !== "undefined") {
-    localStorage.setItem("user", JSON.stringify(data.user));
-    localStorage.setItem("organization", JSON.stringify(data.organization));
-  }
-  return data;
 }
 
 export function getStoredUser(): User | null {

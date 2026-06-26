@@ -151,7 +151,11 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    return this.sanitizeUser(user);
+    const organizations = user.members.map((m: any) => m.organization);
+    return {
+      user: this.sanitizeUser(user),
+      organizations,
+    };
   }
 
   private async generateTokens(userId: string): Promise<TokenResponseDto> {
