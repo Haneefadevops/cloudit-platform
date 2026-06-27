@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api-platform.cloudit.lk";
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || "https://api-platform.cloudit.lk") + "/api";
 
 export class ApiError extends Error {
   constructor(
