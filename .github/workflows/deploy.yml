@@ -30,7 +30,7 @@ jobs:
           ssh ${SERVER_USER}@${SERVER_IP} '
             set -e
             cd /opt/cloudit/cloudit-platform
-            git pull origin master
+            git reset --hard origin/master
             docker compose -f infra/traefik/docker-compose.yml up -d
             docker compose -f infra/postgres/docker-compose.yml up -d
             docker compose -f infra/redis/docker-compose.yml up -d
