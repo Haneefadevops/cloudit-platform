@@ -18,6 +18,8 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
     networks:
       - cloudit
+    ports:
+      - "3001:3001"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.platform-api.rule=Host(`api-platform.cloudit.lk`)"
