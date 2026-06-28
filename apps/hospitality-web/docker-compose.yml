@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  hospitality-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hospitality-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    networks:
+      - cloudit
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hospitality-web.rule=Host(`hospitality.cloudit.lk`)"
+      - "traefik.http.routers.hospitality-web.entrypoints=websecure"
+      - "traefik.http.routers.hospitality-web.tls.certresolver=cloudflare"
+      - "traefik.http.services.hospitality-web.loadbalancer.server.port=3003"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3003"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+networks:
+  cloudit:
+    external: true
