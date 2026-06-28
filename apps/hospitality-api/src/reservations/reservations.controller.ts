@@ -8,6 +8,8 @@ import {
   Param,
   Query,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ReservationsService } from './reservations.service';
@@ -107,6 +109,7 @@ export class ReservationsController {
   }
 
   @Post(':id/check-in')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Check in a reservation' })
   async checkIn(
     @Param('id') id: string,
@@ -117,6 +120,7 @@ export class ReservationsController {
   }
 
   @Post(':id/check-out')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Check out a reservation' })
   async checkOut(
     @Param('id') id: string,

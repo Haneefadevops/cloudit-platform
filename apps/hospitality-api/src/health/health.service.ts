@@ -1,9 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import Redis from 'ioredis';
 
 @Injectable()
-export class HealthService {
+export class HealthService implements OnModuleDestroy {
   private redis: Redis;
 
   constructor(private readonly prisma: PrismaService) {
@@ -41,5 +41,9 @@ export class HealthService {
     }
 
     return checks;
+  }
+
+  onModuleDestroy() {
+    return this.redis.quit();
   }
 }

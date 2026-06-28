@@ -8,6 +8,8 @@ import {
   Param,
   Query,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { InvoicesService } from './invoices.service';
@@ -89,6 +91,7 @@ export class InvoicesController {
   }
 
   @Post(':id/mark-paid')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark invoice as paid' })
   async markPaid(
     @Param('id') id: string,
