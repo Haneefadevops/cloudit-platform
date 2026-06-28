@@ -9,7 +9,8 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./globals.css": "./src/globals.css"
+    "./globals.css": "./src/globals.css",
+    "./tailwind.config": "./tailwind.config.ts"
   },
   "files": [
     "dist",
