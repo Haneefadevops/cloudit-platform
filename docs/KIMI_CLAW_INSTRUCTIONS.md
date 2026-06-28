@@ -10,11 +10,11 @@
 
 ## CURRENT TASK TRACKER
 
-**Last Updated:** 2026-06-28 13:42
+**Last Updated:** 2026-06-28 14:02
 **Current Sprint:** Sprint 4
-**Current Task:** Task 4.3 — Build Reservations & Booking Calendar
+**Current Task:** Task 4.4 — Sri Lankan Tax Engine & Invoice Generation
 **Status:** NOT STARTED
-**Next Task:** Task 4.4 — Sri Lankan Tax Engine & Invoice Generation
+**Next Task:** Task 4.5 — Basic Reports Endpoint
 
 **Sprint Progress:**
 - [x] Sprint 1 — DevOps Infrastructure (COMPLETE)
@@ -35,7 +35,7 @@
 - [x] Task 3.7 — Dark/Light Mode & Mobile Polish
 - [x] Task 4.1 — Initialize `apps/hospitality-api`
 - [x] Task 4.2 — Build Hospitality Core Modules
-- [ ] Task 4.3 — Build Reservations & Booking Calendar
+- [x] Task 4.3 — Build Reservations & Booking Calendar
 - [ ] Task 4.4 — Sri Lankan Tax Engine & Invoice Generation
 - [ ] Task 4.5 — Basic Reports Endpoint
 - [ ] Task 4.6 — Initialize `apps/hospitality-web`

@@ -1,4 +1,4 @@
-import { PrismaClient, RoomStatus } from '@prisma/client';
+import { PrismaClient, RoomStatus, ReservationStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -116,11 +116,68 @@ async function main() {
     );
   }
 
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const dayAfter = new Date(today);
+  dayAfter.setDate(today.getDate() + 2);
+
+  await prisma.reservation.createMany({
+    data: [
+      {
+        reservationNumber: `RES-${today.toISOString().slice(0, 10).replace(/-/g, '')}-0001`,
+        propertyId: property1.id,
+        roomId: rooms[0].id,
+        guestId: guests[0].id,
+        checkInDate: today,
+        checkOutDate: tomorrow,
+        adults: 2,
+        children: 0,
+        status: ReservationStatus.confirmed,
+        totalAmount: 15000,
+        paidAmount: 15000,
+        source: 'direct',
+        createdBy: 'seed',
+      },
+      {
+        reservationNumber: `RES-${today.toISOString().slice(0, 10).replace(/-/g, '')}-0002`,
+        propertyId: property1.id,
+        roomId: rooms[1].id,
+        guestId: guests[1].id,
+        checkInDate: tomorrow,
+        checkOutDate: dayAfter,
+        adults: 1,
+        children: 0,
+        status: ReservationStatus.pending,
+        totalAmount: 10000,
+        paidAmount: 0,
+        source: 'phone',
+        createdBy: 'seed',
+      },
+      {
+        reservationNumber: `RES-${today.toISOString().slice(0, 10).replace(/-/g, '')}-0003`,
+        propertyId: property2.id,
+        roomId: rooms[5].id,
+        guestId: guests[2].id,
+        checkInDate: today,
+        checkOutDate: dayAfter,
+        adults: 4,
+        children: 0,
+        status: ReservationStatus.checked_in,
+        totalAmount: 50000,
+        paidAmount: 25000,
+        source: 'walk_in',
+        createdBy: 'seed',
+      },
+    ],
+  });
+
   console.log('Seed data created:');
   console.log(`- Properties: 2`);
   console.log(`- Room Types: 3`);
   console.log(`- Rooms: ${rooms.length}`);
   console.log(`- Guests: ${guests.length}`);
+  console.log(`- Reservations: 3`);
 }
 
 main()
