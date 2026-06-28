@@ -1,0 +1,112 @@
+{
+  "name": "Check-in Reminder",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24,
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a",
+      "name": "Daily 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.HOSPITALITY_API_URL }}/api/reservations",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "checkInDate",
+              "value": "={{ $today.format('YYYY-MM-DD') }}"
+            },
+            {
+              "name": "status",
+              "value": "confirmed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
+      "name": "Get Today's Check-ins",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WHATSAPP_API_URL }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WHATSAPP_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "={{ $json.guestPhone }}"
+            },
+            {
+              "name": "message",
+              "value": "=Hi {{ $json.guestName }}, this is a reminder that your check-in is today. We look forward to welcoming you."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
+      "name": "Send WhatsApp Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 300]
+    }
+  ],
+  "connections": {
+    "Daily 9 AM": {
+      "main": [
+        [
+          {
+            "node": "Get Today's Check-ins",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Today's Check-ins": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "pinData": {}
+}

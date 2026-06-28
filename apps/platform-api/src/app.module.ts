@@ -12,6 +12,8 @@ import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { SettingsModule } from './settings/settings.module';
 import { HealthModule } from './health/health.module';
 import { EventsModule } from './events/events.module';
+import { AiModule } from './ai/ai.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 
 @Module({
@@ -29,6 +31,8 @@ import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor
     SettingsModule,
     HealthModule,
     EventsModule,
+    AiModule,
+    IntegrationsModule,
   ],
   controllers: [AppController],
   providers: [
