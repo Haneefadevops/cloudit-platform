@@ -1,0 +1,32 @@
+import {
+  IsOptional,
+  IsString,
+  IsEmail,
+  IsObject,
+} from 'class-validator';
+
+export class UpdatePropertyDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  taxId?: string;
+
+  @IsOptional()
+  @IsObject()
+  settings?: Record<string, any>;
+}

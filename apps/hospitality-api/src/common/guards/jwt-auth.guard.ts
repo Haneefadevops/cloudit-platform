@@ -12,10 +12,7 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 export interface AuthenticatedRequest extends Request {
   user?: {
     userId: string;
-    email: string;
-    role: string;
-    organizationId?: string;
-    permissions?: string[];
+    [key: string]: any;
   };
 }
 
@@ -33,7 +30,6 @@ export class JwtAuthGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const token = this.extractTokenFromHeader(request);
 
@@ -45,12 +41,10 @@ export class JwtAuthGuard implements CanActivate {
       const payload = this.jwtService.verify(token, {
         secret: process.env.JWT_SECRET,
       });
+      // platform-api tokens use `sub` for userId; keep any extra claims if present
       request.user = {
-        userId: payload.sub,
-        email: payload.email,
-        role: payload.role,
-        organizationId: payload.organizationId,
-        permissions: payload.permissions,
+        userId: payload.sub || payload.userId,
+        ...payload,
       };
     } catch {
       throw new UnauthorizedException('Invalid authentication token');
