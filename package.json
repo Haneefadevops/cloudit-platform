@@ -1,0 +1,24 @@
+{
+  "name": "cloudit-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CloudIT Platform — Multi-tenant SaaS infrastructure for CloudIT Solutions (Pvt) Ltd",
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspaces",
+    "lint": "npm run lint --workspaces",
+    "clean": "rm -rf node_modules apps/**/node_modules packages/**/node_modules apps/**/dist packages/**/dist apps/**/.next"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,6 +1,15 @@
 # Ignore all real .env files (secrets)
 **/.env
 
+# Ignore node_modules everywhere
+**/node_modules
+
+# Ignore build outputs
+**/dist
+**/.next
+**/out
+**/*.tsbuildinfo
+
 # Ignore backup files
 infra/backups/*.sql.gz
 infra/backups/*.gpg
