@@ -1,4 +1,4 @@
-import { PrismaClient, RoomStatus, ReservationStatus } from '@prisma/client';
+import { PrismaClient, RoomStatus, ReservationStatus, TaxRateType } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -116,6 +116,15 @@ async function main() {
     );
   }
 
+  await prisma.taxRate.createMany({
+    data: [
+      { name: 'Service Charge', rate: 10, type: TaxRateType.percentage, isActive: true, isDefault: true, organizationId },
+      { name: 'TDL', rate: 1, type: TaxRateType.percentage, isActive: true, isDefault: true, organizationId },
+      { name: 'SSCL', rate: 2.5, type: TaxRateType.percentage, isActive: true, isDefault: true, organizationId },
+      { name: 'VAT', rate: 18, type: TaxRateType.percentage, isActive: true, isDefault: true, organizationId },
+    ],
+  });
+
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
@@ -177,6 +186,7 @@ async function main() {
   console.log(`- Room Types: 3`);
   console.log(`- Rooms: ${rooms.length}`);
   console.log(`- Guests: ${guests.length}`);
+  console.log(`- Tax Rates: 4`);
   console.log(`- Reservations: 3`);
 }
 

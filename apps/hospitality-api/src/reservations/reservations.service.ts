@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { InvoicesService } from '../invoices/invoices.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import {
@@ -14,7 +15,10 @@ import {
 
 @Injectable()
 export class ReservationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly invoicesService: InvoicesService,
+  ) {}
 
   async findAll(
     organizationId: string,
@@ -278,6 +282,13 @@ export class ReservationsService {
         data: { status: RoomStatus.cleaning },
       }),
     ]);
+
+    // Auto-generate invoice on checkout
+    try {
+      await this.invoicesService.generateFromCheckout(id, organizationId);
+    } catch {
+      // Don't fail checkout if invoice generation fails
+    }
 
     return updated;
   }
