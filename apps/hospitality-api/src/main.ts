@@ -1,11 +1,14 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { JsonLogger } from './common/logger/json.logger';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: new JsonLogger(),
+  });
   const configService = app.get(ConfigService);
 
   app.setGlobalPrefix('api');
@@ -14,6 +17,14 @@ async function bootstrap() {
       whitelist: true,
       transform: true,
       forbidNonWhitelisted: true,
+      exceptionFactory: (errors) =>
+        new BadRequestException({
+          message: 'Validation failed',
+          errors: errors.map((e) => ({
+            field: e.property,
+            constraints: e.constraints,
+          })),
+        }),
     }),
   );
 

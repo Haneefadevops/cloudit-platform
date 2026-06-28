@@ -179,9 +179,9 @@ export class InvoicesService {
     const invoice = await this.prisma.invoice.create({
       data: {
         invoiceNumber,
-        reservationId: dto.reservationId,
-        propertyId: reservation.propertyId,
-        guestId: reservation.guestId,
+        reservation: { connect: { id: dto.reservationId } },
+        property: { connect: { id: reservation.propertyId } },
+        guest: { connect: { id: reservation.guestId } },
         dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
         subtotal,
         taxBreakdown: calculation.taxBreakdown as any,
@@ -219,13 +219,17 @@ export class InvoicesService {
     const subtotal = dto.subtotal ?? Number(invoice.subtotal);
     const calculation = await this.calculateTaxes(organizationId, subtotal);
 
+    const { reservationId, propertyId, guestId, ...rest } = dto;
     return this.prisma.invoice.update({
       where: { id },
       data: {
-        ...dto,
+        ...rest,
         subtotal,
         taxBreakdown: calculation.taxBreakdown as any,
         totalAmount: calculation.totalAmount,
+        ...(reservationId && { reservation: { connect: { id: reservationId } } }),
+        ...(propertyId && { property: { connect: { id: propertyId } } }),
+        ...(guestId && { guest: { connect: { id: guestId } } }),
       },
       include: {
         guest: true,

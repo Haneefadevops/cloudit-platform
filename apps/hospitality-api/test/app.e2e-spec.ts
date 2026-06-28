@@ -45,7 +45,7 @@ describe('Hospitality API (e2e)', () => {
         taxId: 'TAX-123456',
       })
       .expect(201);
-    propertyId = propertyRes.body.id;
+    propertyId = propertyRes.body.data.id;
 
     const roomTypeRes = await request(app.getHttpServer())
       .post('/api/room-types')
@@ -58,7 +58,7 @@ describe('Hospitality API (e2e)', () => {
         propertyId,
       })
       .expect(201);
-    roomTypeId = roomTypeRes.body.id;
+    roomTypeId = roomTypeRes.body.data.id;
 
     const roomRes = await request(app.getHttpServer())
       .post('/api/rooms')
@@ -70,7 +70,7 @@ describe('Hospitality API (e2e)', () => {
         roomTypeId,
       })
       .expect(201);
-    roomId = roomRes.body.id;
+    roomId = roomRes.body.data.id;
 
     const guestRes = await request(app.getHttpServer())
       .post('/api/guests')
@@ -83,7 +83,7 @@ describe('Hospitality API (e2e)', () => {
         nationality: 'Sri Lankan',
       })
       .expect(201);
-    guestId = guestRes.body.id;
+    guestId = guestRes.body.data.id;
   });
 
   afterAll(async () => {
@@ -150,11 +150,11 @@ describe('Hospitality API (e2e)', () => {
         })
         .expect(201);
 
-      reservationId = res.body.id;
-      expect(res.body.reservationNumber).toMatch(/^RES-/);
-      expect(res.body.status).toBe('pending');
-      expect(res.body.guest.id).toBe(guestId);
-      expect(res.body.room.id).toBe(roomId);
+      reservationId = res.body.data.id;
+      expect(res.body.data.reservationNumber).toMatch(/^RES-/);
+      expect(res.body.data.status).toBe('pending');
+      expect(res.body.data.guest.id).toBe(guestId);
+      expect(res.body.data.room.id).toBe(roomId);
     });
 
     it('should confirm the reservation', async () => {
@@ -164,7 +164,7 @@ describe('Hospitality API (e2e)', () => {
         .send({ status: 'confirmed' })
         .expect(200);
 
-      expect(res.body.status).toBe('confirmed');
+      expect(res.body.data.status).toBe('confirmed');
     });
 
     it('should check in the guest and occupy the room', async () => {
@@ -174,7 +174,7 @@ describe('Hospitality API (e2e)', () => {
         .send({ notes: 'Guest arrived' })
         .expect(200);
 
-      expect(res.body.status).toBe('checked_in');
+      expect(res.body.data.status).toBe('checked_in');
 
       const room = await prisma.room.findUnique({ where: { id: roomId } });
       expect(room?.status).toBe('occupied');
@@ -187,8 +187,8 @@ describe('Hospitality API (e2e)', () => {
         .send({ finalAmount: 22000, notes: 'Checked out' })
         .expect(200);
 
-      expect(res.body.status).toBe('checked_out');
-      expect(Number(res.body.totalAmount)).toBe(22000);
+      expect(res.body.data.status).toBe('checked_out');
+      expect(Number(res.body.data.totalAmount)).toBe(22000);
 
       const room = await prisma.room.findUnique({ where: { id: roomId } });
       expect(room?.status).toBe('cleaning');
@@ -206,17 +206,17 @@ describe('Hospitality API (e2e)', () => {
         .set(authHeaders(authToken))
         .expect(200);
 
-      expect(previewRes.body.invoiceNumber).toMatch(/^INV-/);
-      expect(Number(previewRes.body.totalAmount)).toBeGreaterThan(0);
-      expect(previewRes.body.taxBreakdown).toBeInstanceOf(Array);
+      expect(previewRes.body.data.invoiceNumber).toMatch(/^INV-/);
+      expect(Number(previewRes.body.data.totalAmount)).toBeGreaterThan(0);
+      expect(previewRes.body.data.taxBreakdown).toBeInstanceOf(Array);
 
       const paidRes = await request(app.getHttpServer())
         .post(`/api/invoices/${invoiceId}/mark-paid`)
         .set(authHeaders(authToken))
         .expect(200);
 
-      expect(paidRes.body.status).toBe('paid');
-      expect(Number(paidRes.body.paidAmount)).toBe(Number(paidRes.body.totalAmount));
+      expect(paidRes.body.data.status).toBe('paid');
+      expect(Number(paidRes.body.data.paidAmount)).toBe(Number(paidRes.body.data.totalAmount));
     });
   });
 
@@ -232,8 +232,8 @@ describe('Hospitality API (e2e)', () => {
         .set(authHeaders(authToken))
         .expect(200);
 
-      expect(res.body.summary).toBeDefined();
-      expect(res.body.byDate).toBeInstanceOf(Array);
+      expect(res.body.data.summary).toBeDefined();
+      expect(res.body.data.byDate).toBeInstanceOf(Array);
     });
 
     it('should return revenue report', async () => {
@@ -247,8 +247,8 @@ describe('Hospitality API (e2e)', () => {
         .set(authHeaders(authToken))
         .expect(200);
 
-      expect(res.body.summary.totalRevenue).toBeDefined();
-      expect(res.body.taxBreakdown).toBeInstanceOf(Array);
+      expect(res.body.data.summary.totalRevenue).toBeDefined();
+      expect(res.body.data.taxBreakdown).toBeInstanceOf(Array);
     });
 
     it('should return guest report', async () => {
@@ -262,8 +262,8 @@ describe('Hospitality API (e2e)', () => {
         .set(authHeaders(authToken))
         .expect(200);
 
-      expect(res.body.summary.totalGuests).toBeGreaterThanOrEqual(1);
-      expect(res.body.topNationalities).toBeInstanceOf(Array);
+      expect(res.body.data.summary.totalGuests).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.topNationalities).toBeInstanceOf(Array);
     });
 
     it('should return reservation report', async () => {
@@ -277,9 +277,9 @@ describe('Hospitality API (e2e)', () => {
         .set(authHeaders(authToken))
         .expect(200);
 
-      expect(res.body.summary.totalReservations).toBeGreaterThanOrEqual(1);
-      expect(res.body.byStatus).toBeInstanceOf(Array);
-      expect(res.body.bySource).toBeInstanceOf(Array);
+      expect(res.body.data.summary.totalReservations).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.byStatus).toBeInstanceOf(Array);
+      expect(res.body.data.bySource).toBeInstanceOf(Array);
     });
   });
 });

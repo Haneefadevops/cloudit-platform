@@ -116,8 +116,13 @@ export class RoomsService {
   async create(organizationId: string, dto: CreateRoomDto) {
     await this.validateRelations(organizationId, dto.propertyId, dto.roomTypeId);
 
+    const { propertyId, roomTypeId, ...data } = dto;
     return this.prisma.room.create({
-      data: dto,
+      data: {
+        ...data,
+        property: { connect: { id: propertyId } },
+        roomType: { connect: { id: roomTypeId } },
+      },
     });
   }
 
@@ -133,9 +138,14 @@ export class RoomsService {
       );
     }
 
+    const { propertyId, roomTypeId, ...data } = dto;
     return this.prisma.room.update({
       where: { id },
-      data: dto,
+      data: {
+        ...data,
+        ...(propertyId && { property: { connect: { id: propertyId } } }),
+        ...(roomTypeId && { roomType: { connect: { id: roomTypeId } } }),
+      },
     });
   }
 

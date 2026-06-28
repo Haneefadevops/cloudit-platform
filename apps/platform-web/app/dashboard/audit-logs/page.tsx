@@ -15,7 +15,7 @@ export default function AuditLogsPage() {
   useEffect(() => {
     api
       .get("/audit-logs")
-      .then((res: any) => setLogs(res.data?.data || []))
+      .then((res: any) => setLogs(res.data || []))
       .catch(() => toast.error("Failed to load audit logs"))
       .finally(() => setLoading(false));
   }, []);

@@ -132,9 +132,9 @@ export class ReservationsService {
     const reservation = await this.prisma.reservation.create({
       data: {
         reservationNumber,
-        propertyId: dto.propertyId,
-        roomId: dto.roomId,
-        guestId: dto.guestId,
+        property: { connect: { id: dto.propertyId } },
+        room: { connect: { id: dto.roomId } },
+        guest: { connect: { id: dto.guestId } },
         checkInDate: checkIn,
         checkOutDate: checkOut,
         adults: dto.adults ?? 1,
@@ -217,12 +217,16 @@ export class ReservationsService {
       }
     }
 
+    const { propertyId, roomId, guestId, ...rest } = dto;
     return this.prisma.reservation.update({
       where: { id },
       data: {
-        ...dto,
+        ...rest,
         checkInDate: checkIn,
         checkOutDate: checkOut,
+        ...(propertyId && { property: { connect: { id: propertyId } } }),
+        ...(roomId && { room: { connect: { id: roomId } } }),
+        ...(guestId && { guest: { connect: { id: guestId } } }),
       },
       include: {
         guest: true,

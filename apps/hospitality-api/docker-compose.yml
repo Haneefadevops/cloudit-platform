@@ -7,6 +7,11 @@ services:
       dockerfile: Dockerfile
     container_name: hospitality-api
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       NODE_ENV: production
       PORT: 3002
@@ -26,8 +31,13 @@ services:
       - "traefik.http.routers.hospitality-api.entrypoints=websecure"
       - "traefik.http.routers.hospitality-api.tls.certresolver=cloudflare"
       - "traefik.http.services.hospitality-api.loadbalancer.server.port=3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3002/api/health"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3002/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

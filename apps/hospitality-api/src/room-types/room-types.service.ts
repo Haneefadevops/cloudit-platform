@@ -75,8 +75,12 @@ export class RoomTypesService {
       throw new BadRequestException('Property not found or access denied');
     }
 
+    const { propertyId, ...data } = dto;
     return this.prisma.roomType.create({
-      data: dto,
+      data: {
+        ...data,
+        property: { connect: { id: propertyId } },
+      },
     });
   }
 
@@ -92,9 +96,13 @@ export class RoomTypesService {
       }
     }
 
+    const { propertyId, ...data } = dto;
     return this.prisma.roomType.update({
       where: { id },
-      data: dto,
+      data: {
+        ...data,
+        ...(propertyId && { property: { connect: { id: propertyId } } }),
+      },
     });
   }
 

@@ -38,11 +38,11 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    const error = new ApiError(
-      errorData.message || `HTTP ${response.status}: ${response.statusText}`,
-      response.status,
-      errorData.code
-    );
+    const message =
+      errorData.error?.message ||
+      errorData.message ||
+      `HTTP ${response.status}: ${response.statusText}`;
+    const error = new ApiError(message, response.status, errorData.code);
     throw error;
   }
 
@@ -53,7 +53,8 @@ export const api = {
   get: async <T>(url: string, options?: RequestInit): Promise<T> => {
     const response = await fetchWithAuth(url, { ...options, method: "GET" });
     if (response.status === 204) return {} as T;
-    return response.json();
+    const body = await response.json();
+    return body?.data ?? body;
   },
 
   post: async <T>(url: string, body: unknown, options?: RequestInit): Promise<T> => {
@@ -63,7 +64,8 @@ export const api = {
       body: JSON.stringify(body),
     });
     if (response.status === 204) return {} as T;
-    return response.json();
+    const json = await response.json();
+    return json?.data ?? json;
   },
 
   put: async <T>(url: string, body: unknown, options?: RequestInit): Promise<T> => {
@@ -73,7 +75,8 @@ export const api = {
       body: JSON.stringify(body),
     });
     if (response.status === 204) return {} as T;
-    return response.json();
+    const json = await response.json();
+    return json?.data ?? json;
   },
 
   patch: async <T>(url: string, body: unknown, options?: RequestInit): Promise<T> => {
@@ -83,13 +86,15 @@ export const api = {
       body: JSON.stringify(body),
     });
     if (response.status === 204) return {} as T;
-    return response.json();
+    const json = await response.json();
+    return json?.data ?? json;
   },
 
   delete: async <T>(url: string, options?: RequestInit): Promise<T> => {
     const response = await fetchWithAuth(url, { ...options, method: "DELETE" });
     if (response.status === 204) return {} as T;
-    return response.json();
+    const json = await response.json();
+    return json?.data ?? json;
   },
 };
 

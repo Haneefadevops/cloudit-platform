@@ -5,6 +5,11 @@ services:
     image: docker.n8n.io/n8nio/n8n:latest
     container_name: n8n
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "127.0.0.1:5678:5678"
     environment:
@@ -37,8 +42,13 @@ services:
       - "traefik.http.routers.n8n.tls.domains[0].main=cloudit.lk"
       - "traefik.http.routers.n8n.tls.domains[0].sans=*.cloudit.lk"
       - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5678/healthz || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

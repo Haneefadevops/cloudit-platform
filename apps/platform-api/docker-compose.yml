@@ -7,6 +7,11 @@ services:
       dockerfile: Dockerfile
     container_name: platform-api
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       NODE_ENV: production
       PORT: 3001
@@ -26,8 +31,13 @@ services:
       - "traefik.http.routers.platform-api.entrypoints=websecure"
       - "traefik.http.routers.platform-api.tls.certresolver=cloudflare"
       - "traefik.http.services.platform-api.loadbalancer.server.port=3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3001/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

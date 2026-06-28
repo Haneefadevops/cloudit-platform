@@ -5,6 +5,11 @@ services:
     image: docker:24-cli
     container_name: cloudit-backup
     restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-cloudit}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
@@ -29,6 +34,11 @@ services:
     image: rclone/rclone:latest
     container_name: cloudit-backup-sync
     restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - HETZNER_STORAGE_BOX=${HETZNER_STORAGE_BOX:-}
       - BACKUP_DIR=${BACKUP_DIR:-/opt/backups/local}
