@@ -10,11 +10,11 @@
 
 ## CURRENT TASK TRACKER
 
-**Last Updated:** 2026-06-28 14:45
+**Last Updated:** 2026-06-28 15:20
 **Current Sprint:** Sprint 4
-**Current Task:** Task 4.8 — Build Reservations, Calendar & Check-in/out UI
+**Current Task:** Task 4.9 — Invoices & Reports UI
 **Status:** NOT STARTED
-**Next Task:** Task 4.9 — Invoices & Reports UI
+**Next Task:** Task 4.10 — Hospitality Integration & E2E Tests
 
 **Sprint Progress:**
 - [x] Sprint 1 — DevOps Infrastructure (COMPLETE)
@@ -40,7 +40,7 @@
 - [x] Task 4.5 — Basic Reports Endpoint
 - [x] Task 4.6 — Initialize `apps/hospitality-web`
 - [x] Task 4.7 — Build Hospitality Dashboard & Property Management
-- [ ] Task 4.8 — Build Reservations, Calendar & Check-in/out UI
+- [x] Task 4.8 — Build Reservations, Calendar & Check-in/out UI
 - [ ] Task 4.9 — Invoices & Reports UI
 - [ ] Task 5.1 — n8n Webhook Structure & Event System
 - [ ] Task 5.2 — Example n8n Workflow & AI Module Placeholder

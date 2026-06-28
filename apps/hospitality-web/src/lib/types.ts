@@ -89,3 +89,19 @@ export interface PaginatedResponse<T> {
     totalPages: number;
   };
 }
+
+export interface CalendarDayReservation {
+  id: string;
+  reservationNumber: string;
+  guestName: string;
+  roomNumber: string;
+  status: ReservationStatus;
+  type: 'check-in' | 'check-out';
+}
+
+export interface CalendarDay {
+  date: string;
+  checkIns: number;
+  checkOuts: number;
+  reservations: CalendarDayReservation[];
+}
