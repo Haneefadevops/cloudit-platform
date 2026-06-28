@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  backup:
+    image: docker:24-cli
+    container_name: cloudit-backup
+    restart: "no"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-cloudit}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - BACKUP_ENCRYPTION_KEY=${BACKUP_ENCRYPTION_KEY:-}
+      - BACKUP_DIR=${BACKUP_DIR:-/opt/backups/local}
+      - LOG_FILE=${LOG_FILE:-/var/log/cloudit-backup.log}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${BACKUP_DIR:-/opt/backups/local}:${BACKUP_DIR:-/opt/backups/local}
+      - ${LOG_FILE:-/var/log/cloudit-backup.log}:${LOG_FILE:-/var/log/cloudit-backup.log}
+      - ./backup.sh:/usr/local/bin/backup.sh:ro
+      - ./restore.sh:/usr/local/bin/restore.sh:ro
+      - ./sync-hetzner.sh:/usr/local/bin/sync-hetzner.sh:ro
+    networks:
+      - cloudit
+    command: /usr/local/bin/backup.sh
+
+  # Optional: run the Hetzner sync manually after configuring .env
+  sync-hetzner:
+    image: rclone/rclone:latest
+    container_name: cloudit-backup-sync
+    restart: "no"
+    environment:
+      - HETZNER_STORAGE_BOX=${HETZNER_STORAGE_BOX:-}
+      - BACKUP_DIR=${BACKUP_DIR:-/opt/backups/local}
+      - LOG_FILE=${LOG_FILE:-/var/log/cloudit-backup-sync.log}
+    volumes:
+      - ${BACKUP_DIR:-/opt/backups/local}:${BACKUP_DIR:-/opt/backups/local}
+      - ${LOG_FILE:-/var/log/cloudit-backup-sync.log}:${LOG_FILE:-/var/log/cloudit-backup-sync.log}
+      - ./sync-hetzner.sh:/usr/local/bin/sync-hetzner.sh:ro
+      - ./rclone.conf:/config/rclone/rclone.conf:ro
+    command: /usr/local/bin/sync-hetzner.sh
+    profiles:
+      - sync
+
+networks:
+  cloudit:
+    external: true
