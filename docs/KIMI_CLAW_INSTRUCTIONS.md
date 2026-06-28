@@ -10,11 +10,11 @@
 
 ## CURRENT TASK TRACKER
 
-**Last Updated:** 2026-06-28 14:32
+**Last Updated:** 2026-06-28 14:45
 **Current Sprint:** Sprint 4
-**Current Task:** Task 4.7 — Build Hospitality Dashboard & Property Management
+**Current Task:** Task 4.8 — Build Reservations, Calendar & Check-in/out UI
 **Status:** NOT STARTED
-**Next Task:** Task 4.8 — Build Reservations, Calendar & Check-in/out UI
+**Next Task:** Task 4.9 — Invoices & Reports UI
 
 **Sprint Progress:**
 - [x] Sprint 1 — DevOps Infrastructure (COMPLETE)
@@ -39,7 +39,7 @@
 - [x] Task 4.4 — Sri Lankan Tax Engine & Invoice Generation
 - [x] Task 4.5 — Basic Reports Endpoint
 - [x] Task 4.6 — Initialize `apps/hospitality-web`
-- [ ] Task 4.7 — Build Hospitality Dashboard & Property Management
+- [x] Task 4.7 — Build Hospitality Dashboard & Property Management
 - [ ] Task 4.8 — Build Reservations, Calendar & Check-in/out UI
 - [ ] Task 4.9 — Invoices & Reports UI
 - [ ] Task 5.1 — n8n Webhook Structure & Event System

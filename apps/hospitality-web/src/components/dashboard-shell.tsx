@@ -12,6 +12,7 @@ import {
   BarChart3,
   Settings,
 } from "lucide-react";
+import { OrganizationSelector } from "./organization-selector";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: <LayoutDashboard className="h-4 w-4" />, active: true },
@@ -28,8 +29,12 @@ const navItems = [
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
-      <Sidebar logo={<span className="font-bold">CloudIT Hospitality</span>} items={navItems} />
-      <main className="flex-1 p-6">{children}</main>
+      <Sidebar
+        logo={<span className="font-bold">CloudIT Hospitality</span>}
+        items={navItems}
+        footer={<OrganizationSelector />}
+      />
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">{children}</main>
     </div>
   );
 }
