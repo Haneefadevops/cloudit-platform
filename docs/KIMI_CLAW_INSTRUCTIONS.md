@@ -10,11 +10,11 @@
 
 ## CURRENT TASK TRACKER
 
-**Last Updated:** 2026-06-28 13:02
+**Last Updated:** 2026-06-28 13:35
 **Current Sprint:** Sprint 4
-**Current Task:** Task 4.1 — Initialize `apps/hospitality-api`
+**Current Task:** Task 4.2 — Build Hospitality Core Modules (Properties, Rooms, Guests)
 **Status:** NOT STARTED
-**Next Task:** Task 4.2 — Build Hospitality Core Modules (Properties, Rooms, Guests)
+**Next Task:** Task 4.3 — Build Reservations & Booking Calendar
 
 **Sprint Progress:**
 - [x] Sprint 1 — DevOps Infrastructure (COMPLETE)
@@ -33,7 +33,7 @@
 - [x] Task 3.5 — Build Dashboard Shell
 - [x] Task 3.6 — Build Admin User Management
 - [x] Task 3.7 — Dark/Light Mode & Mobile Polish
-- [ ] Task 4.1 — Initialize `apps/hospitality-api`
+- [x] Task 4.1 — Initialize `apps/hospitality-api`
 - [ ] Task 4.2 — Build Hospitality Core Modules
 - [ ] Task 4.3 — Build Reservations & Booking Calendar
 - [ ] Task 4.4 — Sri Lankan Tax Engine & Invoice Generation

@@ -1,0 +1,222 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Property {
+  id          String   @id @default(uuid())
+  name        String
+  address     String?
+  phone       String?
+  email       String?
+  taxId       String?
+  settings    Json?    @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Tenant
+  organizationId String
+
+  roomTypes     RoomType[]
+  rooms         Room[]
+  reservations  Reservation[]
+  invoices      Invoice[]
+
+  @@index([organizationId])
+  @@map("properties")
+}
+
+model RoomType {
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  basePrice     Decimal  @db.Decimal(10, 2)
+  maxOccupancy  Int      @default(2)
+  amenities     Json?    @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  propertyId    String
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  rooms         Room[]
+
+  @@index([propertyId])
+  @@map("room_types")
+}
+
+enum RoomStatus {
+  available
+  occupied
+  maintenance
+  cleaning
+}
+
+model Room {
+  id          String     @id @default(uuid())
+  roomNumber  String
+  floor       String?
+  status      RoomStatus @default(available)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  propertyId  String
+  property    Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  roomTypeId  String
+  roomType    RoomType   @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+
+  reservations Reservation[]
+
+  @@unique([propertyId, roomNumber])
+  @@index([propertyId])
+  @@index([roomTypeId])
+  @@map("rooms")
+}
+
+model Guest {
+  id          String   @id @default(uuid())
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  idNumber    String?
+  nationality String?
+  address     String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Tenant
+  organizationId String
+
+  reservations Reservation[]
+  invoices     Invoice[]
+
+  @@index([organizationId])
+  @@index([email])
+  @@index([phone])
+  @@map("guests")
+}
+
+enum ReservationStatus {
+  pending
+  confirmed
+  checked_in
+  checked_out
+  cancelled
+  no_show
+}
+
+enum PaymentStatus {
+  pending
+  partial
+  paid
+  refunded
+}
+
+enum ReservationSource {
+  direct
+  walk_in
+  phone
+  email
+}
+
+model Reservation {
+  id                String             @id @default(uuid())
+  reservationNumber String             @unique
+  checkInDate       DateTime
+  checkOutDate      DateTime
+  adults            Int                @default(1)
+  children          Int                @default(0)
+  status            ReservationStatus  @default(pending)
+  totalAmount       Decimal            @db.Decimal(10, 2) @default(0)
+  paidAmount        Decimal            @db.Decimal(10, 2) @default(0)
+  paymentStatus     PaymentStatus      @default(pending)
+  source            ReservationSource  @default(direct)
+  notes             String?
+  createdBy         String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  propertyId        String
+  property          Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  roomId            String
+  room              Room               @relation(fields: [roomId], references: [id], onDelete: Restrict)
+
+  guestId           String
+  guest             Guest              @relation(fields: [guestId], references: [id], onDelete: Restrict)
+
+  invoices          Invoice[]
+
+  @@index([propertyId])
+  @@index([roomId])
+  @@index([guestId])
+  @@index([checkInDate, checkOutDate])
+  @@map("reservations")
+}
+
+enum TaxRateType {
+  percentage
+  fixed
+}
+
+model TaxRate {
+  id             String      @id @default(uuid())
+  name           String
+  rate           Decimal     @db.Decimal(10, 4)
+  type           TaxRateType @default(percentage)
+  isActive       Boolean     @default(true)
+  isDefault      Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Tenant
+  organizationId String
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("tax_rates")
+}
+
+enum InvoiceStatus {
+  draft
+  issued
+  paid
+  overdue
+  cancelled
+}
+
+model Invoice {
+  id             String        @id @default(uuid())
+  invoiceNumber  String        @unique
+  issueDate      DateTime      @default(now())
+  dueDate        DateTime?
+  subtotal       Decimal       @db.Decimal(10, 2)
+  taxBreakdown   Json          @default("[]")
+  totalAmount    Decimal       @db.Decimal(10, 2)
+  paidAmount     Decimal       @db.Decimal(10, 2) @default(0)
+  status         InvoiceStatus @default(draft)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  propertyId     String
+  property       Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  reservationId  String
+  reservation    Reservation   @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  guestId        String
+  guest          Guest         @relation(fields: [guestId], references: [id], onDelete: Restrict)
+
+  @@index([propertyId])
+  @@index([reservationId])
+  @@index([guestId])
+  @@map("invoices")
+}

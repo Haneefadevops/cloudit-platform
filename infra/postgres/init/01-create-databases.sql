@@ -12,3 +12,7 @@ GRANT ALL PRIVILEGES ON DATABASE uptimekuma TO cloudit;
 -- platform database
 CREATE DATABASE platform;
 GRANT ALL PRIVILEGES ON DATABASE platform TO cloudit;
+
+-- hospitality database
+CREATE DATABASE hospitality;
+GRANT ALL PRIVILEGES ON DATABASE hospitality TO cloudit;
