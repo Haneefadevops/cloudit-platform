@@ -105,3 +105,117 @@ export interface CalendarDay {
   checkOuts: number;
   reservations: CalendarDayReservation[];
 }
+
+export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'overdue' | 'cancelled';
+
+export interface TaxBreakdownItem {
+  name: string;
+  rate: number;
+  amount: number;
+}
+
+export interface InvoiceReservationInfo {
+  id: string;
+  reservationNumber: string;
+  checkInDate: string;
+  checkOutDate: string;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  issueDate: string;
+  dueDate?: string;
+  subtotal: number;
+  taxBreakdown: TaxBreakdownItem[];
+  totalAmount: number;
+  paidAmount: number;
+  status: InvoiceStatus;
+  notes?: string;
+  propertyId: string;
+  reservationId: string;
+  guestId: string;
+  property?: Property;
+  guest?: Guest;
+  reservation?: InvoiceReservationInfo;
+  createdAt: string;
+}
+
+export interface InvoicePreview {
+  invoiceNumber: string;
+  issueDate: string;
+  dueDate?: string;
+  property: {
+    name: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+    taxId?: string;
+  };
+  guest: {
+    name: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+  };
+  reservation: InvoiceReservationInfo & {
+    room?: Room & { roomType?: RoomType };
+    guest?: Guest;
+  };
+  lineItems: { description: string; amount: number }[];
+  subtotal: number;
+  taxBreakdown: TaxBreakdownItem[];
+  totalAmount: number;
+  paidAmount: number;
+  status: InvoiceStatus;
+  notes?: string;
+}
+
+export interface OccupancyReport {
+  summary: {
+    totalRooms: number;
+    occupiedRooms: number;
+    occupancyRate: number;
+    revenue: number;
+  };
+  byDate: {
+    date: string;
+    occupiedRooms: number;
+    revenue: number;
+  }[];
+}
+
+export interface RevenueReport {
+  summary: {
+    totalRevenue: number;
+    totalSubtotal: number;
+    totalPaid: number;
+    outstanding: number;
+  };
+  taxBreakdown: TaxBreakdownItem[];
+  byRoomType: { name: string; amount: number }[];
+  byStatus: { status: string; amount: number }[];
+}
+
+export interface GuestReport {
+  summary: {
+    totalGuests: number;
+    uniqueGuests: number;
+    newGuests: number;
+    returningGuests: number;
+  };
+  topNationalities: { nationality: string; count: number }[];
+}
+
+export interface ReservationReport {
+  summary: {
+    totalReservations: number;
+    totalRevenue: number;
+    cancellationRate: number;
+    noShowRate: number;
+  };
+  byStatus: { status: string; count: number }[];
+  bySource: { source: string; count: number }[];
+}
+
+export type ReportType = 'occupancy' | 'revenue' | 'guests' | 'reservations';
