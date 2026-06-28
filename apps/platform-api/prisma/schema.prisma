@@ -182,3 +182,17 @@ model EventLog {
   @@index([createdAt])
   @@map("event_logs")
 }
+
+model IntegrationSetting {
+  id                     String   @id @default(uuid())
+  n8nWebhookUrl          String?  @map("n8n_webhook_url")
+  n8nWebhookSecret       String?  @map("n8n_webhook_secret")
+  aiProvider             String   @default("none") @map("ai_provider")
+  aiApiKey               String?  @map("ai_api_key")
+  whatsappApiKey         String?  @map("whatsapp_api_key")
+  whatsappPhoneNumberId  String?  @map("whatsapp_phone_number_id")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@map("integration_settings")
+}

@@ -46,9 +46,14 @@ export class WebhookService {
   }
 
   async send(payload: unknown): Promise<WebhookResult> {
-    const url = this.getWebhookUrl();
-    const secret = this.getSecret();
+    return this.sendTo(this.getWebhookUrl(), payload, this.getSecret());
+  }
 
+  async sendTo(
+    url: string | undefined,
+    payload: unknown,
+    secret?: string,
+  ): Promise<WebhookResult> {
     if (!url) {
       return { success: false, error: 'Webhook URL not configured', attempts: 0 };
     }

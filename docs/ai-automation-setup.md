@@ -30,7 +30,14 @@ Example workflows are stored in `infra/n8n/workflows/`.
 
 ### Configuring CloudIT to Send Events
 
-Set the webhook URL and secret in `apps/platform-api/.env`:
+The easiest way to configure n8n is through the platform web app:
+
+1. Log in to CloudIT Platform and open **Integrations** in the sidebar.
+2. Enter the **Webhook URL** (e.g. `https://n8n.cloudit.lk/webhook/cloudit-events`).
+3. Enter a strong **Webhook Secret** and save.
+4. Click **Test Webhook** to publish a `user.login` test event.
+
+You can also set fallback values in `apps/platform-api/.env`:
 
 ```bash
 N8N_WEBHOOK_URL=https://n8n.cloudit.lk/webhook/cloudit-events
@@ -138,3 +145,17 @@ Use the official Meta endpoints and message templates for production.
 - Use the `.env.example` files as templates; never commit real secrets.
 - Verify webhook signatures before acting on n8n or WhatsApp payloads.
 - Restrict the AI and WhatsApp endpoints with authentication in production if they are exposed publicly.
+
+---
+
+## Using the Event Logs UI
+
+CloudIT Platform includes an event logs page for monitoring and retrying webhook deliveries.
+
+1. Open **Event Logs** in the sidebar.
+2. Use the filters to narrow by event type or status (`pending`, `success`, `failed`).
+3. Click the eye icon on any row to view the full JSON payload.
+4. Click the retry icon on failed events to resend the webhook.
+5. Click **Test Webhook** to publish a `user.login` event and verify your n8n workflow is receiving events.
+
+The page paginates results and shows the HTTP response status for each delivery attempt.
