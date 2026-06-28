@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/client-hospitality"
 }
 
 datasource db {
@@ -219,4 +220,27 @@ model Invoice {
   @@index([reservationId])
   @@index([guestId])
   @@map("invoices")
+}
+
+enum EventStatus {
+  pending
+  success
+  failed
+}
+
+model EventLog {
+  id             String      @id @default(uuid())
+  eventType      String      @map("event_type")
+  payload        Json        @default("{}")
+  status         EventStatus @default(pending)
+  webhookUrl     String?     @map("webhook_url")
+  responseStatus Int?        @map("response_status")
+  errorMessage   String?     @map("error_message")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  @@index([eventType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("event_logs")
 }

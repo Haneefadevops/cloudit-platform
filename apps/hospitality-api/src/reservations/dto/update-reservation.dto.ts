@@ -9,7 +9,7 @@ import {
   IsNumber,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ReservationSource, ReservationStatus } from '@prisma/client';
+import { ReservationSource, ReservationStatus } from '@prisma/client-hospitality';
 
 export class UpdateReservationDto {
   @IsOptional()

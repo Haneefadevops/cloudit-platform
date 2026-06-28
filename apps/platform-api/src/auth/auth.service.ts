@@ -3,6 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventPublisherService } from '../events/event-publisher.service';
+import { EventTypes } from '../events/event-types';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { TokenResponseDto } from './dto/token-response.dto';
@@ -12,6 +14,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly eventPublisher: EventPublisherService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -46,6 +49,16 @@ export class AuthService {
     });
 
     const tokens = await this.generateTokens(user.id);
+
+    const primaryOrg = user.members?.[0]?.organization;
+    void this.eventPublisher.publish(EventTypes.USER_CREATED, {
+      userId: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      organizationId: primaryOrg?.id,
+    });
+
     return {
       user: this.sanitizeUser(user),
       ...tokens,
@@ -67,6 +80,13 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokens(user.id);
+
+    void this.eventPublisher.publish(EventTypes.USER_LOGIN, {
+      userId: user.id,
+      email: user.email,
+      timestamp: new Date().toISOString(),
+    });
+
     return {
       user: this.sanitizeUser(user),
       ...tokens,

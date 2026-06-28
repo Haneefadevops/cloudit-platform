@@ -11,6 +11,7 @@ import { RolesModule } from './roles/roles.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { SettingsModule } from './settings/settings.module';
 import { HealthModule } from './health/health.module';
+import { EventsModule } from './events/events.module';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 
 @Module({
@@ -27,6 +28,7 @@ import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor
     AuditLogsModule,
     SettingsModule,
     HealthModule,
+    EventsModule,
   ],
   controllers: [AppController],
   providers: [

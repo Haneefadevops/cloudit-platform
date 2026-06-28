@@ -1,4 +1,4 @@
-import { PrismaClient, RoomStatus, ReservationStatus, TaxRateType } from '@prisma/client';
+import { PrismaClient, RoomStatus, ReservationStatus, TaxRateType } from '@prisma/client-hospitality';
 
 const prisma = new PrismaClient();
 

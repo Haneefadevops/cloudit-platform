@@ -6,7 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
-import { RoomStatus, ReservationStatus } from '@prisma/client';
+import { RoomStatus, ReservationStatus } from '@prisma/client-hospitality';
 
 @Injectable()
 export class RoomsService {

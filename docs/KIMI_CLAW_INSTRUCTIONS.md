@@ -10,11 +10,11 @@
 
 ## CURRENT TASK TRACKER
 
-**Last Updated:** 2026-06-28 16:00
+**Last Updated:** 2026-06-28 17:20
 **Current Sprint:** Sprint 5
-**Current Task:** Task 5.1 — n8n Webhook Structure & Event System
+**Current Task:** Task 5.2 — Example n8n Workflow & AI Module Placeholder
 **Status:** NOT STARTED
-**Next Task:** Task 5.2 — Example n8n Workflow & AI Module Placeholder
+**Next Task:** Task 5.3 — Event System UI & Integration Docs
 
 **Sprint Progress:**
 - [x] Sprint 1 — DevOps Infrastructure (COMPLETE)
@@ -43,7 +43,7 @@
 - [x] Task 4.8 — Build Reservations, Calendar & Check-in/out UI
 - [x] Task 4.9 — Invoices & Reports UI
 - [x] Task 4.10 — Hospitality Integration & E2E Tests
-- [ ] Task 5.1 — n8n Webhook Structure & Event System
+- [x] Task 5.1 — n8n Webhook Structure & Event System
 - [ ] Task 5.2 — Example n8n Workflow & AI Module Placeholder
 - [ ] Task 5.3 — Event System UI & Integration Docs
 - [ ] Task 6.1 — Backup & Restore Scripts

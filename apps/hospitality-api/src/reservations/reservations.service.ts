@@ -5,19 +5,22 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InvoicesService } from '../invoices/invoices.service';
+import { EventPublisherService } from '../events/event-publisher.service';
+import { EventTypes } from '../events/event-types';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import {
   ReservationStatus,
   RoomStatus,
   PaymentStatus,
-} from '@prisma/client';
+} from '@prisma/client-hospitality';
 
 @Injectable()
 export class ReservationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly invoicesService: InvoicesService,
+    private readonly eventPublisher: EventPublisherService,
   ) {}
 
   async findAll(
@@ -126,7 +129,7 @@ export class ReservationsService {
 
     const reservationNumber = await this.generateReservationNumber();
 
-    return this.prisma.reservation.create({
+    const reservation = await this.prisma.reservation.create({
       data: {
         reservationNumber,
         propertyId: dto.propertyId,
@@ -154,6 +157,21 @@ export class ReservationsService {
         property: true,
       },
     });
+
+    void this.eventPublisher.publish(EventTypes.BOOKING_CREATED, {
+      reservationId: reservation.id,
+      reservationNumber: reservation.reservationNumber,
+      propertyId: reservation.propertyId,
+      roomId: reservation.roomId,
+      guestId: reservation.guestId,
+      checkInDate: reservation.checkInDate.toISOString(),
+      checkOutDate: reservation.checkOutDate.toISOString(),
+      totalAmount: Number(reservation.totalAmount),
+      source: reservation.source,
+      organizationId,
+    });
+
+    return reservation;
   }
 
   async update(
@@ -248,6 +266,15 @@ export class ReservationsService {
       }),
     ]);
 
+    void this.eventPublisher.publish(EventTypes.BOOKING_CHECKED_IN, {
+      reservationId: updated.id,
+      reservationNumber: updated.reservationNumber,
+      roomId: updated.roomId,
+      guestId: updated.guestId,
+      checkedInAt: new Date().toISOString(),
+      organizationId,
+    });
+
     return updated;
   }
 
@@ -289,6 +316,16 @@ export class ReservationsService {
     } catch {
       // Don't fail checkout if invoice generation fails
     }
+
+    void this.eventPublisher.publish(EventTypes.BOOKING_CHECKED_OUT, {
+      reservationId: updated.id,
+      reservationNumber: updated.reservationNumber,
+      roomId: updated.roomId,
+      guestId: updated.guestId,
+      checkedOutAt: new Date().toISOString(),
+      finalAmount: finalAmount !== undefined ? Number(finalAmount) : undefined,
+      organizationId,
+    });
 
     return updated;
   }

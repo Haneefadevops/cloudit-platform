@@ -4,7 +4,7 @@ import {
   IsUUID,
   IsEnum,
 } from 'class-validator';
-import { RoomStatus } from '@prisma/client';
+import { RoomStatus } from '@prisma/client-hospitality';
 
 export class UpdateRoomDto {
   @IsOptional()

@@ -7,7 +7,7 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TaxRateType } from '@prisma/client';
+import { TaxRateType } from '@prisma/client-hospitality';
 
 export class UpdateTaxRateDto {
   @IsOptional()

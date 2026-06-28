@@ -15,6 +15,7 @@ import { ReservationsModule } from './reservations/reservations.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { TaxesModule } from './taxes/taxes.module';
 import { ReportsModule } from './reports/reports.module';
+import { EventsModule } from './events/events.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 @Module({
@@ -43,6 +44,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     InvoicesModule,
     TaxesModule,
     ReportsModule,
+    EventsModule,
   ],
   controllers: [AppController],
   providers: [

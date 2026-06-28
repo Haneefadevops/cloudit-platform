@@ -5,7 +5,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
-import { InvoiceStatus, ReservationStatus } from '@prisma/client';
+import { InvoiceStatus, ReservationStatus } from '@prisma/client-hospitality';
+import { EventPublisherService } from '../events/event-publisher.service';
+import { EventTypes } from '../events/event-types';
 
 export interface TaxBreakdownItem {
   name: string;
@@ -21,7 +23,10 @@ export interface InvoiceCalculation {
 
 @Injectable()
 export class InvoicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventPublisher: EventPublisherService,
+  ) {}
 
   async findAll(
     organizationId: string,
@@ -171,7 +176,7 @@ export class InvoicesService {
     const calculation = await this.calculateTaxes(organizationId, subtotal);
     const invoiceNumber = await this.generateInvoiceNumber();
 
-    return this.prisma.invoice.create({
+    const invoice = await this.prisma.invoice.create({
       data: {
         invoiceNumber,
         reservationId: dto.reservationId,
@@ -191,6 +196,17 @@ export class InvoicesService {
         reservation: true,
       },
     });
+
+    void this.eventPublisher.publish(EventTypes.INVOICE_GENERATED, {
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      reservationId: invoice.reservationId,
+      guestId: invoice.guestId,
+      totalAmount: Number(invoice.totalAmount),
+      organizationId,
+    });
+
+    return invoice;
   }
 
   async update(id: string, organizationId: string, dto: any) {
