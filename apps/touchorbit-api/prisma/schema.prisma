@@ -9,65 +9,112 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String     @id @default(uuid())
+  email     String     @unique
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
   employees Employee[]
+
+  @@map("users")
 }
 
 model Organization {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String       @id @default(uuid())
+  name        String
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
   departments Department[]
-  employees Employee[]
+  employees   Employee[]
+
+  @@map("organizations")
 }
 
 model Department {
   id             String       @id @default(uuid())
-  organizationId String
+  organizationId String       @map("organization_id")
   name           String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   employees      Employee[]
+
+  @@index([organizationId])
+  @@map("departments")
 }
 
 model Employee {
   id                String             @id @default(uuid())
-  userId            String
-  organizationId    String
-  departmentId      String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  user              User               @relation(fields: [userId], references: [id])
-  organization      Organization       @relation(fields: [organizationId], references: [id])
-  department        Department?        @relation(fields: [departmentId], references: [id])
+  userId            String             @map("user_id")
+  organizationId    String             @map("organization_id")
+  departmentId      String?            @map("department_id")
+  jobTitle          String?            @map("job_title")
+  joinedAt          DateTime           @default(now()) @map("joined_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department        Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   leaveRequests     LeaveRequest[]
   attendanceRecords AttendanceRecord[]
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([departmentId])
+  @@map("employees")
+}
+
+enum LeaveStatus {
+  pending
+  approved
+  rejected
+  cancelled
+
+  @@map("leave_status")
 }
 
 model LeaveRequest {
-  id         String   @id @default(uuid())
-  employeeId String
-  startDate  DateTime
-  endDate    DateTime
-  status     String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  employee   Employee @relation(fields: [employeeId], references: [id])
+  id         String      @id @default(uuid())
+  employeeId String      @map("employee_id")
+  startDate  DateTime    @map("start_date")
+  endDate    DateTime    @map("end_date")
+  reason     String?
+  status     LeaveStatus @default(pending)
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("leave_requests")
+}
+
+enum AttendanceStatus {
+  present
+  absent
+  late
+  half_day
+  on_leave
+
+  @@map("attendance_status")
 }
 
 model AttendanceRecord {
-  id         String   @id @default(uuid())
-  employeeId String
+  id         String           @id @default(uuid())
+  employeeId String           @map("employee_id")
   date       DateTime
-  status     String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  employee   Employee @relation(fields: [employeeId], references: [id])
+  status     AttendanceStatus
+  notes      String?
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([date])
+  @@map("attendance_records")
 }
 
 model EventLog {
