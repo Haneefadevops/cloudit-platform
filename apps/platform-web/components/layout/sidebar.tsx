@@ -15,6 +15,7 @@ import {
   FileText,
   Activity,
   Plug,
+  Puzzle,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -30,6 +31,7 @@ const navItems = [
   { href: "/dashboard/organizations", label: "Organizations", icon: Building2 },
   { href: "/dashboard/events", label: "Event Logs", icon: Activity },
   { href: "/dashboard/integrations", label: "Integrations", icon: Plug },
+  { href: "/dashboard/admin/modules", label: "Modules", icon: Puzzle },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
   { href: "/dashboard/audit-logs", label: "Audit Logs", icon: FileText },
 ];

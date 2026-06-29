@@ -15,6 +15,7 @@ import { HealthModule } from './health/health.module';
 import { EventsModule } from './events/events.module';
 import { AiModule } from './ai/ai.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { ModulesModule } from './modules/modules.module';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -58,6 +59,7 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
     EventsModule,
     AiModule,
     IntegrationsModule,
+    ModulesModule,
   ],
   controllers: [AppController],
   providers: [

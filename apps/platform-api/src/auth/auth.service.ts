@@ -189,8 +189,13 @@ export class AuthService {
   }
 
   private async generateTokens(userId: string): Promise<TokenResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { members: { select: { orgId: true } } },
+    });
+    const orgId = user?.members?.[0]?.orgId;
     const accessToken = this.jwtService.sign(
-      { sub: userId },
+      { sub: userId, orgId },
       { expiresIn: '15m' },
     );
     const refreshToken = this.generateRandomToken();

@@ -42,10 +42,11 @@ model Organization {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  members    OrganizationMember[]
-  auditLogs  AuditLog[]
-  roles      Role[]
-  settingsKV Setting[]
+  members         OrganizationMember[]
+  auditLogs       AuditLog[]
+  roles           Role[]
+  settingsKV      Setting[]
+  productModules  OrganizationProductModule[]
 
   @@index([slug])
   @@index([plan])
@@ -195,4 +196,21 @@ model IntegrationSetting {
   updatedAt              DateTime @updatedAt @map("updated_at")
 
   @@map("integration_settings")
+}
+
+model OrganizationProductModule {
+  id        String   @id @default(uuid())
+  orgId     String   @map("org_id")
+  product   String
+  moduleKey String   @map("module_key")
+  enabled   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, product, moduleKey])
+  @@index([orgId])
+  @@index([product])
+  @@map("organization_product_modules")
 }
