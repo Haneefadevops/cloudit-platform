@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -31,7 +41,11 @@ export class OrganizationsController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update organization' })
-  async update(@Param('id') id: string, @CurrentUser() user: any, @Body() dto: any) {
+  async update(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() dto: any,
+  ) {
     return this.organizationsService.update(id, user.userId, dto);
   }
 
@@ -43,7 +57,11 @@ export class OrganizationsController {
 
   @Post(':id/members')
   @ApiOperation({ summary: 'Invite member to organization' })
-  async inviteMember(@Param('id') id: string, @CurrentUser() user: any, @Body() dto: any) {
+  async inviteMember(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() dto: any,
+  ) {
     return this.organizationsService.inviteMember(id, user.userId, dto);
   }
 
@@ -55,7 +73,12 @@ export class OrganizationsController {
     @CurrentUser() user: any,
     @Body() dto: any,
   ) {
-    return this.organizationsService.updateMember(id, memberId, user.userId, dto);
+    return this.organizationsService.updateMember(
+      id,
+      memberId,
+      user.userId,
+      dto,
+    );
   }
 
   @Delete(':id/members/:memberId')

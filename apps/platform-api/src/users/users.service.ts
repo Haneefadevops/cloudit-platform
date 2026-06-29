@@ -13,11 +13,21 @@ export class UsersService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: { members: { include: { organization: { select: { id: true, name: true } } } } },
+        include: {
+          members: {
+            include: { organization: { select: { id: true, name: true } } },
+          },
+        },
       }),
       this.prisma.user.count(),
     ]);
-    return { data: data.map(this.sanitize), total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      data: data.map(this.sanitize),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async findById(id: string) {

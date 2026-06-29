@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsUUID, IsISO8601 } from 'class-validator';
+import { IsNotEmpty, IsUUID, IsISO8601 } from "class-validator";
 
 export class AvailabilityQueryDto {
   @IsNotEmpty()

@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { ReservationStatus, RoomStatus } from '@prisma/client-hospitality';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { ReservationStatus, RoomStatus } from "@prisma/client-hospitality";
 
 @Injectable()
 export class ReportsService {
@@ -11,7 +11,7 @@ export class ReportsService {
       where: { id: propertyId, organizationId },
     });
     if (!property) {
-      throw new NotFoundException('Property not found');
+      throw new NotFoundException("Property not found");
     }
   }
 
@@ -42,10 +42,13 @@ export class ReportsService {
       },
     });
 
-    const days: Record<string, { date: string; occupiedRooms: number; revenue: number }> = {};
+    const days: Record<
+      string,
+      { date: string; occupiedRooms: number; revenue: number }
+    > = {};
     const current = new Date(start);
     while (current <= end) {
-      const key = current.toISOString().split('T')[0];
+      const key = current.toISOString().split("T")[0];
       days[key] = { date: key, occupiedRooms: 0, revenue: 0 };
       current.setDate(current.getDate() + 1);
     }
@@ -55,7 +58,8 @@ export class ReportsService {
       const nights = Math.max(
         1,
         Math.ceil(
-          (reservation.checkOutDate.getTime() - reservation.checkInDate.getTime()) /
+          (reservation.checkOutDate.getTime() -
+            reservation.checkInDate.getTime()) /
             (1000 * 60 * 60 * 24),
         ),
       );
@@ -63,7 +67,7 @@ export class ReportsService {
 
       const day = new Date(reservation.checkInDate);
       while (day < reservation.checkOutDate) {
-        const key = day.toISOString().split('T')[0];
+        const key = day.toISOString().split("T")[0];
         if (days[key]) {
           days[key].occupiedRooms += 1;
           days[key].revenue += nightlyRate;
@@ -149,7 +153,8 @@ export class ReportsService {
         taxTotals[tax.name] = (taxTotals[tax.name] || 0) + tax.amount;
       }
 
-      const roomTypeName = invoice.reservation?.room?.roomType?.name || 'Unknown';
+      const roomTypeName =
+        invoice.reservation?.room?.roomType?.name || "Unknown";
       byRoomType[roomTypeName] =
         (byRoomType[roomTypeName] || 0) + Number(invoice.totalAmount);
 
@@ -213,8 +218,9 @@ export class ReportsService {
 
     const nationalityCounts: Record<string, number> = {};
     for (const reservation of reservations) {
-      const nationality = reservation.guest.nationality || 'Unknown';
-      nationalityCounts[nationality] = (nationalityCounts[nationality] || 0) + 1;
+      const nationality = reservation.guest.nationality || "Unknown";
+      nationalityCounts[nationality] =
+        (nationalityCounts[nationality] || 0) + 1;
     }
 
     const topNationalities = Object.entries(nationalityCounts)

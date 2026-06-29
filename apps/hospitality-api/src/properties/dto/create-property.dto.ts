@@ -4,7 +4,7 @@ import {
   IsString,
   IsEmail,
   IsObject,
-} from 'class-validator';
+} from "class-validator";
 
 export class CreatePropertyDto {
   @IsNotEmpty()

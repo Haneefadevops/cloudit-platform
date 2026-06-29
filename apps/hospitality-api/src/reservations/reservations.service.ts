@@ -2,18 +2,18 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { InvoicesService } from '../invoices/invoices.service';
-import { EventPublisherService } from '../events/event-publisher.service';
-import { EventTypes } from '../events/event-types';
-import { CreateReservationDto } from './dto/create-reservation.dto';
-import { UpdateReservationDto } from './dto/update-reservation.dto';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { InvoicesService } from "../invoices/invoices.service";
+import { EventPublisherService } from "../events/event-publisher.service";
+import { EventTypes } from "../events/event-types";
+import { CreateReservationDto } from "./dto/create-reservation.dto";
+import { UpdateReservationDto } from "./dto/update-reservation.dto";
 import {
   ReservationStatus,
   RoomStatus,
   PaymentStatus,
-} from '@prisma/client-hospitality';
+} from "@prisma/client-hospitality";
 
 @Injectable()
 export class ReservationsService {
@@ -64,7 +64,7 @@ export class ReservationsService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         include: {
           guest: true,
           room: { include: { roomType: true } },
@@ -97,7 +97,7 @@ export class ReservationsService {
     });
 
     if (!reservation) {
-      throw new NotFoundException('Reservation not found');
+      throw new NotFoundException("Reservation not found");
     }
 
     return reservation;
@@ -112,10 +112,17 @@ export class ReservationsService {
     const checkOut = new Date(dto.checkOutDate);
 
     if (checkIn >= checkOut) {
-      throw new BadRequestException('Check-out date must be after check-in date');
+      throw new BadRequestException(
+        "Check-out date must be after check-in date",
+      );
     }
 
-    await this.validateRelations(organizationId, dto.propertyId, dto.roomId, dto.guestId);
+    await this.validateRelations(
+      organizationId,
+      dto.propertyId,
+      dto.roomId,
+      dto.guestId,
+    );
 
     // Check room availability
     const isAvailable = await this.isRoomAvailable(
@@ -124,7 +131,9 @@ export class ReservationsService {
       checkOut,
     );
     if (!isAvailable) {
-      throw new BadRequestException('Room is not available for the selected dates');
+      throw new BadRequestException(
+        "Room is not available for the selected dates",
+      );
     }
 
     const reservationNumber = await this.generateReservationNumber();
@@ -147,7 +156,7 @@ export class ReservationsService {
             ? PaymentStatus.paid
             : PaymentStatus.partial
           : PaymentStatus.pending,
-        source: dto.source ?? 'direct',
+        source: dto.source ?? "direct",
         notes: dto.notes,
         createdBy: userId,
       },
@@ -174,11 +183,7 @@ export class ReservationsService {
     return reservation;
   }
 
-  async update(
-    id: string,
-    organizationId: string,
-    dto: UpdateReservationDto,
-  ) {
+  async update(id: string, organizationId: string, dto: UpdateReservationDto) {
     const existing = await this.findOne(id, organizationId);
 
     const checkIn = dto.checkInDate
@@ -189,16 +194,14 @@ export class ReservationsService {
       : existing.checkOutDate;
 
     if (checkIn >= checkOut) {
-      throw new BadRequestException('Check-out date must be after check-in date');
+      throw new BadRequestException(
+        "Check-out date must be after check-in date",
+      );
     }
 
     const newRoomId = dto.roomId || existing.roomId;
 
-    if (
-      dto.roomId ||
-      dto.checkInDate ||
-      dto.checkOutDate
-    ) {
+    if (dto.roomId || dto.checkInDate || dto.checkOutDate) {
       await this.validateRelations(
         organizationId,
         dto.propertyId || existing.propertyId,
@@ -213,7 +216,9 @@ export class ReservationsService {
         id,
       );
       if (!isAvailable) {
-        throw new BadRequestException('Room is not available for the selected dates');
+        throw new BadRequestException(
+          "Room is not available for the selected dates",
+        );
       }
     }
 
@@ -248,7 +253,9 @@ export class ReservationsService {
     const reservation = await this.findOne(id, organizationId);
 
     if (reservation.status !== ReservationStatus.confirmed) {
-      throw new BadRequestException('Reservation must be confirmed before check-in');
+      throw new BadRequestException(
+        "Reservation must be confirmed before check-in",
+      );
     }
 
     const [updated] = await this.prisma.$transaction([
@@ -256,7 +263,9 @@ export class ReservationsService {
         where: { id },
         data: {
           status: ReservationStatus.checked_in,
-          notes: notes ? `${reservation.notes ?? ''}\nCheck-in: ${notes}`.trim() : reservation.notes,
+          notes: notes
+            ? `${reservation.notes ?? ""}\nCheck-in: ${notes}`.trim()
+            : reservation.notes,
         },
         include: {
           guest: true,
@@ -286,7 +295,9 @@ export class ReservationsService {
     const reservation = await this.findOne(id, organizationId);
 
     if (reservation.status !== ReservationStatus.checked_in) {
-      throw new BadRequestException('Reservation must be checked in before check-out');
+      throw new BadRequestException(
+        "Reservation must be checked in before check-out",
+      );
     }
 
     const totalAmount = finalAmount ?? reservation.totalAmount;
@@ -345,7 +356,7 @@ export class ReservationsService {
     });
 
     if (!property) {
-      throw new NotFoundException('Property not found');
+      throw new NotFoundException("Property not found");
     }
 
     const start = new Date(year, month - 1, 1);
@@ -368,7 +379,7 @@ export class ReservationsService {
         guest: true,
         room: true,
       },
-      orderBy: { checkInDate: 'asc' },
+      orderBy: { checkInDate: "asc" },
     });
 
     const days: Record<
@@ -384,7 +395,7 @@ export class ReservationsService {
     const daysInMonth = new Date(year, month, 0).getDate();
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month - 1, day);
-      const key = date.toISOString().split('T')[0];
+      const key = date.toISOString().split("T")[0];
       days[key] = {
         date: key,
         checkIns: 0,
@@ -394,8 +405,8 @@ export class ReservationsService {
     }
 
     for (const reservation of reservations) {
-      const checkInKey = reservation.checkInDate.toISOString().split('T')[0];
-      const checkOutKey = reservation.checkOutDate.toISOString().split('T')[0];
+      const checkInKey = reservation.checkInDate.toISOString().split("T")[0];
+      const checkOutKey = reservation.checkOutDate.toISOString().split("T")[0];
 
       if (days[checkInKey]) {
         days[checkInKey].checkIns++;
@@ -405,7 +416,7 @@ export class ReservationsService {
           guestName: `${reservation.guest.firstName} ${reservation.guest.lastName}`,
           roomNumber: reservation.room.roomNumber,
           status: reservation.status,
-          type: 'check-in',
+          type: "check-in",
         });
       }
 
@@ -417,7 +428,7 @@ export class ReservationsService {
           guestName: `${reservation.guest.firstName} ${reservation.guest.lastName}`,
           roomNumber: reservation.room.roomNumber,
           status: reservation.status,
-          type: 'check-out',
+          type: "check-out",
         });
       }
     }
@@ -468,23 +479,27 @@ export class ReservationsService {
       }),
     ]);
 
-    if (!property) throw new BadRequestException('Property not found or access denied');
-    if (!room) throw new BadRequestException('Room not found or access denied');
+    if (!property)
+      throw new BadRequestException("Property not found or access denied");
+    if (!room) throw new BadRequestException("Room not found or access denied");
     if (room.propertyId !== propertyId) {
-      throw new BadRequestException('Room does not belong to the selected property');
+      throw new BadRequestException(
+        "Room does not belong to the selected property",
+      );
     }
-    if (!guest) throw new BadRequestException('Guest not found or access denied');
+    if (!guest)
+      throw new BadRequestException("Guest not found or access denied");
   }
 
   private async generateReservationNumber(): Promise<string> {
     const today = new Date();
-    const datePart = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const datePart = today.toISOString().slice(0, 10).replace(/-/g, "");
     const count = await this.prisma.reservation.count({
       where: {
         reservationNumber: { startsWith: `RES-${datePart}` },
       },
     });
-    const sequence = (count + 1).toString().padStart(4, '0');
+    const sequence = (count + 1).toString().padStart(4, "0");
     return `RES-${datePart}-${sequence}`;
   }
 }

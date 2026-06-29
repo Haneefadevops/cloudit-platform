@@ -2,10 +2,10 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateRoomTypeDto } from './dto/create-room-type.dto';
-import { UpdateRoomTypeDto } from './dto/update-room-type.dto';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { CreateRoomTypeDto } from "./dto/create-room-type.dto";
+import { UpdateRoomTypeDto } from "./dto/update-room-type.dto";
 
 @Injectable()
 export class RoomTypesService {
@@ -31,7 +31,7 @@ export class RoomTypesService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         include: {
           _count: {
             select: { rooms: true },
@@ -59,7 +59,7 @@ export class RoomTypesService {
     });
 
     if (!roomType) {
-      throw new NotFoundException('Room type not found');
+      throw new NotFoundException("Room type not found");
     }
 
     return roomType;
@@ -72,7 +72,7 @@ export class RoomTypesService {
     });
 
     if (!property) {
-      throw new BadRequestException('Property not found or access denied');
+      throw new BadRequestException("Property not found or access denied");
     }
 
     const { propertyId, ...data } = dto;
@@ -92,7 +92,7 @@ export class RoomTypesService {
         where: { id: dto.propertyId, organizationId },
       });
       if (!property) {
-        throw new BadRequestException('Property not found or access denied');
+        throw new BadRequestException("Property not found or access denied");
       }
     }
 

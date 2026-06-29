@@ -6,8 +6,8 @@ import {
   IsArray,
   IsUUID,
   Min,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+} from "class-validator";
+import { Type } from "class-transformer";
 
 export class UpdateRoomTypeDto {
   @IsOptional()

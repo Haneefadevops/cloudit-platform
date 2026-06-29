@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Post,
-  Body,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Patch, Post, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
@@ -56,12 +49,16 @@ export class IntegrationsController {
     const id = existing?.id;
 
     const data: Record<string, unknown> = {};
-    if (dto.n8nWebhookUrl !== undefined) data.n8nWebhookUrl = dto.n8nWebhookUrl || null;
-    if (dto.n8nWebhookSecret !== undefined) data.n8nWebhookSecret = dto.n8nWebhookSecret || null;
+    if (dto.n8nWebhookUrl !== undefined)
+      data.n8nWebhookUrl = dto.n8nWebhookUrl || null;
+    if (dto.n8nWebhookSecret !== undefined)
+      data.n8nWebhookSecret = dto.n8nWebhookSecret || null;
     if (dto.aiProvider !== undefined) data.aiProvider = dto.aiProvider;
     if (dto.aiApiKey !== undefined) data.aiApiKey = dto.aiApiKey || null;
-    if (dto.whatsappApiKey !== undefined) data.whatsappApiKey = dto.whatsappApiKey || null;
-    if (dto.whatsappPhoneNumberId !== undefined) data.whatsappPhoneNumberId = dto.whatsappPhoneNumberId || null;
+    if (dto.whatsappApiKey !== undefined)
+      data.whatsappApiKey = dto.whatsappApiKey || null;
+    if (dto.whatsappPhoneNumberId !== undefined)
+      data.whatsappPhoneNumberId = dto.whatsappPhoneNumberId || null;
 
     if (id) {
       return this.prisma.integrationSetting.update({ where: { id }, data });

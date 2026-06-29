@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -18,14 +23,19 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const existing = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
     if (existing) {
       throw new BadRequestException('Email already in use');
     }
 
     const orgName = dto.orgName || `${dto.firstName}'s Organization`;
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    const slug = orgName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const slug = orgName
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
 
     const user = await this.prisma.user.create({
       data: {
@@ -179,7 +189,10 @@ export class AuthService {
   }
 
   private async generateTokens(userId: string): Promise<TokenResponseDto> {
-    const accessToken = this.jwtService.sign({ sub: userId }, { expiresIn: '15m' });
+    const accessToken = this.jwtService.sign(
+      { sub: userId },
+      { expiresIn: '15m' },
+    );
     const refreshToken = this.generateRandomToken();
     const tokenHash = await this.hashToken(refreshToken);
 
@@ -195,7 +208,9 @@ export class AuthService {
   }
 
   private generateRandomToken(): string {
-    return Buffer.from(crypto.randomUUID() + crypto.randomUUID()).toString('base64');
+    return Buffer.from(crypto.randomUUID() + crypto.randomUUID()).toString(
+      'base64',
+    );
   }
 
   private async hashToken(token: string): Promise<string> {

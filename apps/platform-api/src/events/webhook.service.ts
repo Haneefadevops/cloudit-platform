@@ -29,11 +29,16 @@ export class WebhookService {
   }
 
   signPayload(payload: unknown, secret: string): string {
-    const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    const body =
+      typeof payload === 'string' ? payload : JSON.stringify(payload);
     return crypto.createHmac('sha256', secret).update(body).digest('hex');
   }
 
-  verifySignature(payload: unknown, signature: string, secret: string): boolean {
+  verifySignature(
+    payload: unknown,
+    signature: string,
+    secret: string,
+  ): boolean {
     const expected = this.signPayload(payload, secret);
     try {
       return crypto.timingSafeEqual(
@@ -55,7 +60,11 @@ export class WebhookService {
     secret?: string,
   ): Promise<WebhookResult> {
     if (!url) {
-      return { success: false, error: 'Webhook URL not configured', attempts: 0 };
+      return {
+        success: false,
+        error: 'Webhook URL not configured',
+        attempts: 0,
+      };
     }
 
     const headers: Record<string, string> = {
@@ -76,8 +85,14 @@ export class WebhookService {
           headers,
           timeout: 10000,
         });
-        this.logger.log(`Webhook delivered to ${url} (status ${response.status})`);
-        return { success: true, statusCode: response.status, attempts: attempt };
+        this.logger.log(
+          `Webhook delivered to ${url} (status ${response.status})`,
+        );
+        return {
+          success: true,
+          statusCode: response.status,
+          attempts: attempt,
+        };
       } catch (error) {
         const axiosError = error as AxiosError;
         lastError = axiosError.message;

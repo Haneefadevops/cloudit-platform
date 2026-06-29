@@ -29,8 +29,10 @@ export class EventPublisherService {
     this.eventEmitter.emit(eventType, wrappedPayload);
 
     const settings = await this.getIntegrationSettings();
-    const webhookUrl = settings?.n8nWebhookUrl || this.webhookService.getWebhookUrl();
-    const webhookSecret = settings?.n8nWebhookSecret || this.webhookService.getSecret();
+    const webhookUrl =
+      settings?.n8nWebhookUrl || this.webhookService.getWebhookUrl();
+    const webhookSecret =
+      settings?.n8nWebhookSecret || this.webhookService.getSecret();
 
     const eventLog = await this.prisma.eventLog.create({
       data: {
@@ -42,7 +44,9 @@ export class EventPublisherService {
     });
 
     if (!webhookUrl) {
-      this.logger.log(`No webhook configured for event ${eventType}; skipping remote delivery`);
+      this.logger.log(
+        `No webhook configured for event ${eventType}; skipping remote delivery`,
+      );
       await this.prisma.eventLog.update({
         where: { id: eventLog.id },
         data: { status: 'success' },
@@ -50,7 +54,11 @@ export class EventPublisherService {
       return;
     }
 
-    const result = await this.webhookService.sendTo(webhookUrl, wrappedPayload, webhookSecret);
+    const result = await this.webhookService.sendTo(
+      webhookUrl,
+      wrappedPayload,
+      webhookSecret,
+    );
 
     await this.prisma.eventLog.update({
       where: { id: eventLog.id },

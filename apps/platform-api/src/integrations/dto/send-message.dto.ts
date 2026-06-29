@@ -2,7 +2,9 @@ import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SendMessageDto {
-  @ApiProperty({ description: 'Recipient phone number in international format' })
+  @ApiProperty({
+    description: 'Recipient phone number in international format',
+  })
   @IsString()
   @IsNotEmpty()
   phone!: string;
@@ -14,12 +16,16 @@ export class SendMessageDto {
 }
 
 export class SendTemplateDto {
-  @ApiProperty({ description: 'Recipient phone number in international format' })
+  @ApiProperty({
+    description: 'Recipient phone number in international format',
+  })
   @IsString()
   @IsNotEmpty()
   phone!: string;
 
-  @ApiProperty({ description: 'Template ID registered with WhatsApp Business API' })
+  @ApiProperty({
+    description: 'Template ID registered with WhatsApp Business API',
+  })
   @IsString()
   @IsNotEmpty()
   templateId!: string;

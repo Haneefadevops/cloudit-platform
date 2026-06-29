@@ -8,9 +8,12 @@ import {
   IsEnum,
   Min,
   IsNumber,
-} from 'class-validator';
-import { Type } from 'class-transformer';
-import { ReservationSource, ReservationStatus } from '@prisma/client-hospitality';
+} from "class-validator";
+import { Type } from "class-transformer";
+import {
+  ReservationSource,
+  ReservationStatus,
+} from "@prisma/client-hospitality";
 
 export class CreateReservationDto {
   @IsNotEmpty()

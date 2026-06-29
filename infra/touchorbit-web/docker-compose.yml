@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  touchorbit-web:
+    build:
+      context: ../..
+      dockerfile: infra/touchorbit-web/Dockerfile
+    image: cloudit/touchorbit-web:latest
+    container_name: touchorbit-web
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file:
+      - ../../apps/touchorbit-web/.env
+    environment:
+      - NODE_ENV=production
+      - PORT=3007
+    networks:
+      - cloudit
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.touchorbit-web.rule=Host(`touchorbit.${DOMAIN:-cloudit.lk}`)"
+      - "traefik.http.routers.touchorbit-web.entrypoints=websecure"
+      - "traefik.http.routers.touchorbit-web.tls.certresolver=cloudflare"
+      - "traefik.http.routers.touchorbit-web.tls.domains[0].main=${DOMAIN:-cloudit.lk}"
+      - "traefik.http.routers.touchorbit-web.tls.domains[0].sans=*.${DOMAIN:-cloudit.lk}"
+      - "traefik.http.services.touchorbit-web.loadbalancer.server.port=3007"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3007 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+networks:
+  cloudit:
+    external: true

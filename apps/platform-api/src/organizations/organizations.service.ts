@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -10,21 +15,38 @@ export class OrganizationsService {
       where: { userId },
       include: { organization: true },
     });
-    return members.map(m => ({ ...m.organization, role: m.role }));
+    return members.map((m) => ({ ...m.organization, role: m.role }));
   }
 
   async findOne(id: string, userId: string) {
     await this.checkMembership(id, userId);
     const org = await this.prisma.organization.findUnique({
       where: { id },
-      include: { members: { include: { user: { select: { id: true, email: true, firstName: true, lastName: true, avatar: true } } } } },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+              },
+            },
+          },
+        },
+      },
     });
     if (!org) throw new NotFoundException('Organization not found');
     return org;
   }
 
   async create(userId: string, dto: any) {
-    const slug = `${dto.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}-${Date.now().toString(36)}`;
+    const slug = `${dto.name
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '')}-${Date.now().toString(36)}`;
     const org = await this.prisma.organization.create({
       data: {
         name: dto.name,
@@ -60,7 +82,9 @@ export class OrganizationsService {
 
   async inviteMember(id: string, userId: string, dto: any) {
     await this.checkAdmin(id, userId);
-    const targetUser = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const targetUser = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
     if (!targetUser) {
       throw new BadRequestException('User not found with this email');
     }
@@ -93,7 +117,8 @@ export class OrganizationsService {
     const member = await this.prisma.organizationMember.findUnique({
       where: { userId_orgId: { userId, orgId } },
     });
-    if (!member) throw new ForbiddenException('Not a member of this organization');
+    if (!member)
+      throw new ForbiddenException('Not a member of this organization');
   }
 
   private async checkAdmin(orgId: string, userId: string) {

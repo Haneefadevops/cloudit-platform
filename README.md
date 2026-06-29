@@ -1,6 +1,19 @@
 # CloudIT Platform
 
-Lightweight self-hosted platform running on a single Hetzner CX33 server (4 vCPU, 8 GB RAM).
+Lightweight self-hosted platform running on a single Hetzner CX33 server (4 vCPU, 8 GB RAM, 80 GB SSD).
+
+## Table of Contents
+
+- [What's Inside](#whats-inside)
+- [Quick Start (Local)](#quick-start-local)
+- [How to Deploy](#how-to-deploy)
+- [How to Add a New App](#how-to-add-a-new-app)
+- [Backup & Restore](#backup--restore)
+- [Useful Commands](#useful-commands)
+- [Project Structure](#project-structure)
+- [Architecture](#architecture)
+- [Documentation](#documentation)
+- [License](#license)
 
 ## What's Inside
 
@@ -11,6 +24,14 @@ Lightweight self-hosted platform running on a single Hetzner CX33 server (4 vCPU
 | **Redis** | Caching, n8n queue | No |
 | **n8n** | Workflow automation | Yes |
 | **Uptime Kuma** | Monitoring & status pages | Yes |
+| **Platform API** | Auth, users, organizations, events | Yes |
+| **Platform Web** | Platform dashboard | Yes |
+| **Hospitality API** | Hospitality OS backend | Yes |
+| **Hospitality Web** | Hospitality dashboard | Yes |
+| **OrbitOne API** | Digital business cards backend | Yes |
+| **OrbitOne Web** | Digital business cards dashboard | Yes |
+| **TouchOrbit HR API** | HR management backend | Yes |
+| **TouchOrbit HR Web** | HR management dashboard | Yes |
 
 ## Quick Start (Local)
 
@@ -19,8 +40,8 @@ git clone https://github.com/YOUR_ORG/cloudit-platform.git
 cd cloudit-platform
 
 # Copy example env files (edit with real values before deploying)
-for svc in traefik postgres redis n8n uptime-kuma; do
-  cp infra/$svc/.env.example infra/$svc/.env
+for svc in traefik postgres redis n8n uptime-kuma platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web; do
+  cp infra/$svc/.env.example infra/$svc/.env 2>/dev/null || cp apps/$svc/.env.example apps/$svc/.env 2>/dev/null
 done
 
 # Start everything
@@ -31,60 +52,32 @@ Services will be available (add to `/etc/hosts` for local dev):
 - `http://traefik.localhost:8080` — Traefik dashboard
 - `https://n8n.localhost` — n8n
 - `https://status.localhost` — Uptime Kuma
+- `https://app.localhost` — Platform Web
+- `https://hospitality.localhost` — Hospitality Web
+- `https://orbitone.localhost` — OrbitOne Web
+- `https://touchorbit.localhost` — TouchOrbit HR Web
 
 ## How to Deploy
 
-### 1. Server Setup
+See the full [Deployment Guide](docs/deployment-guide.md) for:
+- GitHub Actions setup
+- Manual deployment
+- Rollbacks
+- Maintenance mode
+- Health checks
 
-Follow the [Server Hardening Guide](docs/server-hardening.md) to configure your Hetzner server.
+Quick summary:
 
-### 2. GitHub Actions Secrets
-
-Add these secrets to your GitHub repo (`Settings → Secrets and variables → Actions`):
-
-| Secret | Description |
-|--------|-------------|
-| `SSH_PRIVATE_KEY` | Private key for the `deploy` user on the server |
-| `SERVER_IP` | Your Hetzner server IP |
-| `SERVER_USER` | Usually `deploy` |
-
-Add this variable:
-
-| Variable | Description |
-|----------|-------------|
-| `DOMAIN` | Your root domain, e.g. `cloudit.example.com` |
-
-### 3. Push to Main
-
-```bash
-git push origin main
-```
-
-GitHub Actions will deploy automatically.
-
-### 4. DNS Setup
-
-Point these A/AAAA records to your server IP:
-
-```
-traefik.cloudit.example.com  →  YOUR_SERVER_IP
-n8n.cloudit.example.com      →  YOUR_SERVER_IP
-status.cloudit.example.com   →  YOUR_SERVER_IP
-```
+1. Follow the [Server Hardening Guide](docs/server-hardening.md).
+2. Add GitHub secrets: `SSH_PRIVATE_KEY`, `SERVER_IP`, `SERVER_USER`.
+3. Add GitHub variable: `DOMAIN`.
+4. Push to `master`. GitHub Actions deploys automatically.
 
 ## How to Add a New App
 
-1. **Create a folder**: `mkdir infra/myapp`
-2. **Add `.env.example`**: Document all required env vars
-3. **Add `docker-compose.yml`**:
-   - Connect to the `cloudit` external network
-   - Add Traefik labels for routing
-   - Set `restart: unless-stopped` and resource limits
-   - Add a healthcheck
-4. **Update `start.sh`** to include your new service
-5. **Update README** with your app's domain
+See [docs/new-app-guide.md](docs/new-app-guide.md) for a complete checklist.
 
-### Minimal docker-compose template:
+Minimal template for `infra/myapp/docker-compose.yml`:
 
 ```yaml
 version: "3.8"
@@ -105,7 +98,7 @@ services:
       - "traefik.http.routers.myapp.tls.certresolver=cloudflare"
       - "traefik.http.services.myapp.loadbalancer.server.port=8080"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -124,16 +117,18 @@ networks:
 ### Create a backup
 
 ```bash
-BACKUP_PASSPHRASE="your-strong-passphrase" ./infra/scripts/backup.sh
+BACKUP_PASSPHRASE="your-strong-passphrase" ./infra/backups/backup.sh
 ```
 
-Backups are stored in `infra/backups/` with 7-day retention.
+Backups are stored in `/opt/backups/local/` with 7-day retention.
 
 ### Restore from backup
 
 ```bash
-BACKUP_PASSPHRASE="your-strong-passphrase" ./infra/scripts/restore.sh infra/backups/postgres_backup_YYYYMMDD_HHMMSS.sql.gz.gpg
+BACKUP_PASSPHRASE="your-strong-passphrase" ./infra/backups/restore.sh /opt/backups/local/<backup-file>
 ```
+
+See [docs/backup-restore.md](docs/backup-restore.md) for details.
 
 ## Useful Commands
 
@@ -144,16 +139,25 @@ BACKUP_PASSPHRASE="your-strong-passphrase" ./infra/scripts/restore.sh infra/back
 # Stop everything
 ./infra/scripts/stop.sh
 
+# Deploy manually
+DOMAIN=cloudit.example.com ./infra/scripts/deploy.sh
+
+# Health checks
+DOMAIN=cloudit.example.com ./infra/scripts/health-check.sh
+
+# Maintenance mode
+./infra/scripts/maintenance.sh on
+./infra/scripts/maintenance.sh off
+
 # View resource usage
 docker stats
 
 # View logs
+docker logs -f platform-api
 docker logs -f traefik
-docker logs -f n8n
-docker logs -f postgres
 
 # Restart a single service
-cd infra/n8n && docker-compose restart
+cd infra/n8n && docker compose restart
 ```
 
 ## Project Structure
@@ -161,39 +165,73 @@ cd infra/n8n && docker-compose restart
 ```
 cloudit-platform/
 ├── .github/workflows/
-│   └── deploy.yml              # GitHub Actions CI/CD
+│   ├── deploy.yml              # Production CI/CD
+│   └── pr-checks.yml           # PR checks
+├── apps/
+│   ├── hospitality-api/        # Hospitality OS API
+│   ├── hospitality-web/        # Hospitality OS dashboard
+│   ├── orbitone-api/           # OrbitOne API
+│   ├── orbitone-web/           # OrbitOne dashboard
+│   ├── platform-api/           # Core platform API
+│   ├── platform-web/           # Platform dashboard
+│   ├── touchorbit-api/         # TouchOrbit HR API
+│   └── touchorbit-web/         # TouchOrbit HR dashboard
 ├── docs/
+│   ├── architecture.md         # Architecture overview
+│   ├── backup-restore.md       # Backup procedures
+│   ├── deployment-guide.md     # Deployment procedures
+│   ├── disk-management.md      # Cleanup and monitoring
+│   ├── incident-recovery.md    # Incident runbook
+│   ├── new-app-guide.md        # How to add a SaaS product
+│   ├── security.md             # Application security
 │   └── server-hardening.md     # Server setup guide
 ├── infra/
-│   ├── backups/                # Backup storage
-│   ├── docker-compose.network.yml  # Shared Docker network
+│   ├── backups/                # Backup scripts
+│   ├── docker-compose.network.yml
+│   ├── hospitality-api/        # Hospitality API compose
+│   ├── hospitality-web/        # Hospitality Web compose
+│   ├── orbitone-api/           # OrbitOne API compose
+│   ├── orbitone-web/           # OrbitOne Web compose
+│   ├── maintenance/            # Maintenance page compose
+│   ├── touchorbit-api/         # TouchOrbit HR API compose
+│   └── touchorbit-web/         # TouchOrbit HR Web compose
 │   ├── n8n/
-│   │   ├── .env.example
-│   │   └── docker-compose.yml
+│   ├── platform-api/           # Platform API compose
+│   ├── platform-web/           # Platform Web compose
 │   ├── postgres/
-│   │   ├── .env.example
-│   │   ├── docker-compose.yml
-│   │   └── init/
 │   ├── redis/
-│   │   ├── .env.example
-│   │   └── docker-compose.yml
-│   ├── scripts/
-│   │   ├── backup.sh
-│   │   ├── restore.sh
-│   │   ├── start.sh
-│   │   └── stop.sh
+│   ├── scripts/                # deploy.sh, rollback.sh, etc.
 │   ├── traefik/
-│   │   ├── .env.example
-│   │   ├── docker-compose.yml
-│   │   ├── traefik.yml
-│   │   └── dynamic/
-│   │       └── middlewares.yml
 │   └── uptime-kuma/
-│       ├── .env.example
-│       └── docker-compose.yml
+├── packages/
+│   └── ui/                     # Shared UI components
 ├── .gitignore
-└── README.md
+├── README.md
+└── package.json
 ```
+
+## Architecture
+
+See [docs/architecture.md](docs/architecture.md) for the full architecture description, resource allocation, and network diagram.
+
+High-level flow:
+
+```
+Internet → Cloudflare → Traefik → App services → PostgreSQL / Redis
+```
+
+## Documentation
+
+- [Deployment Guide](docs/deployment-guide.md)
+- [Server Hardening](docs/server-hardening.md)
+- [Security](docs/security.md)
+- [Backup & Restore](docs/backup-restore.md)
+- [Disk Management](docs/disk-management.md)
+- [Incident Recovery](docs/incident-recovery.md)
+- [New App Guide](docs/new-app-guide.md)
+- [Architecture](docs/architecture.md)
+- [AI & Automation Setup](docs/ai-automation-setup.md)
+- [n8n Workflows](docs/n8n-workflows.md)
 
 ## License
 

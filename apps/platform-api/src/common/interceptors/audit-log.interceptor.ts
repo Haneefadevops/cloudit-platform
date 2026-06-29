@@ -23,7 +23,8 @@ export class AuditLogInterceptor implements NestInterceptor {
     const handler = context.getHandler().name;
     const controller = context.getClass().name;
     const user = (request as any).user;
-    const orgId = request.params.orgId || request.body?.orgId || request.query?.orgId;
+    const orgId =
+      request.params.orgId || request.body?.orgId || request.query?.orgId;
 
     return next.handle().pipe(
       tap(async () => {
@@ -32,7 +33,9 @@ export class AuditLogInterceptor implements NestInterceptor {
             data: {
               action: `${method} ${controller}.${handler}`,
               entityType: controller.replace('Controller', ''),
-              entityId: String(request.params.id || request.params.memberId || 'unknown'),
+              entityId: String(
+                request.params.id || request.params.memberId || 'unknown',
+              ),
               userId: user?.sub || null,
               orgId: orgId || null,
               metadata: {

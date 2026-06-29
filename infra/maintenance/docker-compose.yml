@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  maintenance:
+    image: nginx:alpine
+    container_name: maintenance
+    restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+    networks:
+      - cloudit
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.maintenance-platform.rule=Host(`app.${DOMAIN:-cloudit.lk}`)"
+      - "traefik.http.routers.maintenance-platform.entrypoints=websecure"
+      - "traefik.http.routers.maintenance-platform.tls.certresolver=cloudflare"
+      - "traefik.http.routers.maintenance-platform.priority=100"
+      - "traefik.http.routers.maintenance-api-platform.rule=Host(`api-platform.${DOMAIN:-cloudit.lk}`)"
+      - "traefik.http.routers.maintenance-api-platform.entrypoints=websecure"
+      - "traefik.http.routers.maintenance-api-platform.tls.certresolver=cloudflare"
+      - "traefik.http.routers.maintenance-api-platform.priority=100"
+      - "traefik.http.routers.maintenance-hospitality.rule=Host(`hospitality.${DOMAIN:-cloudit.lk}`)"
+      - "traefik.http.routers.maintenance-hospitality.entrypoints=websecure"
+      - "traefik.http.routers.maintenance-hospitality.tls.certresolver=cloudflare"
+      - "traefik.http.routers.maintenance-hospitality.priority=100"
+      - "traefik.http.routers.maintenance-api-hospitality.rule=Host(`api-hospitality.${DOMAIN:-cloudit.lk}`)"
+      - "traefik.http.routers.maintenance-api-hospitality.entrypoints=websecure"
+      - "traefik.http.routers.maintenance-api-hospitality.tls.certresolver=cloudflare"
+      - "traefik.http.routers.maintenance-api-hospitality.priority=100"
+      - "traefik.http.services.maintenance.loadbalancer.server.port=80"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+networks:
+  cloudit:
+    external: true

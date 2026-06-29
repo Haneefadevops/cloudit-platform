@@ -28,6 +28,14 @@ services:
     networks:
       - cloudit
     command: /usr/local/bin/backup.sh
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
 
   # Optional: run the Hetzner sync manually after configuring .env
   sync-hetzner:
@@ -51,6 +59,14 @@ services:
     command: /usr/local/bin/sync-hetzner.sh
     profiles:
       - sync
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
 
 networks:
   cloudit:

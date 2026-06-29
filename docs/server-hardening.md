@@ -115,14 +115,47 @@ for svc in traefik postgres redis n8n uptime-kuma; do
 done
 ```
 
-## 7. Start the Stack
+## 7. Application-Level Security
+
+The NestJS APIs enforce the following controls:
+
+- **Rate limiting:** 100 req/min globally; 10 req/min for `POST /api/auth/login`.
+- **Helmet headers:** security headers on every response.
+- **CORS whitelist:** comma-separated origins in `CORS_ORIGIN` (avoid `*` in production).
+- **Input sanitization:** `ValidationPipe` + `XssSanitizationPipe` strip malicious input.
+- **JWT authentication** with strong secrets stored in environment variables.
+
+See `docs/security.md` for full details.
+
+## 8. Resource Limits & Disk Management
+
+Docker Compose files under `infra/<service>/` define CPU and memory limits. Log rotation is configured per container (`max-size: 10m`, `max-file: 3`).
+
+Automated maintenance scripts:
+
+- `infra/scripts/cleanup.sh` — weekly prune of unused Docker objects and old logs.
+- `infra/scripts/disk-check.sh` — disk-usage monitor that triggers cleanup at 90%.
+
+Example cron:
+
+```cron
+# Weekly cleanup
+0 4 * * 0 /opt/cloudit/infra/scripts/cleanup.sh >> /var/log/cloudit-cleanup.log 2>&1
+
+# Disk check every 15 minutes
+*/15 * * * * /opt/cloudit/infra/scripts/disk-check.sh >> /var/log/cloudit-disk-check.log 2>&1
+```
+
+See `docs/disk-management.md` for full details.
+
+## 9. Start the Stack
 
 ```bash
 cd /opt/cloudit
 ./infra/scripts/start.sh
 ```
 
-## 8. Setup Backup Cron
+## 10. Setup Backup Cron
 
 ```bash
 sudo crontab -e
@@ -135,7 +168,7 @@ Add:
 0 3 * * * BACKUP_PASSPHRASE="your-strong-passphrase" /opt/cloudit/infra/scripts/backup.sh >> /var/log/cloudit-backup.log 2>&1
 ```
 
-## 9. Monitoring Resource Usage
+## 11. Monitoring Resource Usage
 
 ```bash
 # Watch live
@@ -153,7 +186,7 @@ Expected baseline (idle):
 - Traefik: ~50-100 MB
 - **Total idle: ~600 MB - 1 GB**
 
-## 10. Hardening Checklist
+## 12. Hardening Checklist
 
 - [ ] SSH keys only (no passwords)
 - [ ] Root login disabled
@@ -165,3 +198,10 @@ Expected baseline (idle):
 - [ ] PostgreSQL & Redis not exposed to internet
 - [ ] Backups encrypted and rotated
 - [ ] Traefik dashboard protected by Basic Auth
+- [ ] Rate limiting active on APIs
+- [ ] Helmet security headers present
+- [ ] CORS whitelist enforced in production
+- [ ] Input sanitization active
+- [ ] Docker resource limits configured
+- [ ] Weekly cleanup cron scheduled
+- [ ] Disk-check cron scheduled

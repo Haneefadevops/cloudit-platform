@@ -1,10 +1,5 @@
-import {
-  IsOptional,
-  IsString,
-  IsUUID,
-  IsEnum,
-} from 'class-validator';
-import { RoomStatus } from '@prisma/client-hospitality';
+import { IsOptional, IsString, IsUUID, IsEnum } from "class-validator";
+import { RoomStatus } from "@prisma/client-hospitality";
 
 export class UpdateRoomDto {
   @IsOptional()

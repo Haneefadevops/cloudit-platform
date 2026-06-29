@@ -4,8 +4,8 @@ import {
   IsString,
   IsUUID,
   IsEnum,
-} from 'class-validator';
-import { RoomStatus } from '@prisma/client-hospitality';
+} from "class-validator";
+import { RoomStatus } from "@prisma/client-hospitality";
 
 export class CreateRoomDto {
   @IsNotEmpty()

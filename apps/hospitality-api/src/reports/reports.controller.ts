@@ -1,19 +1,19 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { ReportsService } from './reports.service';
-import { ReportQueryDto } from './dto/report-query.dto';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { CurrentOrganization } from '../common/decorators/current-organization.decorator';
+import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
+import { ReportsService } from "./reports.service";
+import { ReportQueryDto } from "./dto/report-query.dto";
+import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
+import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
 
-@ApiTags('reports')
-@Controller('reports')
+@ApiTags("reports")
+@Controller("reports")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
-  @Get('occupancy')
-  @ApiOperation({ summary: 'Occupancy report' })
+  @Get("occupancy")
+  @ApiOperation({ summary: "Occupancy report" })
   async occupancy(
     @CurrentOrganization() organizationId: string,
     @Query() query: ReportQueryDto,
@@ -26,8 +26,8 @@ export class ReportsController {
     );
   }
 
-  @Get('revenue')
-  @ApiOperation({ summary: 'Revenue report' })
+  @Get("revenue")
+  @ApiOperation({ summary: "Revenue report" })
   async revenue(
     @CurrentOrganization() organizationId: string,
     @Query() query: ReportQueryDto,
@@ -40,8 +40,8 @@ export class ReportsController {
     );
   }
 
-  @Get('guests')
-  @ApiOperation({ summary: 'Guest report' })
+  @Get("guests")
+  @ApiOperation({ summary: "Guest report" })
   async guests(
     @CurrentOrganization() organizationId: string,
     @Query() query: ReportQueryDto,
@@ -54,8 +54,8 @@ export class ReportsController {
     );
   }
 
-  @Get('reservations')
-  @ApiOperation({ summary: 'Reservation report' })
+  @Get("reservations")
+  @ApiOperation({ summary: "Reservation report" })
   async reservations(
     @CurrentOrganization() organizationId: string,
     @Query() query: ReportQueryDto,

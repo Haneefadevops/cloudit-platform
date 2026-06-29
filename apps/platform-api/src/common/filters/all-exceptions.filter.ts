@@ -37,7 +37,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
         method: request.method,
         path: request.url,
         statusCode: status,
-        message: exception instanceof Error ? exception.message : 'Unknown error',
+        message:
+          exception instanceof Error ? exception.message : 'Unknown error',
         stack,
       },
       AllExceptionsFilter.name,

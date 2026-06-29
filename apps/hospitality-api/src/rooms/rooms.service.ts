@@ -2,11 +2,11 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateRoomDto } from './dto/create-room.dto';
-import { UpdateRoomDto } from './dto/update-room.dto';
-import { RoomStatus, ReservationStatus } from '@prisma/client-hospitality';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { CreateRoomDto } from "./dto/create-room.dto";
+import { UpdateRoomDto } from "./dto/update-room.dto";
+import { RoomStatus, ReservationStatus } from "@prisma/client-hospitality";
 
 @Injectable()
 export class RoomsService {
@@ -42,7 +42,7 @@ export class RoomsService {
         where,
         skip,
         take: limit,
-        orderBy: { roomNumber: 'asc' },
+        orderBy: { roomNumber: "asc" },
         include: { roomType: true, property: true },
       }),
       this.prisma.room.count({ where }),
@@ -66,7 +66,7 @@ export class RoomsService {
     });
 
     if (!room) {
-      throw new NotFoundException('Room not found');
+      throw new NotFoundException("Room not found");
     }
 
     return room;
@@ -83,7 +83,7 @@ export class RoomsService {
     });
 
     if (!property) {
-      throw new NotFoundException('Property not found');
+      throw new NotFoundException("Property not found");
     }
 
     const overlappingReservations = await this.prisma.reservation.findMany({
@@ -109,12 +109,16 @@ export class RoomsService {
         id: { notIn: occupiedRoomIds },
       },
       include: { roomType: true },
-      orderBy: { roomNumber: 'asc' },
+      orderBy: { roomNumber: "asc" },
     });
   }
 
   async create(organizationId: string, dto: CreateRoomDto) {
-    await this.validateRelations(organizationId, dto.propertyId, dto.roomTypeId);
+    await this.validateRelations(
+      organizationId,
+      dto.propertyId,
+      dto.roomTypeId,
+    );
 
     const { propertyId, roomTypeId, ...data } = dto;
     return this.prisma.room.create({
@@ -168,7 +172,7 @@ export class RoomsService {
         where: { id: propertyId, organizationId },
       });
       if (!property) {
-        throw new BadRequestException('Property not found or access denied');
+        throw new BadRequestException("Property not found or access denied");
       }
     }
 
@@ -182,7 +186,7 @@ export class RoomsService {
         },
       });
       if (!roomType) {
-        throw new BadRequestException('Room type not found or access denied');
+        throw new BadRequestException("Room type not found or access denied");
       }
     }
   }

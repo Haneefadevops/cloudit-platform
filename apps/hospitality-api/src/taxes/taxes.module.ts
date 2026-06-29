@@ -1,6 +1,6 @@
-import { Module } from '@nestjs/common';
-import { TaxesController } from './taxes.controller';
-import { TaxesService } from './taxes.service';
+import { Module } from "@nestjs/common";
+import { TaxesController } from "./taxes.controller";
+import { TaxesService } from "./taxes.service";
 
 @Module({
   controllers: [TaxesController],

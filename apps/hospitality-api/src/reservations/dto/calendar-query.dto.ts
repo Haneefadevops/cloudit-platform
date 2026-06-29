@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsUUID, IsInt, Min, Max } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsNotEmpty, IsUUID, IsInt, Min, Max } from "class-validator";
+import { Type } from "class-transformer";
 
 export class CalendarQueryDto {
   @IsNotEmpty()

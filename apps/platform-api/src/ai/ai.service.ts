@@ -13,11 +13,17 @@ export class AiService {
 
   private async getProvider(): Promise<string> {
     const settings = await this.prisma.integrationSetting.findFirst();
-    return settings?.aiProvider || this.configService.get<string>('AI_PROVIDER') || 'openai';
+    return (
+      settings?.aiProvider ||
+      this.configService.get<string>('AI_PROVIDER') ||
+      'openai'
+    );
   }
 
   async generateResponse(prompt: string): Promise<string> {
-    this.logger.log(`generateResponse called with prompt length ${prompt.length}`);
+    this.logger.log(
+      `generateResponse called with prompt length ${prompt.length}`,
+    );
     const provider = await this.getProvider();
     return `[${provider}] AI response placeholder for: ${prompt}`;
   }

@@ -1,0 +1,64 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared UI package
+        run: npm run build --workspace=@cloudit/ui
+
+      - name: Generate Prisma clients
+        run: |
+          npx prisma generate --schema=apps/platform-api/prisma/schema.prisma
+          npx prisma generate --schema=apps/hospitality-api/prisma/schema.prisma
+          npx prisma generate --schema=apps/orbitone-api/prisma/schema.prisma
+          npx prisma generate --schema=apps/touchorbit-api/prisma/schema.prisma
+
+      - name: Type check / build APIs
+        run: |
+          npm run build --workspace=platform-api
+          npm run build --workspace=hospitality-api
+          npm run build --workspace=@cloudit/orbitone-api
+          npm run build --workspace=@cloudit/touchorbit-api
+
+      - name: Build web apps
+        run: |
+          npm run build --workspace=platform-web
+          npm run build --workspace=hospitality-web
+          npm run build --workspace=@cloudit/orbitone-web
+          npm run build --workspace=@cloudit/touchorbit-web
+
+      - name: Run unit tests
+        run: |
+          npm test --workspace=platform-api
+          npm test --workspace=hospitality-api
+          npm test --workspace=@cloudit/orbitone-api
+          npm test --workspace=@cloudit/touchorbit-api
+
+      - name: Lint
+        run: |
+          npm run lint --workspace=platform-api
+          npm run lint --workspace=hospitality-api
+          npm run lint --workspace=@cloudit/orbitone-api
+          npm run lint --workspace=@cloudit/touchorbit-api
+          npm run lint --workspace=platform-web
+          npm run lint --workspace=hospitality-web
+          npm run lint --workspace=@cloudit/orbitone-web
+          npm run lint --workspace=@cloudit/touchorbit-web

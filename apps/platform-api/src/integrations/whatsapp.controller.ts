@@ -21,7 +21,9 @@ export class WhatsAppController {
     @Query('hub.verify_token') token: string,
     @Query('hub.challenge') challenge: string,
   ) {
-    const expectedToken = this.configService.get<string>('WHATSAPP_WEBHOOK_VERIFY_TOKEN');
+    const expectedToken = this.configService.get<string>(
+      'WHATSAPP_WEBHOOK_VERIFY_TOKEN',
+    );
 
     if (mode === 'subscribe' && token && token === expectedToken) {
       this.logger.log('WhatsApp webhook verified');
@@ -49,7 +51,11 @@ export class WhatsAppController {
   @Post('send-template')
   @ApiOperation({ summary: 'Send a WhatsApp template (placeholder)' })
   async sendTemplate(@Body() dto: SendTemplateDto) {
-    await this.whatsappService.sendTemplate(dto.phone, dto.templateId, dto.data);
+    await this.whatsappService.sendTemplate(
+      dto.phone,
+      dto.templateId,
+      dto.data,
+    );
     return { success: true };
   }
 }

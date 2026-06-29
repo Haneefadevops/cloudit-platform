@@ -2,10 +2,10 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreatePropertyDto } from './dto/create-property.dto';
-import { UpdatePropertyDto } from './dto/update-property.dto';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { CreatePropertyDto } from "./dto/create-property.dto";
+import { UpdatePropertyDto } from "./dto/update-property.dto";
 
 @Injectable()
 export class PropertiesService {
@@ -21,7 +21,7 @@ export class PropertiesService {
     const where: any = { organizationId };
 
     if (search) {
-      where.name = { contains: search, mode: 'insensitive' };
+      where.name = { contains: search, mode: "insensitive" };
     }
 
     const [data, total] = await Promise.all([
@@ -29,7 +29,7 @@ export class PropertiesService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         include: {
           _count: {
             select: { rooms: true, roomTypes: true },
@@ -60,7 +60,7 @@ export class PropertiesService {
     });
 
     if (!property) {
-      throw new NotFoundException('Property not found');
+      throw new NotFoundException("Property not found");
     }
 
     return property;

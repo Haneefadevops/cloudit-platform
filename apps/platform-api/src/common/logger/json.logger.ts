@@ -15,7 +15,11 @@ export class JsonLogger implements LoggerService {
     return this.logLevelPriority[level] >= this.logLevelPriority[this.minLevel];
   }
 
-  private write(level: LogLevel, message: unknown, ...optionalParams: unknown[]) {
+  private write(
+    level: LogLevel,
+    message: unknown,
+    ...optionalParams: unknown[]
+  ) {
     if (!this.shouldLog(level)) return;
 
     const logEntry: Record<string, unknown> = {

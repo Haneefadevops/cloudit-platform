@@ -1,10 +1,7 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateTaxRateDto } from './dto/create-tax-rate.dto';
-import { UpdateTaxRateDto } from './dto/update-tax-rate.dto';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { CreateTaxRateDto } from "./dto/create-tax-rate.dto";
+import { UpdateTaxRateDto } from "./dto/update-tax-rate.dto";
 
 @Injectable()
 export class TaxesService {
@@ -13,14 +10,14 @@ export class TaxesService {
   async findAll(organizationId: string) {
     return this.prisma.taxRate.findMany({
       where: { organizationId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
   async findActive(organizationId: string) {
     return this.prisma.taxRate.findMany({
       where: { organizationId, isActive: true },
-      orderBy: { name: 'asc' },
+      orderBy: { name: "asc" },
     });
   }
 
@@ -30,7 +27,7 @@ export class TaxesService {
     });
 
     if (!taxRate) {
-      throw new NotFoundException('Tax rate not found');
+      throw new NotFoundException("Tax rate not found");
     }
 
     return taxRate;

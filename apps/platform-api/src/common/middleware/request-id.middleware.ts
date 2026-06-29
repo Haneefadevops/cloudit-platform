@@ -9,8 +9,7 @@ export interface RequestWithId extends Request {
 @Injectable()
 export class RequestIdMiddleware implements NestMiddleware {
   use(req: RequestWithId, res: Response, next: NextFunction) {
-    const requestId =
-      (req.headers['x-request-id'] as string) || randomUUID();
+    const requestId = (req.headers['x-request-id'] as string) || randomUUID();
     req.requestId = requestId;
     res.setHeader('X-Request-ID', requestId);
     next();

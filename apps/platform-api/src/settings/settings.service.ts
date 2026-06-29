@@ -7,10 +7,13 @@ export class SettingsService {
 
   async findAll(orgId: string) {
     const settings = await this.prisma.setting.findMany({ where: { orgId } });
-    return settings.reduce((acc, s) => {
-      acc[s.key] = s.value;
-      return acc;
-    }, {} as Record<string, any>);
+    return settings.reduce(
+      (acc, s) => {
+        acc[s.key] = s.value;
+        return acc;
+      },
+      {} as Record<string, any>,
+    );
   }
 
   async update(orgId: string, dto: any) {
