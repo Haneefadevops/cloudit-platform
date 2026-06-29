@@ -2,7 +2,7 @@
 
 ## Overview
 
-CloudIT Platform is a lightweight, self-hosted multi-tenant SaaS platform running on a single Hetzner CX33 server.
+CloudIT Platform is a lightweight, self-hosted multi-tenant SaaS platform running on a single Hetzner CX33 server, orchestrated with Docker and Docker Compose.
 
 ## Server
 
@@ -10,6 +10,7 @@ CloudIT Platform is a lightweight, self-hosted multi-tenant SaaS platform runnin
 - **Model:** CX33
 - **Specs:** 4 vCPU, 8 GB RAM, 80 GB SSD
 - **OS:** Ubuntu 24.04 LTS
+- **Container runtime:** Docker + Docker Compose
 - **Location:** `C:\Project\cloudit-platform` (local development), `/opt/cloudit/cloudit-platform` (server)
 
 ## Network Diagram
@@ -85,7 +86,9 @@ All services connect to the external `cloudit` bridge network. This allows conta
 ## Shared Packages
 
 - `@cloudit/ui` — reusable React + Tailwind components
-- Future packages: `@cloudit/auth`, `@cloudit/database`, `@cloudit/config`
+- `@cloudit/auth` — planned shared authentication helpers
+- `@cloudit/database` — planned shared Prisma/connection helpers
+- `@cloudit/config` — planned shared environment/configuration utilities
 
 ## Domains
 

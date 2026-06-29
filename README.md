@@ -1,6 +1,8 @@
 # CloudIT Platform
 
-Lightweight self-hosted platform running on a single Hetzner CX33 server (4 vCPU, 8 GB RAM, 80 GB SSD).
+Lightweight self-hosted multi-tenant SaaS platform running on a single Hetzner CX33 server (4 vCPU, 8 GB RAM, 80 GB SSD).
+
+Built with **Docker + Docker Compose**, **NestJS**, **Next.js**, **Tailwind CSS**, **Prisma**, **PostgreSQL**, **Redis**, **Traefik**, **n8n**, and **Uptime Kuma**.
 
 ## Table of Contents
 
@@ -13,6 +15,8 @@ Lightweight self-hosted platform running on a single Hetzner CX33 server (4 vCPU
 - [Project Structure](#project-structure)
 - [Architecture](#architecture)
 - [Documentation](#documentation)
+- [Sprint Completion](#sprint-completion)
+- [Contributing](#contributing)
 - [License](#license)
 
 ## What's Inside
@@ -177,14 +181,18 @@ cloudit-platform/
 │   ├── touchorbit-api/         # TouchOrbit HR API
 │   └── touchorbit-web/         # TouchOrbit HR dashboard
 ├── docs/
-│   ├── architecture.md         # Architecture overview
-│   ├── backup-restore.md       # Backup procedures
-│   ├── deployment-guide.md     # Deployment procedures
-│   ├── disk-management.md      # Cleanup and monitoring
-│   ├── incident-recovery.md    # Incident runbook
-│   ├── new-app-guide.md        # How to add a SaaS product
-│   ├── security.md             # Application security
-│   └── server-hardening.md     # Server setup guide
+│   ├── architecture.md             # Architecture overview
+│   ├── backup-restore.md           # Backup procedures
+│   ├── deployment-guide.md         # Deployment procedures
+│   ├── disk-management.md          # Cleanup and monitoring
+│   ├── environment-setup.md        # Environment variable templates
+│   ├── incident-recovery.md        # Incident runbook
+│   ├── new-app-guide.md            # Quick checklist for adding an app
+│   ├── new-saas-product-guide.md   # Full SaaS onboarding guide
+│   ├── routing-examples.md         # Traefik routing patterns
+│   ├── security.md                 # Application security
+│   ├── server-hardening.md         # Server setup guide
+│   └── shared-packages.md          # Shared package usage
 ├── infra/
 │   ├── backups/                # Backup scripts
 │   ├── docker-compose.network.yml
@@ -229,10 +237,36 @@ Internet → Cloudflare → Traefik → App services → PostgreSQL / Redis
 - [Disk Management](docs/disk-management.md)
 - [Incident Recovery](docs/incident-recovery.md)
 - [New App Guide](docs/new-app-guide.md)
+- [New SaaS Product Onboarding Guide](docs/new-saas-product-guide.md)
 - [Architecture](docs/architecture.md)
+- [Routing Examples](docs/routing-examples.md)
+- [Shared Packages](docs/shared-packages.md)
+- [Environment Setup](docs/environment-setup.md)
 - [AI & Automation Setup](docs/ai-automation-setup.md)
 - [n8n Workflows](docs/n8n-workflows.md)
 
+## Sprint Completion
+
+| Sprint | Status |
+|--------|--------|
+| Sprint 3 — Shared Frontend Foundation | ✅ Complete |
+| Sprint 4 — Hospitality OS MVP | ✅ Complete |
+| Sprint 5 — Platform Admin & Multi-tenancy | ✅ Complete |
+| Sprint 6 — DevOps, Security & Reliability | ✅ Complete |
+| Sprint 7 — Future Product Readiness | ✅ Complete |
+
+> **All sprints complete.** The platform is ready for further product development and deployment.
+
+## Contributing
+
+1. Create a feature branch from `master`.
+2. Make changes following the existing app patterns.
+3. Run builds and lint for the affected workspaces.
+4. Update relevant documentation (`docs/`) and this README if needed.
+5. Open a pull request; PR checks must pass before merging.
+
+See [docs/new-saas-product-guide.md](docs/new-saas-product-guide.md) for adding new SaaS products.
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE) (placeholder; add a `LICENSE` file when distributing).
