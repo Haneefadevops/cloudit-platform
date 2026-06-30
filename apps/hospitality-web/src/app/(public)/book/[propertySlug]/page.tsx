@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Card, CardContent, Input, Badge } from "@cloudit/ui";
+import { Button, Card, CardContent, Input, Badge, buttonVariants } from "@cloudit/ui";
 import { CalendarDays, MapPin, Phone, Mail } from "lucide-react";
+import Link from "next/link";
 import { formatLkr } from "@/lib/format";
 import type { PublicAvailabilityResult } from "@/lib/types";
 
@@ -99,6 +100,10 @@ export default function PublicPropertyBookingPage({
   }
 
   if (!result) return null;
+  const checkoutParams = new URLSearchParams({
+    checkInDate,
+    checkOutDate,
+  });
 
   return (
     <main className="min-h-screen bg-background">
@@ -199,6 +204,15 @@ export default function PublicPropertyBookingPage({
                     <Badge variant="outline">{roomType.totalRooms} room(s)</Badge>
                   )}
                 </div>
+
+                {hasSearched && !!roomType.availableRooms && (
+                  <Link
+                    className={buttonVariants({ className: "w-full" })}
+                    href={`/book/${params.propertySlug}/checkout?${checkoutParams.toString()}&roomTypeId=${roomType.id}`}
+                  >
+                    Book {roomType.name}
+                  </Link>
+                )}
 
                 {!!roomType.seasonalRates.length && (
                   <div className="space-y-1 border-t pt-3 text-xs text-muted-foreground">

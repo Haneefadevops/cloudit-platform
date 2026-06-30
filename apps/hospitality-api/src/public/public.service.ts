@@ -1,11 +1,23 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { ReservationStatus, RoomStatus } from "@prisma/client-hospitality";
+import { randomBytes } from "crypto";
+import {
+  PaymentStatus,
+  ReservationSource,
+  ReservationStatus,
+  RoomStatus,
+} from "@prisma/client-hospitality";
+import { EventPublisherService } from "../events/event-publisher.service";
+import { EventTypes } from "../events/event-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { PublicAvailabilityDto } from "./dto/availability.dto";
+import { CreatePublicBookingDto } from "./dto/create-public-booking.dto";
 
 @Injectable()
 export class PublicService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventPublisher: EventPublisherService,
+  ) {}
 
   async availability(dto: PublicAvailabilityDto) {
     const property = await this.prisma.property.findFirst({
@@ -86,6 +98,158 @@ export class PublicService {
     };
   }
 
+  async createBooking(dto: CreatePublicBookingDto) {
+    const checkIn = new Date(dto.checkInDate);
+    const checkOut = new Date(dto.checkOutDate);
+    if (checkIn >= checkOut) {
+      throw new BadRequestException("Check-out date must be after check-in");
+    }
+
+    const property = await this.prisma.property.findFirst({
+      where: { publicSlug: dto.propertySlug },
+    });
+    if (!property) {
+      throw new NotFoundException("Property not found");
+    }
+
+    const roomType = await this.prisma.roomType.findFirst({
+      where: { id: dto.roomTypeId, propertyId: property.id },
+      include: {
+        seasonalRates: {
+          where: {
+            organizationId: property.organizationId,
+            isActive: true,
+            startDate: { lt: checkOut },
+            endDate: { gte: checkIn },
+          },
+          orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
+        },
+      },
+    });
+    if (!roomType) {
+      throw new BadRequestException("Room type not found");
+    }
+
+    const occupiedRoomIds = await this.findOccupiedRoomIds(
+      property.id,
+      checkIn,
+      checkOut,
+    );
+    const room = await this.prisma.room.findFirst({
+      where: {
+        propertyId: property.id,
+        roomTypeId: roomType.id,
+        status: RoomStatus.available,
+        id: { notIn: [...occupiedRoomIds] },
+      },
+      orderBy: { roomNumber: "asc" },
+    });
+    if (!room) {
+      throw new BadRequestException("No rooms available for selected dates");
+    }
+
+    const totalAmount = this.calculateStayTotal(
+      checkIn,
+      checkOut,
+      Number(roomType.basePrice),
+      roomType.seasonalRates,
+    );
+    const reservationNumber = await this.generateReservationNumber();
+    const token = this.generateToken();
+    const expiresAt = new Date(checkOut);
+    expiresAt.setDate(expiresAt.getDate() + 1);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const guest = await tx.guest.create({
+        data: {
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          email: dto.email,
+          phone: dto.phone,
+          localPhone: dto.phone,
+          nicNumber: dto.nicNumber,
+          passportNumber: dto.passportNumber,
+          organizationId: property.organizationId,
+        },
+      });
+
+      const reservation = await tx.reservation.create({
+        data: {
+          reservationNumber,
+          property: { connect: { id: property.id } },
+          room: { connect: { id: room.id } },
+          guest: { connect: { id: guest.id } },
+          checkInDate: checkIn,
+          checkOutDate: checkOut,
+          adults: dto.adults ?? 1,
+          children: dto.children ?? 0,
+          status: ReservationStatus.confirmed,
+          totalAmount,
+          paidAmount: 0,
+          paymentStatus: PaymentStatus.pending,
+          source: ReservationSource.direct,
+          notes: `Public booking. Preferred payment: ${dto.paymentMethod}`,
+          createdBy: "public",
+        },
+      });
+
+      const session = await tx.guestCheckInSession.create({
+        data: {
+          token,
+          expiresAt,
+          organizationId: property.organizationId,
+          reservation: { connect: { id: reservation.id } },
+        },
+      });
+
+      return { guest, reservation, session };
+    });
+
+    const guestPortalUrl = `/guest/check-in/${result.session.token}`;
+    void this.eventPublisher.publish(EventTypes.BOOKING_CREATED, {
+      reservationId: result.reservation.id,
+      reservationNumber: result.reservation.reservationNumber,
+      propertyId: property.id,
+      roomId: room.id,
+      guestId: result.guest.id,
+      checkInDate: result.reservation.checkInDate.toISOString(),
+      checkOutDate: result.reservation.checkOutDate.toISOString(),
+      totalAmount: Number(result.reservation.totalAmount),
+      source: result.reservation.source,
+      guestPortalUrl,
+      guestEmail: result.guest.email ?? undefined,
+      guestPhone: result.guest.phone ?? undefined,
+      paymentMethod: dto.paymentMethod,
+      organizationId: property.organizationId,
+    });
+
+    return {
+      reservation: {
+        id: result.reservation.id,
+        reservationNumber: result.reservation.reservationNumber,
+        checkInDate: result.reservation.checkInDate,
+        checkOutDate: result.reservation.checkOutDate,
+        totalAmount: Number(result.reservation.totalAmount),
+        status: result.reservation.status,
+      },
+      guest: {
+        firstName: result.guest.firstName,
+        lastName: result.guest.lastName,
+        email: result.guest.email,
+        phone: result.guest.phone,
+      },
+      property: {
+        name: property.name,
+        publicSlug: property.publicSlug,
+        email: property.email,
+        phone: property.phone,
+      },
+      guestPortalUrl,
+      selfCheckInUrl: guestPortalUrl,
+      paymentMethod: dto.paymentMethod,
+    };
+  }
+
   private async findOccupiedRoomIds(propertyId: string, checkIn: Date, checkOut: Date) {
     const reservations = await this.prisma.reservation.findMany({
       where: {
@@ -98,5 +262,49 @@ export class PublicService {
     });
 
     return new Set(reservations.map((reservation) => reservation.roomId));
+  }
+
+  private calculateStayTotal(
+    checkIn: Date,
+    checkOut: Date,
+    basePrice: number,
+    seasonalRates: { name: string; startDate: Date; endDate: Date; price: any; minimumStay: number }[],
+  ) {
+    const nights = Math.max(
+      1,
+      Math.ceil(
+        (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24),
+      ),
+    );
+    let total = 0;
+
+    for (let offset = 0; offset < nights; offset++) {
+      const date = new Date(checkIn);
+      date.setDate(checkIn.getDate() + offset);
+      const seasonalRate = seasonalRates.find((rate) => {
+        const start = new Date(rate.startDate);
+        const end = new Date(rate.endDate);
+        end.setHours(23, 59, 59, 999);
+        return date >= start && date <= end && nights >= rate.minimumStay;
+      });
+      total += Number(seasonalRate?.price ?? basePrice);
+    }
+
+    return Number(total.toFixed(2));
+  }
+
+  private async generateReservationNumber() {
+    const today = new Date();
+    const datePart = today.toISOString().slice(0, 10).replace(/-/g, "");
+    const count = await this.prisma.reservation.count({
+      where: {
+        reservationNumber: { startsWith: `RES-${datePart}` },
+      },
+    });
+    return `RES-${datePart}-${(count + 1).toString().padStart(4, "0")}`;
+  }
+
+  private generateToken() {
+    return randomBytes(24).toString("hex");
   }
 }

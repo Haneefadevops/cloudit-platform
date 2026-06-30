@@ -64,6 +64,32 @@ export interface PublicAvailabilityResult {
   roomTypes: PublicAvailabilityRoomType[];
 }
 
+export interface PublicBookingConfirmation {
+  reservation: {
+    id: string;
+    reservationNumber: string;
+    checkInDate: string;
+    checkOutDate: string;
+    totalAmount: number;
+    status: ReservationStatus;
+  };
+  guest: {
+    firstName: string;
+    lastName: string;
+    email?: string;
+    phone?: string;
+  };
+  property: {
+    name: string;
+    publicSlug?: string;
+    email?: string;
+    phone?: string;
+  };
+  guestPortalUrl: string;
+  selfCheckInUrl: string;
+  paymentMethod: PaymentMethod;
+}
+
 export interface SeasonalRate {
   id: string;
   name: string;

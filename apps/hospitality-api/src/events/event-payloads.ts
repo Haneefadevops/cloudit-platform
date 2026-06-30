@@ -8,6 +8,10 @@ export interface BookingCreatedPayload {
   checkOutDate: string;
   totalAmount: number;
   source: string;
+  guestPortalUrl?: string;
+  guestEmail?: string;
+  guestPhone?: string;
+  paymentMethod?: string;
   organizationId?: string;
 }
 

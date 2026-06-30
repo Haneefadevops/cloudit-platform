@@ -2,6 +2,7 @@ import { Body, Controller, Post } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Public } from "../common/decorators/public.decorator";
 import { PublicAvailabilityDto } from "./dto/availability.dto";
+import { CreatePublicBookingDto } from "./dto/create-public-booking.dto";
 import { PublicService } from "./public.service";
 
 @ApiTags("public")
@@ -14,5 +15,11 @@ export class PublicController {
   @ApiOperation({ summary: "Get public property and room availability" })
   async availability(@Body() dto: PublicAvailabilityDto) {
     return this.publicService.availability(dto);
+  }
+
+  @Post("bookings")
+  @ApiOperation({ summary: "Create public booking" })
+  async createBooking(@Body() dto: CreatePublicBookingDto) {
+    return this.publicService.createBooking(dto);
   }
 }
