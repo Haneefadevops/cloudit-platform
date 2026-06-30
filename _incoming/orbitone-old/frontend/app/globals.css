@@ -1,0 +1,172 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Island Modern — Light */
+  --background: #fff7ed;
+  --foreground: #1f2937;
+  --surface: #fffbf5;
+  --surface-elevated: #ffffff;
+  --border: #fed7aa;
+  --primary: #0f2e2e;
+  --secondary: #0f766e;
+  --accent: #f97068;
+  --accent-2: #fdba74;
+  --muted: #786b60;
+
+  /* Semantic feedback */
+  --success: #0f766e;
+  --success-subtle: #ccfbf1;
+  --error: #dc2626;
+  --error-subtle: #fee2e2;
+  --warning: #d97706;
+  --warning-subtle: #fef3c7;
+  --info: #0ea5e9;
+  --info-subtle: #e0f2fe;
+
+  /* Elevation */
+  --shadow-none: 0 0 #0000;
+  --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-dropdown: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
+  --shadow-dialog: 0 25px 50px -12px rgb(0 0 0 / 0.15);
+
+  /* Radius */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* Focus ring */
+  --ring: #0f766e;
+  --ring-offset: #fff7ed;
+}
+
+.dark {
+  /* Island Modern — Dark */
+  --background: #0b1a1a;
+  --foreground: #f5e6d3;
+  --surface: #122525;
+  --surface-elevated: #1a3333;
+  --border: #1f3d3b;
+  --primary: #fff7ed;
+  --secondary: #2dd4bf;
+  --accent: #f97068;
+  --accent-2: #fdba74;
+  --muted: #a89b8c;
+
+  --success: #2dd4bf;
+  --success-subtle: rgba(45, 212, 191, 0.12);
+  --error: #f87171;
+  --error-subtle: rgba(248, 113, 113, 0.12);
+  --warning: #fbbf24;
+  --warning-subtle: rgba(251, 191, 36, 0.12);
+  --info: #38bdf8;
+  --info-subtle: rgba(56, 189, 248, 0.12);
+
+  --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-dropdown: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-dialog: 0 25px 50px -12px rgb(0 0 0 / 0.6);
+
+  --ring: #2dd4bf;
+  --ring-offset: #0b1a1a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-muted: var(--muted);
+
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-error: var(--error);
+  --color-error-subtle: var(--error-subtle);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+
+  --shadow-none: var(--shadow-none);
+  --shadow-card: var(--shadow-card);
+  --shadow-dropdown: var(--shadow-dropdown);
+  --shadow-dialog: var(--shadow-dialog);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-full: var(--radius-full);
+
+  --color-ring: var(--ring);
+  --color-ring-offset: var(--ring-offset);
+
+  --font-sans: "Inter", "Noto Sans Sinhala", "Noto Sans Tamil", system-ui,
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: rgba(249, 112, 104, 0.25);
+}
+
+.dark ::selection {
+  background: rgba(249, 112, 104, 0.35);
+}
+
+@keyframes mesh {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(8%, -8%) scale(1.08);
+  }
+  66% {
+    transform: translate(-6%, 6%) scale(0.96);
+  }
+}
+
+.animate-mesh {
+  animation: mesh 14s ease-in-out infinite;
+}
+
+@keyframes wave {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-wave {
+  animation: wave 20s linear infinite;
+}
+
+.gradient-sunset {
+  background: linear-gradient(135deg, #0f766e 0%, #fdba74 55%, #f97068 100%);
+}
+
+.gradient-sunset-text {
+  background: linear-gradient(135deg, #0f766e 0%, #f97068 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

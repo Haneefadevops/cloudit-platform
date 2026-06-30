@@ -14,8 +14,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/package*.json ./
 RUN npm install --omit=dev && npm cache clean --force
 RUN npx prisma generate
 EXPOSE 3004
-CMD ["node", "dist/src/main"]
+CMD ["sh", "-c", "npm run migrate && node dist/src/main"]

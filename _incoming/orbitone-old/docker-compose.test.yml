@@ -1,0 +1,62 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: https://to1.cloudit.lk/api/v1
+        NEXT_PUBLIC_APP_URL: https://to1.cloudit.lk
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: https://to1.cloudit.lk/api/v1
+      NEXT_PUBLIC_APP_URL: https://to1.cloudit.lk
+    depends_on:
+      - backend
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.orbitone-test-web.rule=Host(`to1.cloudit.lk`)"
+      - "traefik.http.routers.orbitone-test-web.entrypoints=websecure"
+      - "traefik.http.routers.orbitone-test-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.orbitone-test-web.loadbalancer.server.port=3000"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env.test
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.orbitone-test-api.rule=Host(`to1.cloudit.lk`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.orbitone-test-api.entrypoints=websecure"
+      - "traefik.http.routers.orbitone-test-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.orbitone-test-api.loadbalancer.server.port=8000"
+
+  postgres:
+    image: postgres:17-alpine
+    env_file:
+      - .env.test
+    volumes:
+      - orbitone_postgres_test:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - orbitone_redis_test:/data
+
+volumes:
+  orbitone_postgres_test:
+  orbitone_redis_test:
+
+networks:
+  traefik:
+    external: true

@@ -26,3 +26,15 @@ infra/traefik/certs/
 
 # Logs
 *.log
+
+# Worktrees
+.worktrees/
+
+# Test outputs
+**/test-results
+
+# Media archives
+*.mp4
+
+# Nested source archives (kept as standalone repos)
+_incoming/touchorbit-old/

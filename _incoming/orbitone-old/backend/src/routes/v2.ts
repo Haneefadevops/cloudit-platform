@@ -1,0 +1,34 @@
+import { Router } from "express";
+import { analyticsRouter } from "../domain/analytics/routes.js";
+import { authRouter } from "../domain/auth/routes.js";
+import { billingRouter } from "../domain/billing/routes.js";
+import { customersRouter } from "../domain/customers/routes.js";
+import { dashboardRouter } from "../domain/dashboard/routes.js";
+import { organizationsRouter } from "../domain/organizations/routes.js";
+import { profilesRouter } from "../domain/profiles/routes.js";
+import { publicRouter } from "../domain/public/routes.js";
+import { schedulingRouter } from "../domain/scheduling/routes.js";
+import { crmRouter } from "../domain/crm/routes.js";
+import { ratingsRouter } from "../domain/ratings/routes.js";
+import { documentsRouter, addCustomerDocumentRoutes } from "../domain/documents/routes.js";
+import { feedbackRouter, addCustomerFeedbackRoutes } from "../domain/feedback/routes.js";
+import { accountsRouter } from "../domain/accounts/routes.js";
+
+export const v2Router = Router();
+
+v2Router.use("/auth", authRouter);
+v2Router.use("/profiles", profilesRouter);
+v2Router.use("/book", publicRouter);
+v2Router.use("/billing", billingRouter);
+v2Router.use("/customers", customersRouter);
+addCustomerDocumentRoutes(customersRouter);
+addCustomerFeedbackRoutes(customersRouter);
+v2Router.use("/documents", documentsRouter);
+v2Router.use("/feedback", feedbackRouter);
+v2Router.use("/accounts", accountsRouter);
+v2Router.use("/scheduling", schedulingRouter);
+v2Router.use("/crm", crmRouter);
+v2Router.use("/ratings", ratingsRouter);
+v2Router.use("/organizations", organizationsRouter);
+v2Router.use("/analytics", analyticsRouter);
+v2Router.use("/dashboard", dashboardRouter);

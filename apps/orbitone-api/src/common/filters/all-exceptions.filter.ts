@@ -45,12 +45,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     );
 
     response.status(status).json({
-      success: false,
-      error: {
-        message,
-        requestId: request.requestId,
-        statusCode: status,
-      },
+      ok: false,
+      error: message,
     });
   }
 }

@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* OrbitOne Brand — Light */
+  --background: #FFFBF7;
+  --foreground: #1F2937;
+  --surface: #F5F2EE;
+  --surface-elevated: #FFFFFF;
+  --border: #E7E2DC;
+  --primary: #1A2E26;
+  --primary-foreground: #FFFFFF;
+  --secondary: #047857;
+  --secondary-foreground: #FFFFFF;
+  --accent: #D97706;
+  --accent-foreground: #FFFFFF;
+  --accent-2: #F59E0B;
+  --muted: #786B5D;
+
+  /* Semantic feedback */
+  --success: #047857;
+  --success-foreground: #FFFFFF;
+  --success-subtle: #D1FAE5;
+  --error: #DC2626;
+  --error-foreground: #FFFFFF;
+  --error-subtle: #FEE2E2;
+  --warning: #D97706;
+  --warning-foreground: #FFFFFF;
+  --warning-subtle: #FEF3C7;
+  --info: #0EA5E9;
+  --info-foreground: #FFFFFF;
+  --info-subtle: #E0F2FE;
+
+  /* Elevation */
+  --shadow-none: 0 0 #0000;
+  --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-dropdown: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
+  --shadow-dialog: 0 25px 50px -12px rgb(0 0 0 / 0.15);
+
+  /* Radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* Focus ring */
+  --ring: #047857;
+  --ring-offset: #FFFBF7;
+
+  /* shadcn compatibility */
+  --radius: 0.75rem;
+  --input: #E7E2DC;
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2937;
+  --card: #FFFFFF;
+  --card-foreground: #1F2937;
+  --muted-foreground: #786B5D;
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+}
+
+.dark {
+  /* OrbitOne Brand — Dark */
+  --background: #0F1A17;
+  --foreground: #F5F2EE;
+  --surface: #1A2E26;
+  --surface-elevated: #243B32;
+  --border: #2F4A3E;
+  --primary: #F5F2EE;
+  --primary-foreground: #0F1A17;
+  --secondary: #34D399;
+  --secondary-foreground: #0F1A17;
+  --accent: #FBBF24;
+  --accent-foreground: #0F1A17;
+  --accent-2: #F59E0B;
+  --muted: #A89B8C;
+
+  --success: #34D399;
+  --success-foreground: #0F1A17;
+  --success-subtle: rgba(52, 211, 153, 0.15);
+  --error: #F87171;
+  --error-foreground: #0F1A17;
+  --error-subtle: rgba(248, 113, 113, 0.15);
+  --warning: #FBBF24;
+  --warning-foreground: #0F1A17;
+  --warning-subtle: rgba(251, 191, 36, 0.15);
+  --info: #38BDF8;
+  --info-foreground: #0F1A17;
+  --info-subtle: rgba(56, 189, 248, 0.15);
+
+  --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-dropdown: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-dialog: 0 25px 50px -12px rgb(0 0 0 / 0.6);
+
+  --ring: #34D399;
+  --ring-offset: #0F1A17;
+
+  /* shadcn compatibility */
+  --input: #2F4A3E;
+  --popover: #1A2E26;
+  --popover-foreground: #F5F2EE;
+  --card: #1A2E26;
+  --card-foreground: #F5F2EE;
+  --muted-foreground: #A89B8C;
+  --destructive: #F87171;
+  --destructive-foreground: #0F1A17;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(217, 119, 6, 0.25);
+}
+
+.dark ::selection {
+  background: rgba(251, 191, 36, 0.35);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
