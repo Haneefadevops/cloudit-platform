@@ -1,0 +1,249 @@
+/* TouchOrbit Global Styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ============================================
+     ROOT VARIABLES (Light Mode)
+     ============================================ */
+  :root {
+    --background: 0 0% 100%;                /* White */
+    --foreground: 222.2 84% 4.9%;           /* Near black */
+
+    --primary: 250 87% 50%;                 /* TouchOrbit indigo #534AB7 */
+    --primary-foreground: 0 0% 100%;        /* White text on primary */
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --muted: 210 40% 96.1%;                 /* Light gray */
+    --muted-foreground: 215.4 16.3% 46.9%;  /* Muted text */
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;           /* Red for delete/danger */
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;            /* Light border */
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;                 /* Focus ring */
+
+    --radius: 0.5rem;                       /* Default border radius */
+
+    /* ============================================
+       CALENDAR DESIGN TOKENS (Phase 2)
+       ============================================ */
+    --cal-shift:      83  62%  55%;  /* Emerald */
+    --cal-leave:      217 91%  60%;  /* Blue */
+    --cal-holiday:    0   84%  60%;  /* Red */
+    --cal-training:   25  95%  53%;  /* Orange */
+    --cal-meeting:    250 87%  50%;  /* Primary purple */
+    --cal-company:    270 60%  55%;  /* Violet */
+    --cal-task:       215 16%  47%;  /* Slate */
+    --cal-birthday:   340 82%  60%;  /* Pink */
+    --cal-glass-bg:   0 0% 100% / 0.72;
+    --cal-glass-border: 0 0% 100% / 0.18;
+    --cal-shadow-sm:  0 4px  6px -1px hsl(250 50% 20% / 0.04);
+    --cal-shadow-md:  0 10px 15px -3px hsl(250 50% 20% / 0.06);
+    --cal-shadow-xl:  0 25px 50px -12px hsl(250 50% 20% / 0.10);
+  }
+
+  /* ============================================
+     DARK MODE
+     ============================================ */
+  .dark {
+    --background: 222.2 84% 4.9%;           /* Dark background */
+    --foreground: 210 40% 98%;              /* Light text */
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;             /* Dark muted */
+    --muted-foreground: 215 20.2% 65.1%;    /* Muted text */
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;           /* Dark red */
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;            /* Dark border */
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;              /* Light focus ring */
+  }
+
+  /* ============================================
+     BASE STYLES
+     ============================================ */
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', var(--font-sans), sans-serif;
+  }
+
+  /* ============================================
+     SCROLLBAR STYLING (modern, minimal)
+     ============================================ */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) hsl(var(--muted));
+  }
+
+  /* ============================================
+     SELECTION STYLING
+     ============================================ */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.2);
+    color: hsl(var(--foreground));
+  }
+
+  /* ============================================
+     FOCUS VISIBLE (accessibility)
+     ============================================ */
+  *:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* ============================================
+     SAFE AREA (for mobile PWA)
+     ============================================ */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* ============================================
+     ANIMATIONS (Phase 12 Sprint E)
+     ============================================ */
+  @keyframes slide-in-left {
+    from { transform: translateX(-10px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  @keyframes fade-out-scale {
+    from { transform: scale(1); opacity: 1; }
+    to { transform: scale(0.95); opacity: 0; }
+  }
+
+  @keyframes badge-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 rgba(83, 74, 183, 0.4); }
+    70% { box-shadow: 0 0 0 6px rgba(83, 74, 183, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(83, 74, 183, 0); }
+  }
+
+  .animate-slide-in-left {
+    animation: slide-in-left 0.3s ease-out;
+  }
+
+  .animate-fade-out {
+    animation: fade-out-scale 0.3s ease-in forwards;
+  }
+
+  .animate-badge-bounce {
+    animation: badge-bounce 0.5s ease-in-out infinite;
+  }
+
+  .animate-pulse-ring {
+    animation: pulse-ring 2s ease-out infinite;
+  }
+
+  /* ============================================
+     PRINT STYLES (Roster + Calendar)
+     ============================================ */
+  @media print {
+    .print\:hidden { display: none !important; }
+    .print\:shadow-none { box-shadow: none !important; }
+    .print\:border-0 { border: none !important; }
+    .print\:bg-white { background: white !important; }
+
+    nav, header, button, .no-print {
+      display: none !important;
+    }
+
+    body {
+      background: white !important;
+      color: black !important;
+    }
+
+    table {
+      font-size: 10pt;
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+    }
+
+    /* Force color printing */
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    /* Org chart print styles */
+    .react-flow {
+      background: white !important;
+    }
+    .react-flow__minimap,
+    .react-flow__controls,
+    .react-flow__panel {
+      display: none !important;
+    }
+  }
+}
