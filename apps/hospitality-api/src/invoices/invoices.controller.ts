@@ -22,9 +22,11 @@ import { CreateInvoiceDto } from "./dto/create-invoice.dto";
 import { UpdateInvoiceDto } from "./dto/update-invoice.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { RequireModule } from "../common/decorators/require-module.decorator";
 
 @ApiTags("invoices")
 @Controller("invoices")
+@RequireModule("hospitality", "invoices")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class InvoicesController {

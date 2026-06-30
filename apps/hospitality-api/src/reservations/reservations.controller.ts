@@ -26,9 +26,11 @@ import { CalendarQueryDto } from "./dto/calendar-query.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { RequireModule } from "../common/decorators/require-module.decorator";
 
 @ApiTags("reservations")
 @Controller("reservations")
+@RequireModule("hospitality", "reservations")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class ReservationsController {

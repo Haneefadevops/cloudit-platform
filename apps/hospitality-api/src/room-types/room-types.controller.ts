@@ -20,9 +20,11 @@ import { CreateRoomTypeDto } from "./dto/create-room-type.dto";
 import { UpdateRoomTypeDto } from "./dto/update-room-type.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { RequireModule } from "../common/decorators/require-module.decorator";
 
 @ApiTags("room-types")
 @Controller("room-types")
+@RequireModule("hospitality", "room-types")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class RoomTypesController {

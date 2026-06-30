@@ -14,9 +14,11 @@ import { CreateTaxRateDto } from "./dto/create-tax-rate.dto";
 import { UpdateTaxRateDto } from "./dto/update-tax-rate.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { RequireModule } from "../common/decorators/require-module.decorator";
 
 @ApiTags("taxes")
 @Controller("taxes")
+@RequireModule("hospitality", "taxes")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class TaxesController {

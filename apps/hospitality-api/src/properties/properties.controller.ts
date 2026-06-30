@@ -21,9 +21,11 @@ import { CreatePropertyDto } from "./dto/create-property.dto";
 import { UpdatePropertyDto } from "./dto/update-property.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { RequireModule } from "../common/decorators/require-module.decorator";
 
 @ApiTags("properties")
 @Controller("properties")
+@RequireModule("hospitality", "properties")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class PropertiesController {

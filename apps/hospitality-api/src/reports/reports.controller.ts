@@ -4,9 +4,11 @@ import { ReportsService } from "./reports.service";
 import { ReportQueryDto } from "./dto/report-query.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { RequireModule } from "../common/decorators/require-module.decorator";
 
 @ApiTags("reports")
 @Controller("reports")
+@RequireModule("hospitality", "reports")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class ReportsController {

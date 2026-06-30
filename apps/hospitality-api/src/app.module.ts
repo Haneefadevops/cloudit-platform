@@ -8,6 +8,7 @@ import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { PrismaModule } from "./prisma/prisma.module";
 import { HealthModule } from "./health/health.module";
+import { ProductModulesModule } from "./modules/modules.module";
 import { PropertiesModule } from "./properties/properties.module";
 import { RoomTypesModule } from "./room-types/room-types.module";
 import { RoomsModule } from "./rooms/rooms.module";
@@ -18,6 +19,7 @@ import { TaxesModule } from "./taxes/taxes.module";
 import { ReportsModule } from "./reports/reports.module";
 import { EventsModule } from "./events/events.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
+import { ModuleGuard } from "./common/guards/module.guard";
 import { RequestLoggingInterceptor } from "./common/interceptors/request-logging.interceptor";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
 import { TimeoutInterceptor } from "./common/interceptors/timeout.interceptor";
@@ -61,6 +63,7 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
     }),
     PrismaModule,
     HealthModule,
+    ProductModulesModule,
     PropertiesModule,
     RoomTypesModule,
     RoomsModule,
@@ -81,6 +84,10 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ModuleGuard,
     },
     {
       provide: APP_INTERCEPTOR,

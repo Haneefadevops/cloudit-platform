@@ -21,9 +21,11 @@ import { UpdateRoomDto } from "./dto/update-room.dto";
 import { AvailabilityQueryDto } from "./dto/availability-query.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { RequireModule } from "../common/decorators/require-module.decorator";
 
 @ApiTags("rooms")
 @Controller("rooms")
+@RequireModule("hospitality", "rooms")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class RoomsController {
