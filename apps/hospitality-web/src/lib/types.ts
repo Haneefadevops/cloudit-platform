@@ -246,6 +246,47 @@ export interface ReservationReport {
   bySource: { source: string; count: number }[];
 }
 
+export interface DashboardOverview {
+  date: string;
+  summary: {
+    checkIns: number;
+    checkOuts: number;
+    availableRooms: number;
+    occupiedRooms: number;
+    totalRooms: number;
+    occupancyRate: number;
+    revenue: number;
+  };
+  checkIns: Reservation[];
+  checkOuts: Reservation[];
+}
+
+export interface GuestSourceReport {
+  summary: {
+    totalReservations: number;
+  };
+  bySource: {
+    source: string;
+    count: number;
+    revenue: number;
+    share: number;
+  }[];
+}
+
+export interface TaxSummaryReport {
+  summary: {
+    invoiceCount: number;
+    totalTax: number;
+  };
+  byTax: {
+    name: string;
+    rate: number;
+    taxableBase: number;
+    amount: number;
+    invoiceCount: number;
+  }[];
+}
+
 export interface TdlReport {
   summary: {
     invoiceCount: number;
@@ -262,4 +303,11 @@ export interface TdlReport {
   }[];
 }
 
-export type ReportType = 'occupancy' | 'revenue' | 'guests' | 'reservations' | 'tdl';
+export type ReportType =
+  | 'occupancy'
+  | 'revenue'
+  | 'guests'
+  | 'guest-sources'
+  | 'reservations'
+  | 'tax-summary'
+  | 'tdl';

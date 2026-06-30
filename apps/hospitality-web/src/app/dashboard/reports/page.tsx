@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button, Card, CardContent, Input, Select, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Badge } from "@cloudit/ui";
-import { BarChart3, BedDouble, Users, ClipboardList, Wallet } from "lucide-react";
+import { BarChart3, BedDouble, Users, ClipboardList, Wallet, Receipt } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatsCard } from "@/components/stats-card";
 import { api } from "@/lib/api";
@@ -13,7 +13,9 @@ import type {
   OccupancyReport,
   RevenueReport,
   GuestReport,
+  GuestSourceReport,
   ReservationReport,
+  TaxSummaryReport,
   TdlReport,
   ReportType,
 } from "@/lib/types";
@@ -22,7 +24,9 @@ const reportTabs: { value: ReportType; label: string; icon: React.ReactNode }[] 
   { value: "occupancy", label: "Occupancy", icon: <BedDouble className="h-4 w-4" /> },
   { value: "revenue", label: "Revenue", icon: <Wallet className="h-4 w-4" /> },
   { value: "guests", label: "Guests", icon: <Users className="h-4 w-4" /> },
+  { value: "guest-sources", label: "Sources", icon: <Users className="h-4 w-4" /> },
   { value: "reservations", label: "Reservations", icon: <ClipboardList className="h-4 w-4" /> },
+  { value: "tax-summary", label: "Tax Summary", icon: <Receipt className="h-4 w-4" /> },
   { value: "tdl", label: "TDL", icon: <BarChart3 className="h-4 w-4" /> },
 ];
 
@@ -45,7 +49,9 @@ export default function ReportsPage() {
   const [occupancy, setOccupancy] = useState<OccupancyReport | null>(null);
   const [revenue, setRevenue] = useState<RevenueReport | null>(null);
   const [guests, setGuests] = useState<GuestReport | null>(null);
+  const [guestSources, setGuestSources] = useState<GuestSourceReport | null>(null);
   const [reservations, setReservations] = useState<ReservationReport | null>(null);
+  const [taxSummary, setTaxSummary] = useState<TaxSummaryReport | null>(null);
   const [tdl, setTdl] = useState<TdlReport | null>(null);
 
   useEffect(() => {
@@ -76,7 +82,13 @@ export default function ReportsPage() {
       setIsLoading(true);
       const url = `/reports/${type}?propertyId=${propertyId}&startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`;
       const data = await api.get<
-        OccupancyReport | RevenueReport | GuestReport | ReservationReport | TdlReport
+        | OccupancyReport
+        | RevenueReport
+        | GuestReport
+        | GuestSourceReport
+        | ReservationReport
+        | TaxSummaryReport
+        | TdlReport
       >(url);
       switch (type) {
         case "occupancy":
@@ -88,8 +100,14 @@ export default function ReportsPage() {
         case "guests":
           setGuests(data as GuestReport);
           break;
+        case "guest-sources":
+          setGuestSources(data as GuestSourceReport);
+          break;
         case "reservations":
           setReservations(data as ReservationReport);
+          break;
+        case "tax-summary":
+          setTaxSummary(data as TaxSummaryReport);
           break;
         case "tdl":
           setTdl(data as TdlReport);
@@ -364,6 +382,106 @@ export default function ReportsPage() {
                   </CardContent>
                 </Card>
               </div>
+            </>
+          )}
+
+          {activeTab === "guest-sources" && guestSources && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <StatsCard
+                  title="Reservations"
+                  value={guestSources.summary.totalReservations}
+                />
+                <StatsCard
+                  title="Top Source"
+                  value={guestSources.bySource[0]?.source?.replace("_", " ") || "-"}
+                />
+                <StatsCard
+                  title="Top Source Share"
+                  value={`${guestSources.bySource[0]?.share ?? 0}%`}
+                />
+              </div>
+              <Card>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Source</TableHead>
+                          <TableHead>Reservations</TableHead>
+                          <TableHead>Share</TableHead>
+                          <TableHead>Revenue</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {guestSources.bySource.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-muted-foreground">
+                              No source data
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          guestSources.bySource.map((item) => (
+                            <TableRow key={item.source}>
+                              <TableCell className="font-medium">
+                                {item.source.replace("_", " ")}
+                              </TableCell>
+                              <TableCell>{item.count}</TableCell>
+                              <TableCell>{item.share}%</TableCell>
+                              <TableCell>{formatLkr(item.revenue)}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {activeTab === "tax-summary" && taxSummary && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <StatsCard title="Invoices" value={taxSummary.summary.invoiceCount} />
+                <StatsCard title="Total Tax" value={formatLkr(taxSummary.summary.totalTax)} />
+              </div>
+              <Card>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Tax</TableHead>
+                          <TableHead>Rate</TableHead>
+                          <TableHead>Taxable Base</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Invoices</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {taxSummary.byTax.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground">
+                              No tax data
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          taxSummary.byTax.map((tax) => (
+                            <TableRow key={tax.name}>
+                              <TableCell className="font-medium">{tax.name}</TableCell>
+                              <TableCell>{tax.rate}%</TableCell>
+                              <TableCell>{formatLkr(tax.taxableBase)}</TableCell>
+                              <TableCell>{formatLkr(tax.amount)}</TableCell>
+                              <TableCell>{tax.invoiceCount}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
             </>
           )}
 

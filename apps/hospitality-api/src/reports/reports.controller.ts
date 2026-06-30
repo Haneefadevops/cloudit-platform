@@ -14,6 +14,12 @@ import { RequireModule } from "../common/decorators/require-module.decorator";
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  @Get("dashboard")
+  @ApiOperation({ summary: "Dashboard summary" })
+  async dashboard(@CurrentOrganization() organizationId: string) {
+    return this.reportsService.dashboard(organizationId);
+  }
+
   @Get("occupancy")
   @ApiOperation({ summary: "Occupancy report" })
   async occupancy(
@@ -42,6 +48,20 @@ export class ReportsController {
     );
   }
 
+  @Get("tax-summary")
+  @ApiOperation({ summary: "Tax summary report" })
+  async taxSummary(
+    @CurrentOrganization() organizationId: string,
+    @Query() query: ReportQueryDto,
+  ) {
+    return this.reportsService.taxSummary(
+      organizationId,
+      query.propertyId,
+      query.startDate,
+      query.endDate,
+    );
+  }
+
   @Get("tdl")
   @ApiOperation({ summary: "TDL report for SLTDA filing" })
   async tdl(
@@ -49,6 +69,20 @@ export class ReportsController {
     @Query() query: ReportQueryDto,
   ) {
     return this.reportsService.tdl(
+      organizationId,
+      query.propertyId,
+      query.startDate,
+      query.endDate,
+    );
+  }
+
+  @Get("guest-sources")
+  @ApiOperation({ summary: "Guest source report" })
+  async guestSources(
+    @CurrentOrganization() organizationId: string,
+    @Query() query: ReportQueryDto,
+  ) {
+    return this.reportsService.guestSources(
       organizationId,
       query.propertyId,
       query.startDate,

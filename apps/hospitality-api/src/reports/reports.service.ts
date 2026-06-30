@@ -1,6 +1,10 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { ReservationStatus, RoomStatus } from "@prisma/client-hospitality";
+import {
+  InvoiceStatus,
+  ReservationStatus,
+  RoomStatus,
+} from "@prisma/client-hospitality";
 
 @Injectable()
 export class ReportsService {
@@ -184,6 +188,76 @@ export class ReportsService {
     };
   }
 
+  async dashboard(organizationId: string) {
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 1);
+
+    const [totalRooms, availableRooms, occupiedRooms, todaysReservations, revenue] =
+      await Promise.all([
+        this.prisma.room.count({ where: { property: { organizationId } } }),
+        this.prisma.room.count({
+          where: { property: { organizationId }, status: RoomStatus.available },
+        }),
+        this.prisma.room.count({
+          where: { property: { organizationId }, status: RoomStatus.occupied },
+        }),
+        this.prisma.reservation.findMany({
+          where: {
+            property: { organizationId },
+            status: { notIn: [ReservationStatus.cancelled, ReservationStatus.no_show] },
+            OR: [
+              { checkInDate: { gte: start, lt: end } },
+              { checkOutDate: { gte: start, lt: end } },
+            ],
+          },
+          orderBy: [{ checkInDate: "asc" }, { checkOutDate: "asc" }],
+          include: {
+            guest: true,
+            room: true,
+            property: true,
+          },
+        }),
+        this.prisma.invoice.aggregate({
+          where: {
+            property: { organizationId },
+            status: { not: InvoiceStatus.cancelled },
+            issueDate: { gte: start, lt: end },
+          },
+          _sum: { totalAmount: true },
+        }),
+      ]);
+
+    const checkIns = todaysReservations.filter(
+      (reservation) =>
+        reservation.checkInDate >= start && reservation.checkInDate < end,
+    );
+    const checkOuts = todaysReservations.filter(
+      (reservation) =>
+        reservation.checkOutDate >= start && reservation.checkOutDate < end,
+    );
+
+    return {
+      date: start.toISOString().split("T")[0],
+      summary: {
+        checkIns: checkIns.length,
+        checkOuts: checkOuts.length,
+        availableRooms,
+        occupiedRooms,
+        totalRooms,
+        occupancyRate:
+          totalRooms > 0
+            ? Number(((occupiedRooms / totalRooms) * 100).toFixed(1))
+            : 0,
+        revenue: Number(revenue._sum.totalAmount ?? 0),
+      },
+      checkIns,
+      checkOuts,
+    };
+  }
+
   async tdl(
     organizationId: string,
     propertyId: string,
@@ -246,6 +320,69 @@ export class ReportsService {
     };
   }
 
+  async taxSummary(
+    organizationId: string,
+    propertyId: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    await this.validateProperty(organizationId, propertyId);
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        propertyId,
+        status: { not: InvoiceStatus.cancelled },
+        issueDate: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      select: {
+        invoiceNumber: true,
+        taxBreakdown: true,
+      },
+    });
+
+    const taxTotals: Record<
+      string,
+      { taxableBase: number; amount: number; invoiceCount: number; rate: number }
+    > = {};
+
+    for (const invoice of invoices) {
+      for (const tax of invoice.taxBreakdown as any[]) {
+        const entry = taxTotals[tax.name] ?? {
+          taxableBase: 0,
+          amount: 0,
+          invoiceCount: 0,
+          rate: Number(tax.rate ?? 0),
+        };
+        entry.taxableBase += Number(tax.taxableBase ?? 0);
+        entry.amount += Number(tax.amount ?? 0);
+        entry.invoiceCount += 1;
+        entry.rate = Number(tax.rate ?? entry.rate);
+        taxTotals[tax.name] = entry;
+      }
+    }
+
+    const byTax = Object.entries(taxTotals).map(([name, values]) => ({
+      name,
+      rate: values.rate,
+      taxableBase: Number(values.taxableBase.toFixed(2)),
+      amount: Number(values.amount.toFixed(2)),
+      invoiceCount: values.invoiceCount,
+    }));
+
+    const totalTax = byTax.reduce((sum, tax) => sum + tax.amount, 0);
+
+    return {
+      summary: {
+        invoiceCount: invoices.length,
+        totalTax: Number(totalTax.toFixed(2)),
+      },
+      byTax,
+    };
+  }
+
   async guests(
     organizationId: string,
     propertyId: string,
@@ -298,6 +435,56 @@ export class ReportsService {
         returningGuests,
       },
       topNationalities,
+    };
+  }
+
+  async guestSources(
+    organizationId: string,
+    propertyId: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    await this.validateProperty(organizationId, propertyId);
+
+    const reservations = await this.prisma.reservation.findMany({
+      where: {
+        propertyId,
+        checkInDate: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      select: {
+        source: true,
+        totalAmount: true,
+      },
+    });
+
+    const totalReservations = reservations.length;
+    const bySource: Record<string, { count: number; revenue: number }> = {};
+
+    for (const reservation of reservations) {
+      const source = reservation.source || "unknown";
+      bySource[source] = bySource[source] ?? { count: 0, revenue: 0 };
+      bySource[source].count += 1;
+      bySource[source].revenue += Number(reservation.totalAmount);
+    }
+
+    return {
+      summary: {
+        totalReservations,
+      },
+      bySource: Object.entries(bySource)
+        .map(([source, values]) => ({
+          source,
+          count: values.count,
+          revenue: Number(values.revenue.toFixed(2)),
+          share:
+            totalReservations > 0
+              ? Number(((values.count / totalReservations) * 100).toFixed(2))
+              : 0,
+        }))
+        .sort((a, b) => b.count - a.count),
     };
   }
 
