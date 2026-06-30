@@ -4,6 +4,7 @@ export interface Property {
   address?: string;
   phone?: string;
   email?: string;
+  publicSlug?: string;
   taxId?: string;
   registrationNumber?: string;
   sltdaNumber?: string;
@@ -31,6 +32,36 @@ export interface RoomType {
   _count?: {
     rooms: number;
   };
+}
+
+export interface PublicAvailabilityRoomType {
+  id: string;
+  name: string;
+  description?: string;
+  basePrice: number;
+  maxOccupancy: number;
+  amenities?: string[];
+  availableRooms?: number;
+  totalRooms: number;
+  seasonalRates: {
+    name: string;
+    startDate: string;
+    endDate: string;
+    price: number;
+    minimumStay: number;
+  }[];
+}
+
+export interface PublicAvailabilityResult {
+  property: Pick<
+    Property,
+    "id" | "name" | "publicSlug" | "address" | "phone" | "email" | "settings"
+  >;
+  search: {
+    checkInDate?: string;
+    checkOutDate?: string;
+  };
+  roomTypes: PublicAvailabilityRoomType[];
 }
 
 export interface SeasonalRate {

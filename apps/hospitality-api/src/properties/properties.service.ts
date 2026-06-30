@@ -74,11 +74,14 @@ export class PropertiesService {
   }
 
   async create(organizationId: string, dto: CreatePropertyDto) {
-    const { settings, ...data } = dto;
+    const { settings, publicSlug, ...data } = dto;
 
     return this.prisma.property.create({
       data: {
         ...data,
+        publicSlug: await this.generatePublicSlug(
+          publicSlug || data.name,
+        ),
         settings: {
           ...SRI_LANKA_DEFAULT_SETTINGS,
           ...(settings ?? {}),
@@ -90,10 +93,21 @@ export class PropertiesService {
 
   async update(id: string, organizationId: string, dto: UpdatePropertyDto) {
     await this.findOne(id, organizationId);
+    const { publicSlug, ...data } = dto;
 
     return this.prisma.property.update({
       where: { id },
-      data: dto,
+      data: {
+        ...data,
+        ...(publicSlug !== undefined
+          ? {
+              publicSlug: await this.generatePublicSlug(
+                publicSlug,
+                id,
+              ),
+            }
+          : {}),
+      },
     });
   }
 
@@ -104,5 +118,37 @@ export class PropertiesService {
     return this.prisma.property.delete({
       where: { id },
     });
+  }
+
+  private async generatePublicSlug(
+    value: string,
+    excludePropertyId?: string,
+  ) {
+    const base = this.slugify(value);
+    let candidate = base;
+    let suffix = 2;
+
+    while (
+      await this.prisma.property.findFirst({
+        where: {
+          publicSlug: candidate,
+          ...(excludePropertyId ? { id: { not: excludePropertyId } } : {}),
+        },
+      })
+    ) {
+      candidate = `${base}-${suffix}`;
+      suffix += 1;
+    }
+
+    return candidate;
+  }
+
+  private slugify(value: string) {
+    const slug = value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return slug || `property-${Date.now()}`;
   }
 }

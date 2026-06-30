@@ -1,0 +1,18 @@
+import { Body, Controller, Post } from "@nestjs/common";
+import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Public } from "../common/decorators/public.decorator";
+import { PublicAvailabilityDto } from "./dto/availability.dto";
+import { PublicService } from "./public.service";
+
+@ApiTags("public")
+@Public()
+@Controller("public")
+export class PublicController {
+  constructor(private readonly publicService: PublicService) {}
+
+  @Post("availability")
+  @ApiOperation({ summary: "Get public property and room availability" })
+  async availability(@Body() dto: PublicAvailabilityDto) {
+    return this.publicService.availability(dto);
+  }
+}
