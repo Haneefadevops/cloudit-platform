@@ -42,6 +42,20 @@ export class ReportsController {
     );
   }
 
+  @Get("tdl")
+  @ApiOperation({ summary: "TDL report for SLTDA filing" })
+  async tdl(
+    @CurrentOrganization() organizationId: string,
+    @Query() query: ReportQueryDto,
+  ) {
+    return this.reportsService.tdl(
+      organizationId,
+      query.propertyId,
+      query.startDate,
+      query.endDate,
+    );
+  }
+
   @Get("guests")
   @ApiOperation({ summary: "Guest report" })
   async guests(

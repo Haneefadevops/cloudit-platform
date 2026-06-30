@@ -184,6 +184,65 @@ export class ReportsService {
     };
   }
 
+  async tdl(
+    organizationId: string,
+    propertyId: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    await this.validateProperty(organizationId, propertyId);
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        propertyId,
+        status: { not: "cancelled" },
+        issueDate: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      select: {
+        invoiceNumber: true,
+        issueDate: true,
+        subtotal: true,
+        totalAmount: true,
+        taxBreakdown: true,
+      },
+      orderBy: { issueDate: "asc" },
+    });
+
+    const byInvoice = invoices.map((invoice) => {
+      const taxes = invoice.taxBreakdown as any[];
+      const tdl = taxes.find((tax) => tax.name === "TDL");
+      return {
+        invoiceNumber: invoice.invoiceNumber,
+        issueDate: invoice.issueDate,
+        taxableRevenue: Number(invoice.subtotal),
+        tdlRate: Number(tdl?.rate ?? 0),
+        tdlAmount: Number(tdl?.amount ?? 0),
+        totalAmount: Number(invoice.totalAmount),
+      };
+    });
+
+    const taxableRevenue = byInvoice.reduce(
+      (sum, invoice) => sum + invoice.taxableRevenue,
+      0,
+    );
+    const tdlAmount = byInvoice.reduce(
+      (sum, invoice) => sum + invoice.tdlAmount,
+      0,
+    );
+
+    return {
+      summary: {
+        invoiceCount: invoices.length,
+        taxableRevenue: Number(taxableRevenue.toFixed(2)),
+        tdlAmount: Number(tdlAmount.toFixed(2)),
+      },
+      byInvoice,
+    };
+  }
+
   async guests(
     organizationId: string,
     propertyId: string,

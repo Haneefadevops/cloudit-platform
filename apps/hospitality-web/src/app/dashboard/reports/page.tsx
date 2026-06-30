@@ -14,6 +14,7 @@ import type {
   RevenueReport,
   GuestReport,
   ReservationReport,
+  TdlReport,
   ReportType,
 } from "@/lib/types";
 
@@ -22,6 +23,7 @@ const reportTabs: { value: ReportType; label: string; icon: React.ReactNode }[] 
   { value: "revenue", label: "Revenue", icon: <Wallet className="h-4 w-4" /> },
   { value: "guests", label: "Guests", icon: <Users className="h-4 w-4" /> },
   { value: "reservations", label: "Reservations", icon: <ClipboardList className="h-4 w-4" /> },
+  { value: "tdl", label: "TDL", icon: <BarChart3 className="h-4 w-4" /> },
 ];
 
 function getDefaultDateRange() {
@@ -44,6 +46,7 @@ export default function ReportsPage() {
   const [revenue, setRevenue] = useState<RevenueReport | null>(null);
   const [guests, setGuests] = useState<GuestReport | null>(null);
   const [reservations, setReservations] = useState<ReservationReport | null>(null);
+  const [tdl, setTdl] = useState<TdlReport | null>(null);
 
   useEffect(() => {
     loadProperties();
@@ -72,7 +75,9 @@ export default function ReportsPage() {
     try {
       setIsLoading(true);
       const url = `/reports/${type}?propertyId=${propertyId}&startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`;
-      const data = await api.get<OccupancyReport | RevenueReport | GuestReport | ReservationReport>(url);
+      const data = await api.get<
+        OccupancyReport | RevenueReport | GuestReport | ReservationReport | TdlReport
+      >(url);
       switch (type) {
         case "occupancy":
           setOccupancy(data as OccupancyReport);
@@ -85,6 +90,9 @@ export default function ReportsPage() {
           break;
         case "reservations":
           setReservations(data as ReservationReport);
+          break;
+        case "tdl":
+          setTdl(data as TdlReport);
           break;
       }
     } catch (error) {
@@ -356,6 +364,58 @@ export default function ReportsPage() {
                   </CardContent>
                 </Card>
               </div>
+            </>
+          )}
+
+          {activeTab === "tdl" && tdl && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <StatsCard title="Invoices" value={tdl.summary.invoiceCount} />
+                <StatsCard
+                  title="Taxable Revenue"
+                  value={formatLkr(tdl.summary.taxableRevenue)}
+                />
+                <StatsCard title="TDL Payable" value={formatLkr(tdl.summary.tdlAmount)} />
+              </div>
+
+              <Card>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Invoice</TableHead>
+                          <TableHead>Issue Date</TableHead>
+                          <TableHead>Taxable Revenue</TableHead>
+                          <TableHead>TDL Rate</TableHead>
+                          <TableHead>TDL Amount</TableHead>
+                          <TableHead>Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {tdl.byInvoice.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center text-muted-foreground">
+                              No TDL data for this period
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          tdl.byInvoice.map((invoice) => (
+                            <TableRow key={invoice.invoiceNumber}>
+                              <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
+                              <TableCell>{formatDate(invoice.issueDate)}</TableCell>
+                              <TableCell>{formatLkr(invoice.taxableRevenue)}</TableCell>
+                              <TableCell>{invoice.tdlRate}%</TableCell>
+                              <TableCell>{formatLkr(invoice.tdlAmount)}</TableCell>
+                              <TableCell>{formatLkr(invoice.totalAmount)}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
             </>
           )}
         </div>

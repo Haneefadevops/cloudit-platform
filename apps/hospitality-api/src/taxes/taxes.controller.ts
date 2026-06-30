@@ -36,6 +36,12 @@ export class TaxesController {
     return this.taxesService.findActive(organizationId);
   }
 
+  @Post("presets/sri-lanka")
+  @ApiOperation({ summary: "Apply Sri Lankan hospitality tax presets" })
+  async applySriLankaPresets(@CurrentOrganization() organizationId: string) {
+    return this.taxesService.applySriLankaPresets(organizationId);
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Get tax rate by ID" })
   async findOne(

@@ -13,6 +13,7 @@ export interface TaxBreakdownItem {
   name: string;
   rate: number;
   amount: number;
+  taxableBase?: number;
 }
 
 export interface InvoiceCalculation {
@@ -287,11 +288,16 @@ export class InvoicesService {
       where: { organizationId, isActive: true },
     });
 
-    const getRate = (name: string) => {
-      const rate = activeRates.find(
-        (r) => r.name.toLowerCase() === name.toLowerCase(),
-      );
-      return rate ? Number(rate.rate) : 0;
+    const getRate = (name: string) =>
+      activeRates.find((r) => r.name.toLowerCase() === name.toLowerCase());
+
+    const calculateAmount = (
+      rate: ReturnType<typeof getRate>,
+      taxableBase: number,
+    ) => {
+      if (!rate) return 0;
+      if (rate.type === "fixed") return Number(rate.rate);
+      return taxableBase * (Number(rate.rate) / 100);
     };
 
     const serviceChargeRate = getRate("Service Charge");
@@ -299,39 +305,43 @@ export class InvoicesService {
     const ssclRate = getRate("SSCL");
     const vatRate = getRate("VAT");
 
-    const serviceCharge = subtotal * (serviceChargeRate / 100);
-    const tdl = subtotal * (tdlRate / 100);
-    const sscl = subtotal * (ssclRate / 100);
+    const serviceCharge = calculateAmount(serviceChargeRate, subtotal);
+    const tdl = calculateAmount(tdlRate, subtotal);
+    const sscl = calculateAmount(ssclRate, subtotal);
     const vatBase = subtotal + serviceCharge + tdl + sscl;
-    const vat = vatBase * (vatRate / 100);
+    const vat = calculateAmount(vatRate, vatBase);
 
     const taxBreakdown: TaxBreakdownItem[] = [];
 
-    if (serviceChargeRate > 0) {
+    if (serviceChargeRate && Number(serviceChargeRate.rate) > 0) {
       taxBreakdown.push({
         name: "Service Charge",
-        rate: serviceChargeRate,
+        rate: Number(serviceChargeRate.rate),
+        taxableBase: Number(subtotal.toFixed(2)),
         amount: Number(serviceCharge.toFixed(2)),
       });
     }
-    if (tdlRate > 0) {
+    if (tdlRate && Number(tdlRate.rate) > 0) {
       taxBreakdown.push({
         name: "TDL",
-        rate: tdlRate,
+        rate: Number(tdlRate.rate),
+        taxableBase: Number(subtotal.toFixed(2)),
         amount: Number(tdl.toFixed(2)),
       });
     }
-    if (ssclRate > 0) {
+    if (ssclRate && Number(ssclRate.rate) > 0) {
       taxBreakdown.push({
         name: "SSCL",
-        rate: ssclRate,
+        rate: Number(ssclRate.rate),
+        taxableBase: Number(subtotal.toFixed(2)),
         amount: Number(sscl.toFixed(2)),
       });
     }
-    if (vatRate > 0) {
+    if (vatRate && Number(vatRate.rate) > 0) {
       taxBreakdown.push({
         name: "VAT",
-        rate: vatRate,
+        rate: Number(vatRate.rate),
+        taxableBase: Number(vatBase.toFixed(2)),
         amount: Number(vat.toFixed(2)),
       });
     }

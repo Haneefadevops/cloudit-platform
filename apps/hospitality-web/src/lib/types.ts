@@ -120,6 +120,21 @@ export interface TaxBreakdownItem {
   name: string;
   rate: number;
   amount: number;
+  taxableBase?: number;
+}
+
+export type TaxRateType = 'percentage' | 'fixed';
+
+export interface TaxRate {
+  id: string;
+  name: string;
+  rate: number;
+  type: TaxRateType;
+  isActive: boolean;
+  isDefault: boolean;
+  organizationId: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface InvoiceReservationInfo {
@@ -231,4 +246,20 @@ export interface ReservationReport {
   bySource: { source: string; count: number }[];
 }
 
-export type ReportType = 'occupancy' | 'revenue' | 'guests' | 'reservations';
+export interface TdlReport {
+  summary: {
+    invoiceCount: number;
+    taxableRevenue: number;
+    tdlAmount: number;
+  };
+  byInvoice: {
+    invoiceNumber: string;
+    issueDate: string;
+    taxableRevenue: number;
+    tdlRate: number;
+    tdlAmount: number;
+    totalAmount: number;
+  }[];
+}
+
+export type ReportType = 'occupancy' | 'revenue' | 'guests' | 'reservations' | 'tdl';
