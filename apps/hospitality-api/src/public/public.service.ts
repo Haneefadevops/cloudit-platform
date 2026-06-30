@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "crypto";
 import {
+  HousekeepingTaskStatus,
+  HousekeepingTaskType,
+  Invoice,
+  PaymentMethod,
+  PaymentProviderStatus,
   PaymentStatus,
   ReservationSource,
   ReservationStatus,
@@ -8,15 +13,21 @@ import {
 } from "@prisma/client-hospitality";
 import { EventPublisherService } from "../events/event-publisher.service";
 import { EventTypes } from "../events/event-types";
+import { InvoicesService } from "../invoices/invoices.service";
+import { PaymentsService } from "../payments/payments.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { PublicAvailabilityDto } from "./dto/availability.dto";
 import { CreatePublicBookingDto } from "./dto/create-public-booking.dto";
+import { CreatePublicPaymentIntentDto } from "./dto/create-public-payment-intent.dto";
+import { PublicCheckoutDto } from "./dto/public-checkout.dto";
 
 @Injectable()
 export class PublicService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventPublisher: EventPublisherService,
+    private readonly invoicesService: InvoicesService,
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   async availability(dto: PublicAvailabilityDto) {
@@ -336,6 +347,114 @@ export class PublicService {
     };
   }
 
+  async createPaymentIntent(dto: CreatePublicPaymentIntentDto) {
+    if (
+      dto.method !== PaymentMethod.payhere &&
+      dto.method !== PaymentMethod.stripe
+    ) {
+      throw new BadRequestException("Payment intent requires PayHere or Stripe");
+    }
+
+    const session = await this.getBookingSession(dto.token);
+    const invoice = await this.ensureInvoice(
+      session.reservation.id,
+      session.organizationId,
+    );
+    const balance = await this.getInvoiceBalance(invoice.id, session.organizationId);
+    if (balance <= 0) {
+      throw new BadRequestException("No payment is due for this booking");
+    }
+
+    return this.paymentsService.createIntent(session.organizationId, {
+      invoiceId: invoice.id,
+      amount: balance,
+      method: dto.method,
+    });
+  }
+
+  async checkoutBooking(token: string, dto: PublicCheckoutDto) {
+    const session = await this.getBookingSession(token);
+    const reservation = session.reservation;
+
+    if (reservation.status === ReservationStatus.cancelled) {
+      throw new BadRequestException("Cancelled bookings cannot be checked out");
+    }
+
+    const invoice = await this.ensureInvoice(
+      reservation.id,
+      session.organizationId,
+    );
+    const balance = await this.getInvoiceBalance(invoice.id, session.organizationId);
+
+    if (balance > 0) {
+      const method = dto.paymentMethod;
+      if (method !== PaymentMethod.payhere && method !== PaymentMethod.stripe) {
+        throw new BadRequestException("Online payment is required before check-out");
+      }
+
+      await this.paymentsService.create(session.organizationId, {
+        invoiceId: invoice.id,
+        amount: balance,
+        method,
+        providerStatus: PaymentProviderStatus.succeeded,
+        providerRef: dto.providerRef,
+        notes: "Public guest checkout payment",
+        metadata: { source: "public_guest_checkout" },
+      });
+    }
+
+    const paidAmount = await this.getInvoicePaidAmount(invoice.id, session.organizationId);
+    const totalAmount = Number(invoice.totalAmount);
+    const paymentStatus =
+      paidAmount >= totalAmount
+        ? PaymentStatus.paid
+        : paidAmount > 0
+          ? PaymentStatus.partial
+          : PaymentStatus.pending;
+
+    if (reservation.status !== ReservationStatus.checked_out) {
+      await this.prisma.$transaction([
+        this.prisma.reservation.update({
+          where: { id: reservation.id },
+          data: {
+            status: ReservationStatus.checked_out,
+            totalAmount,
+            paidAmount,
+            paymentStatus,
+          },
+        }),
+        this.prisma.room.update({
+          where: { id: reservation.roomId },
+          data: { status: RoomStatus.cleaning },
+        }),
+        this.prisma.housekeepingTask.create({
+          data: {
+            organizationId: session.organizationId,
+            property: { connect: { id: reservation.propertyId } },
+            room: { connect: { id: reservation.roomId } },
+            type: HousekeepingTaskType.checkout_clean,
+            status: HousekeepingTaskStatus.pending,
+            priority: 2,
+            dueDate: new Date(),
+            notes: `Public checkout clean for ${reservation.reservationNumber}`,
+          },
+        }),
+      ]);
+
+      void this.eventPublisher.publish(EventTypes.BOOKING_CHECKED_OUT, {
+        reservationId: reservation.id,
+        reservationNumber: reservation.reservationNumber,
+        roomId: reservation.roomId,
+        guestId: reservation.guestId,
+        checkedOutAt: new Date().toISOString(),
+        finalAmount: totalAmount,
+        organizationId: session.organizationId,
+      });
+    }
+
+    return this.getBooking(token);
+  }
+
   private async findOccupiedRoomIds(propertyId: string, checkIn: Date, checkOut: Date) {
     const reservations = await this.prisma.reservation.findMany({
       where: {
@@ -348,6 +467,60 @@ export class PublicService {
     });
 
     return new Set(reservations.map((reservation) => reservation.roomId));
+  }
+
+  private async getBookingSession(token: string) {
+    const session = await this.prisma.guestCheckInSession.findUnique({
+      where: { token },
+      include: { reservation: true },
+    });
+
+    if (!session || session.expiresAt <= new Date()) {
+      throw new NotFoundException("Booking link not found or expired");
+    }
+
+    return session;
+  }
+
+  private async ensureInvoice(
+    reservationId: string,
+    organizationId: string,
+  ): Promise<Invoice> {
+    const existingInvoice = await this.prisma.invoice.findFirst({
+      where: { reservationId, property: { organizationId } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existingInvoice) {
+      return existingInvoice;
+    }
+
+    return this.invoicesService.generateFromCheckout(reservationId, organizationId);
+  }
+
+  private async getInvoiceBalance(invoiceId: string, organizationId: string) {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, property: { organizationId } },
+    });
+    if (!invoice) {
+      throw new NotFoundException("Invoice not found");
+    }
+
+    const paidAmount = await this.getInvoicePaidAmount(invoiceId, organizationId);
+    return Math.max(Number(invoice.totalAmount) - paidAmount, 0);
+  }
+
+  private async getInvoicePaidAmount(invoiceId: string, organizationId: string) {
+    const aggregate = await this.prisma.payment.aggregate({
+      where: {
+        invoiceId,
+        organizationId,
+        providerStatus: PaymentProviderStatus.succeeded,
+      },
+      _sum: { amount: true },
+    });
+
+    return Number(aggregate._sum.amount ?? 0);
   }
 
   private calculateStayTotal(

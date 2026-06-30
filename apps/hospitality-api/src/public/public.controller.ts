@@ -3,6 +3,8 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Public } from "../common/decorators/public.decorator";
 import { PublicAvailabilityDto } from "./dto/availability.dto";
 import { CreatePublicBookingDto } from "./dto/create-public-booking.dto";
+import { CreatePublicPaymentIntentDto } from "./dto/create-public-payment-intent.dto";
+import { PublicCheckoutDto } from "./dto/public-checkout.dto";
 import { PublicService } from "./public.service";
 
 @ApiTags("public")
@@ -27,5 +29,20 @@ export class PublicController {
   @ApiOperation({ summary: "Get public booking by guest token" })
   async getBooking(@Param("token") token: string) {
     return this.publicService.getBooking(token);
+  }
+
+  @Post("bookings/:token/checkout")
+  @ApiOperation({ summary: "Complete public guest check-out" })
+  async checkoutBooking(
+    @Param("token") token: string,
+    @Body() dto: PublicCheckoutDto,
+  ) {
+    return this.publicService.checkoutBooking(token, dto);
+  }
+
+  @Post("payments/intent")
+  @ApiOperation({ summary: "Create public payment intent for guest checkout" })
+  async createPaymentIntent(@Body() dto: CreatePublicPaymentIntentDto) {
+    return this.publicService.createPaymentIntent(dto);
   }
 }
