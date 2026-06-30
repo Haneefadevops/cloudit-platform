@@ -28,6 +28,14 @@ export class CreatePropertyDto {
   taxId?: string;
 
   @IsOptional()
+  @IsString()
+  registrationNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  sltdaNumber?: string;
+
+  @IsOptional()
   @IsObject()
   settings?: Record<string, any>;
 }

@@ -18,6 +18,7 @@ import { Plus, Pencil, Trash2, BedDouble } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { RoomTypeModal } from "@/components/room-type-modal";
 import { api } from "@/lib/api";
+import { formatLkr } from "@/lib/format";
 import type { Property, RoomType, PaginatedResponse } from "@/lib/types";
 
 export default function RoomTypesPage() {
@@ -135,7 +136,7 @@ export default function RoomTypesPage() {
                         </div>
                       </TableCell>
                       <TableCell>{getPropertyName(rt.propertyId)}</TableCell>
-                      <TableCell>Rs. {Number(rt.basePrice).toLocaleString()}</TableCell>
+                      <TableCell>{formatLkr(rt.basePrice)}</TableCell>
                       <TableCell>{rt.maxOccupancy}</TableCell>
                       <TableCell>{rt._count?.rooms ?? 0}</TableCell>
                       <TableCell className="text-right">

@@ -1,4 +1,10 @@
-import { IsNotEmpty, IsOptional, IsString, IsEmail } from "class-validator";
+import {
+  IsBoolean,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from "class-validator";
 
 export class CreateGuestDto {
   @IsNotEmpty()
@@ -19,7 +25,31 @@ export class CreateGuestDto {
 
   @IsOptional()
   @IsString()
+  localPhone?: string;
+
+  @IsOptional()
+  @IsString()
   idNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  nicNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  passportNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  emergencyContactName?: string;
+
+  @IsOptional()
+  @IsString()
+  emergencyContactPhone?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isForeignGuest?: boolean;
 
   @IsOptional()
   @IsString()

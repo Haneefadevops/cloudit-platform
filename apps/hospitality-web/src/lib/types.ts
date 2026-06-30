@@ -5,6 +5,8 @@ export interface Property {
   phone?: string;
   email?: string;
   taxId?: string;
+  registrationNumber?: string;
+  sltdaNumber?: string;
   settings?: Record<string, any>;
   createdAt: string;
   updatedAt: string;
@@ -51,7 +53,13 @@ export interface Guest {
   lastName: string;
   email?: string;
   phone?: string;
+  localPhone?: string;
   idNumber?: string;
+  nicNumber?: string;
+  passportNumber?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  isForeignGuest?: boolean;
   nationality?: string;
   address?: string;
   notes?: string;
@@ -151,11 +159,16 @@ export interface InvoicePreview {
     phone?: string;
     email?: string;
     taxId?: string;
+    registrationNumber?: string;
+    sltdaNumber?: string;
   };
   guest: {
     name: string;
     email?: string;
     phone?: string;
+    localPhone?: string;
+    nicNumber?: string;
+    passportNumber?: string;
     address?: string;
   };
   reservation: InvoiceReservationInfo & {

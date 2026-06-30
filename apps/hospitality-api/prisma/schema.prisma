@@ -9,42 +9,44 @@ datasource db {
 }
 
 model Property {
-  id          String   @id @default(uuid())
-  name        String
-  address     String?
-  phone       String?
-  email       String?
-  taxId       String?
-  settings    Json?    @default("{}")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  name               String
+  address            String?
+  phone              String?
+  email              String?
+  taxId              String?
+  registrationNumber String?
+  sltdaNumber        String?
+  settings           Json?    @default("{\"currency\":\"LKR\",\"currencySymbol\":\"Rs.\",\"locale\":\"en-LK\",\"dateFormat\":\"yyyy-MM-dd\"}")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   // Tenant
   organizationId String
 
-  roomTypes     RoomType[]
-  rooms         Room[]
-  reservations  Reservation[]
-  invoices      Invoice[]
+  roomTypes    RoomType[]
+  rooms        Room[]
+  reservations Reservation[]
+  invoices     Invoice[]
 
   @@index([organizationId])
   @@map("properties")
 }
 
 model RoomType {
-  id            String   @id @default(uuid())
-  name          String
-  description   String?
-  basePrice     Decimal  @db.Decimal(10, 2)
-  maxOccupancy  Int      @default(2)
-  amenities     Json?    @default("[]")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  basePrice    Decimal  @db.Decimal(10, 2)
+  maxOccupancy Int      @default(2)
+  amenities    Json?    @default("[]")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  propertyId    String
-  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  rooms         Room[]
+  rooms Room[]
 
   @@index([propertyId])
   @@map("room_types")
@@ -58,18 +60,18 @@ enum RoomStatus {
 }
 
 model Room {
-  id          String     @id @default(uuid())
-  roomNumber  String
-  floor       String?
-  status      RoomStatus @default(available)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id         String     @id @default(uuid())
+  roomNumber String
+  floor      String?
+  status     RoomStatus @default(available)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 
-  propertyId  String
-  property    Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  roomTypeId  String
-  roomType    RoomType   @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+  roomTypeId String
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
 
   reservations Reservation[]
 
@@ -80,17 +82,23 @@ model Room {
 }
 
 model Guest {
-  id          String   @id @default(uuid())
-  firstName   String
-  lastName    String
-  email       String?
-  phone       String?
-  idNumber    String?
-  nationality String?
-  address     String?
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                    String   @id @default(uuid())
+  firstName             String
+  lastName              String
+  email                 String?
+  phone                 String?
+  localPhone            String?
+  idNumber              String?
+  nicNumber             String?
+  passportNumber        String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  isForeignGuest        Boolean  @default(false)
+  nationality           String?
+  address               String?
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   // Tenant
   organizationId String
@@ -128,32 +136,32 @@ enum ReservationSource {
 }
 
 model Reservation {
-  id                String             @id @default(uuid())
-  reservationNumber String             @unique
+  id                String            @id @default(uuid())
+  reservationNumber String            @unique
   checkInDate       DateTime
   checkOutDate      DateTime
-  adults            Int                @default(1)
-  children          Int                @default(0)
-  status            ReservationStatus  @default(pending)
-  totalAmount       Decimal            @db.Decimal(10, 2) @default(0)
-  paidAmount        Decimal            @db.Decimal(10, 2) @default(0)
-  paymentStatus     PaymentStatus      @default(pending)
-  source            ReservationSource  @default(direct)
+  adults            Int               @default(1)
+  children          Int               @default(0)
+  status            ReservationStatus @default(pending)
+  totalAmount       Decimal           @default(0) @db.Decimal(10, 2)
+  paidAmount        Decimal           @default(0) @db.Decimal(10, 2)
+  paymentStatus     PaymentStatus     @default(pending)
+  source            ReservationSource @default(direct)
   notes             String?
   createdBy         String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
-  propertyId        String
-  property          Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  roomId            String
-  room              Room               @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Restrict)
 
-  guestId           String
-  guest             Guest              @relation(fields: [guestId], references: [id], onDelete: Restrict)
+  guestId String
+  guest   Guest  @relation(fields: [guestId], references: [id], onDelete: Restrict)
 
-  invoices          Invoice[]
+  invoices Invoice[]
 
   @@index([propertyId])
   @@index([roomId])
@@ -168,14 +176,14 @@ enum TaxRateType {
 }
 
 model TaxRate {
-  id             String      @id @default(uuid())
-  name           String
-  rate           Decimal     @db.Decimal(10, 4)
-  type           TaxRateType @default(percentage)
-  isActive       Boolean     @default(true)
-  isDefault      Boolean     @default(false)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id        String      @id @default(uuid())
+  name      String
+  rate      Decimal     @db.Decimal(10, 4)
+  type      TaxRateType @default(percentage)
+  isActive  Boolean     @default(true)
+  isDefault Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
   // Tenant
   organizationId String
@@ -194,27 +202,27 @@ enum InvoiceStatus {
 }
 
 model Invoice {
-  id             String        @id @default(uuid())
-  invoiceNumber  String        @unique
-  issueDate      DateTime      @default(now())
-  dueDate        DateTime?
-  subtotal       Decimal       @db.Decimal(10, 2)
-  taxBreakdown   Json          @default("[]")
-  totalAmount    Decimal       @db.Decimal(10, 2)
-  paidAmount     Decimal       @db.Decimal(10, 2) @default(0)
-  status         InvoiceStatus @default(draft)
-  notes          String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id            String        @id @default(uuid())
+  invoiceNumber String        @unique
+  issueDate     DateTime      @default(now())
+  dueDate       DateTime?
+  subtotal      Decimal       @db.Decimal(10, 2)
+  taxBreakdown  Json          @default("[]")
+  totalAmount   Decimal       @db.Decimal(10, 2)
+  paidAmount    Decimal       @default(0) @db.Decimal(10, 2)
+  status        InvoiceStatus @default(draft)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  propertyId     String
-  property       Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  reservationId  String
-  reservation    Reservation   @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
 
-  guestId        String
-  guest          Guest         @relation(fields: [guestId], references: [id], onDelete: Restrict)
+  guestId String
+  guest   Guest  @relation(fields: [guestId], references: [id], onDelete: Restrict)
 
   @@index([propertyId])
   @@index([reservationId])

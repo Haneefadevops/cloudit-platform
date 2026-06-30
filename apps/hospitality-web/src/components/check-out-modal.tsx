@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Modal, Button, Input, Form, FormField, FormLabel } from "@cloudit/ui";
+import { formatDate, formatLkr } from "@/lib/format";
 import type { Reservation } from "@/lib/types";
 
 interface CheckOutModalProps {
@@ -33,9 +34,9 @@ export function CheckOutModal({ open, onClose, reservation, onConfirm }: CheckOu
       open={open}
       onClose={onClose}
       title="Check-out Guest"
-      description={`${guestName} — Room ${reservation.room?.roomNumber} — ${new Date(
-        reservation.checkInDate
-      ).toLocaleDateString()} to ${new Date(reservation.checkOutDate).toLocaleDateString()}`}
+      description={`${guestName} — Room ${reservation.room?.roomNumber} — ${formatDate(
+        reservation.checkInDate,
+      )} to ${formatDate(reservation.checkOutDate)}`}
       footer={
         <>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -61,7 +62,7 @@ export function CheckOutModal({ open, onClose, reservation, onConfirm }: CheckOu
             onChange={(e) => setFinalAmount(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Leave blank to use the reservation total of Rs. {Number(reservation.totalAmount).toLocaleString()}
+            Leave blank to use the reservation total of {formatLkr(reservation.totalAmount)}
           </p>
         </FormField>
         <FormField>

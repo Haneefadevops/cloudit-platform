@@ -6,6 +6,7 @@ import { BarChart3, BedDouble, Users, ClipboardList, Wallet } from "lucide-react
 import { PageHeader } from "@/components/page-header";
 import { StatsCard } from "@/components/stats-card";
 import { api } from "@/lib/api";
+import { formatDate, formatLkr } from "@/lib/format";
 import type {
   Property,
   PaginatedResponse,
@@ -166,7 +167,7 @@ export default function ReportsPage() {
                 <StatsCard title="Occupancy Rate" value={`${occupancy.summary.occupancyRate}%`} />
                 <StatsCard
                   title="Revenue"
-                  value={`Rs. ${Number(occupancy.summary.revenue).toLocaleString()}`}
+                  value={formatLkr(occupancy.summary.revenue)}
                 />
               </div>
               <Card>
@@ -177,15 +178,15 @@ export default function ReportsPage() {
                         <TableRow>
                           <TableHead>Date</TableHead>
                           <TableHead>Occupied Rooms</TableHead>
-                          <TableHead>Revenue (Rs.)</TableHead>
+                          <TableHead>Revenue</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {occupancy.byDate.map((day) => (
                           <TableRow key={day.date}>
-                            <TableCell>{new Date(day.date).toLocaleDateString()}</TableCell>
+                            <TableCell>{formatDate(day.date)}</TableCell>
                             <TableCell>{day.occupiedRooms}</TableCell>
-                            <TableCell>{Number(day.revenue).toLocaleString()}</TableCell>
+                            <TableCell>{formatLkr(day.revenue)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -201,19 +202,19 @@ export default function ReportsPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatsCard
                   title="Total Revenue"
-                  value={`Rs. ${Number(revenue.summary.totalRevenue).toLocaleString()}`}
+                  value={formatLkr(revenue.summary.totalRevenue)}
                 />
                 <StatsCard
                   title="Subtotal"
-                  value={`Rs. ${Number(revenue.summary.totalSubtotal).toLocaleString()}`}
+                  value={formatLkr(revenue.summary.totalSubtotal)}
                 />
                 <StatsCard
                   title="Total Paid"
-                  value={`Rs. ${Number(revenue.summary.totalPaid).toLocaleString()}`}
+                  value={formatLkr(revenue.summary.totalPaid)}
                 />
                 <StatsCard
                   title="Outstanding"
-                  value={`Rs. ${Number(revenue.summary.outstanding).toLocaleString()}`}
+                  value={formatLkr(revenue.summary.outstanding)}
                 />
               </div>
 
@@ -230,7 +231,7 @@ export default function ReportsPage() {
                             <span className="text-muted-foreground">
                               {tax.name} ({tax.rate}%)
                             </span>
-                            <span>Rs. {Number(tax.amount).toLocaleString()}</span>
+                            <span>{formatLkr(tax.amount)}</span>
                           </div>
                         ))}
                       </div>
@@ -247,7 +248,7 @@ export default function ReportsPage() {
                         {revenue.byRoomType.map((item) => (
                           <div key={item.name} className="flex justify-between text-sm">
                             <span className="text-muted-foreground">{item.name}</span>
-                            <span>Rs. {Number(item.amount).toLocaleString()}</span>
+                            <span>{formatLkr(item.amount)}</span>
                           </div>
                         ))}
                       </div>
@@ -262,7 +263,7 @@ export default function ReportsPage() {
                   <div className="flex flex-wrap gap-2">
                     {revenue.byStatus.map((item) => (
                       <Badge key={item.status} variant={statusBadgeVariant[item.status] as any || "secondary"}>
-                        {item.status}: Rs. {Number(item.amount).toLocaleString()}
+                        {item.status}: {formatLkr(item.amount)}
                       </Badge>
                     ))}
                   </div>
@@ -318,7 +319,7 @@ export default function ReportsPage() {
                 <StatsCard title="Total Reservations" value={reservations.summary.totalReservations} />
                 <StatsCard
                   title="Total Revenue"
-                  value={`Rs. ${Number(reservations.summary.totalRevenue).toLocaleString()}`}
+                  value={formatLkr(reservations.summary.totalRevenue)}
                 />
                 <StatsCard
                   title="Cancellation Rate"

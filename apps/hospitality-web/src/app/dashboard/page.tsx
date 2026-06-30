@@ -6,6 +6,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Table, TableBody, Tab
 import { StatsCard } from "@/components/stats-card";
 import { PageHeader } from "@/components/page-header";
 import { api } from "@/lib/api";
+import { formatDate, formatLkr } from "@/lib/format";
 import type { Reservation, Room } from "@/lib/types";
 import { Calendar, LogIn, LogOut, Receipt, BedDouble, Users, ClipboardList } from "lucide-react";
 
@@ -126,7 +127,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           title="Today's Revenue"
-          value={`Rs. ${stats.revenue.toLocaleString()}`}
+          value={formatLkr(stats.revenue)}
           description="From today's arrivals"
           icon={<Receipt className="h-4 w-4" />}
         />
@@ -211,8 +212,8 @@ export default function DashboardPage() {
                         {reservation.guest?.firstName} {reservation.guest?.lastName}
                       </TableCell>
                       <TableCell>{reservation.room?.roomNumber}</TableCell>
-                      <TableCell>{new Date(reservation.checkInDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{new Date(reservation.checkOutDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatDate(reservation.checkInDate)}</TableCell>
+                      <TableCell>{formatDate(reservation.checkOutDate)}</TableCell>
                       <TableCell>{getStatusBadge(reservation.status)}</TableCell>
                     </TableRow>
                   ))

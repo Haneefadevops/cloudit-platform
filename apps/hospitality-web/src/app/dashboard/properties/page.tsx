@@ -101,6 +101,7 @@ export default function PropertiesPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>Phone</TableHead>
+                  <TableHead>SLTDA</TableHead>
                   <TableHead>Rooms</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -108,11 +109,11 @@ export default function PropertiesPage() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center">Loading...</TableCell>
+                    <TableCell colSpan={6} className="text-center">Loading...</TableCell>
                   </TableRow>
                 ) : filteredProperties.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
                       No properties found
                     </TableCell>
                   </TableRow>
@@ -127,6 +128,7 @@ export default function PropertiesPage() {
                       </TableCell>
                       <TableCell>{property.address || "-"}</TableCell>
                       <TableCell>{property.phone || "-"}</TableCell>
+                      <TableCell>{property.sltdaNumber || "-"}</TableCell>
                       <TableCell>{property._count?.rooms ?? 0}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

@@ -22,6 +22,14 @@ export class UpdatePropertyDto {
   taxId?: string;
 
   @IsOptional()
+  @IsString()
+  registrationNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  sltdaNumber?: string;
+
+  @IsOptional()
   @IsObject()
   settings?: Record<string, any>;
 }

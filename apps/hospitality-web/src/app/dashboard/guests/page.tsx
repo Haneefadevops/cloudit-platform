@@ -47,7 +47,10 @@ export default function GuestsPage() {
     return (
       fullName.includes(search.toLowerCase()) ||
       g.email?.toLowerCase().includes(search.toLowerCase()) ||
-      g.phone?.toLowerCase().includes(search.toLowerCase())
+      g.phone?.toLowerCase().includes(search.toLowerCase()) ||
+      g.localPhone?.toLowerCase().includes(search.toLowerCase()) ||
+      g.nicNumber?.toLowerCase().includes(search.toLowerCase()) ||
+      g.passportNumber?.toLowerCase().includes(search.toLowerCase())
     );
   });
 
@@ -106,18 +109,19 @@ export default function GuestsPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Nationality</TableHead>
-                  <TableHead>ID Number</TableHead>
+                  <TableHead>NIC / Passport</TableHead>
+                  <TableHead>Emergency</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">Loading...</TableCell>
+                    <TableCell colSpan={7} className="text-center">Loading...</TableCell>
                   </TableRow>
                 ) : filteredGuests.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">
                       No guests found
                     </TableCell>
                   </TableRow>
@@ -131,9 +135,10 @@ export default function GuestsPage() {
                         </div>
                       </TableCell>
                       <TableCell>{guest.email || "-"}</TableCell>
-                      <TableCell>{guest.phone || "-"}</TableCell>
+                      <TableCell>{guest.localPhone || guest.phone || "-"}</TableCell>
                       <TableCell>{guest.nationality || "-"}</TableCell>
-                      <TableCell>{guest.idNumber || "-"}</TableCell>
+                      <TableCell>{guest.nicNumber || guest.passportNumber || guest.idNumber || "-"}</TableCell>
+                      <TableCell>{guest.emergencyContactPhone || guest.emergencyContactName || "-"}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button

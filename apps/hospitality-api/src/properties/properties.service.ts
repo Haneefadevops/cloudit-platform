@@ -7,6 +7,13 @@ import { PrismaService } from "../prisma/prisma.service";
 import { CreatePropertyDto } from "./dto/create-property.dto";
 import { UpdatePropertyDto } from "./dto/update-property.dto";
 
+const SRI_LANKA_DEFAULT_SETTINGS = {
+  currency: "LKR",
+  currencySymbol: "Rs.",
+  locale: "en-LK",
+  dateFormat: "yyyy-MM-dd",
+};
+
 @Injectable()
 export class PropertiesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -67,9 +74,15 @@ export class PropertiesService {
   }
 
   async create(organizationId: string, dto: CreatePropertyDto) {
+    const { settings, ...data } = dto;
+
     return this.prisma.property.create({
       data: {
-        ...dto,
+        ...data,
+        settings: {
+          ...SRI_LANKA_DEFAULT_SETTINGS,
+          ...(settings ?? {}),
+        },
         organizationId,
       },
     });

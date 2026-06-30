@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEmail } from "class-validator";
+import { IsBoolean, IsOptional, IsString, IsEmail } from "class-validator";
 
 export class UpdateGuestDto {
   @IsOptional()
@@ -19,7 +19,31 @@ export class UpdateGuestDto {
 
   @IsOptional()
   @IsString()
+  localPhone?: string;
+
+  @IsOptional()
+  @IsString()
   idNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  nicNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  passportNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  emergencyContactName?: string;
+
+  @IsOptional()
+  @IsString()
+  emergencyContactPhone?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isForeignGuest?: boolean;
 
   @IsOptional()
   @IsString()

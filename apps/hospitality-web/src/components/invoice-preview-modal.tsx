@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Modal, Button, Card, CardContent, Badge } from "@cloudit/ui";
 import { api } from "@/lib/api";
+import { formatDate, formatLkr } from "@/lib/format";
 import type { InvoicePreview } from "@/lib/types";
 
 interface InvoicePreviewModalProps {
@@ -61,15 +62,23 @@ export function InvoicePreviewModal({ open, onClose, invoiceId }: InvoicePreview
               {preview.property.taxId && (
                 <p className="text-sm text-muted-foreground">Tax ID: {preview.property.taxId}</p>
               )}
+              {preview.property.registrationNumber && (
+                <p className="text-sm text-muted-foreground">
+                  Registration: {preview.property.registrationNumber}
+                </p>
+              )}
+              {preview.property.sltdaNumber && (
+                <p className="text-sm text-muted-foreground">SLTDA: {preview.property.sltdaNumber}</p>
+              )}
             </div>
             <div className="text-right">
               <p className="text-sm font-medium">{preview.invoiceNumber}</p>
               <p className="text-sm text-muted-foreground">
-                Issue: {new Date(preview.issueDate).toLocaleDateString()}
+                Issue: {formatDate(preview.issueDate)}
               </p>
               {preview.dueDate && (
                 <p className="text-sm text-muted-foreground">
-                  Due: {new Date(preview.dueDate).toLocaleDateString()}
+                  Due: {formatDate(preview.dueDate)}
                 </p>
               )}
               <Badge variant={preview.status === "paid" ? "default" : "secondary"} className="mt-2">
@@ -100,7 +109,7 @@ export function InvoicePreviewModal({ open, onClose, invoiceId }: InvoicePreview
                 {preview.lineItems.map((item, index) => (
                   <tr key={index} className="border-t">
                     <td className="px-4 py-2">{item.description}</td>
-                    <td className="px-4 py-2 text-right">{Number(item.amount).toLocaleString()}</td>
+                    <td className="px-4 py-2 text-right">{formatLkr(item.amount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -110,28 +119,28 @@ export function InvoicePreviewModal({ open, onClose, invoiceId }: InvoicePreview
           <div className="space-y-1">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>Rs. {Number(preview.subtotal).toLocaleString()}</span>
+              <span>{formatLkr(preview.subtotal)}</span>
             </div>
             {preview.taxBreakdown.map((tax) => (
               <div key={tax.name} className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
                   {tax.name} ({tax.rate}%)
                 </span>
-                <span>Rs. {Number(tax.amount).toLocaleString()}</span>
+                <span>{formatLkr(tax.amount)}</span>
               </div>
             ))}
             <div className="flex justify-between border-t pt-2 text-base font-semibold">
               <span>Total</span>
-              <span>Rs. {Number(preview.totalAmount).toLocaleString()}</span>
+              <span>{formatLkr(preview.totalAmount)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Paid</span>
-              <span>Rs. {Number(preview.paidAmount).toLocaleString()}</span>
+              <span>{formatLkr(preview.paidAmount)}</span>
             </div>
             <div className="flex justify-between text-sm font-medium">
               <span>Balance</span>
               <span>
-                Rs. {Number(preview.totalAmount - preview.paidAmount).toLocaleString()}
+                {formatLkr(preview.totalAmount - preview.paidAmount)}
               </span>
             </div>
           </div>

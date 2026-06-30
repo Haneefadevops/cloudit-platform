@@ -20,6 +20,7 @@ import { PageHeader } from "@/components/page-header";
 import { InvoiceModal } from "@/components/invoice-modal";
 import { InvoicePreviewModal } from "@/components/invoice-preview-modal";
 import { api } from "@/lib/api";
+import { formatDate, formatLkr } from "@/lib/format";
 import type { Invoice, Reservation, PaginatedResponse, Property } from "@/lib/types";
 
 const statusBadgeVariant: Record<string, string> = {
@@ -184,9 +185,9 @@ export default function InvoicesPage() {
                         {invoice.guest?.firstName} {invoice.guest?.lastName}
                       </TableCell>
                       <TableCell>{invoice.property?.name}</TableCell>
-                      <TableCell>{new Date(invoice.issueDate).toLocaleDateString()}</TableCell>
-                      <TableCell>Rs. {Number(invoice.totalAmount).toLocaleString()}</TableCell>
-                      <TableCell>Rs. {Number(invoice.paidAmount).toLocaleString()}</TableCell>
+                      <TableCell>{formatDate(invoice.issueDate)}</TableCell>
+                      <TableCell>{formatLkr(invoice.totalAmount)}</TableCell>
+                      <TableCell>{formatLkr(invoice.paidAmount)}</TableCell>
                       <TableCell>
                         <Badge variant={statusBadgeVariant[invoice.status] as any}>
                           {invoice.status}

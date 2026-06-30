@@ -21,6 +21,7 @@ import { ReservationModal } from "@/components/reservation-modal";
 import { CheckInModal } from "@/components/check-in-modal";
 import { CheckOutModal } from "@/components/check-out-modal";
 import { api } from "@/lib/api";
+import { formatDate } from "@/lib/format";
 import type {
   Property,
   Room,
@@ -226,8 +227,8 @@ export default function ReservationsPage() {
                       </TableCell>
                       <TableCell>{reservation.room?.roomNumber}</TableCell>
                       <TableCell>{reservation.property?.name}</TableCell>
-                      <TableCell>{new Date(reservation.checkInDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{new Date(reservation.checkOutDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatDate(reservation.checkInDate)}</TableCell>
+                      <TableCell>{formatDate(reservation.checkOutDate)}</TableCell>
                       <TableCell>
                         <Badge variant={statusBadgeVariant[reservation.status] as any}>
                           {reservation.status.replace("_", " ")}
