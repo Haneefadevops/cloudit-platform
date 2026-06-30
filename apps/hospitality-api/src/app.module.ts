@@ -21,6 +21,8 @@ import { EventsModule } from "./events/events.module";
 import { CommunicationsModule } from "./communications/communications.module";
 import { PaymentsModule } from "./payments/payments.module";
 import { HousekeepingModule } from "./housekeeping/housekeeping.module";
+import { IntegrationsModule } from "./integrations/integrations.module";
+import { GuestPortalModule } from "./guest-portal/guest-portal.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { ModuleGuard } from "./common/guards/module.guard";
 import { RolesGuard } from "./common/guards/roles.guard";
@@ -80,6 +82,8 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
     CommunicationsModule,
     PaymentsModule,
     HousekeepingModule,
+    IntegrationsModule,
+    GuestPortalModule,
   ],
   controllers: [AppController],
   providers: [

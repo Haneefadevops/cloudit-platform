@@ -29,6 +29,7 @@ model Property {
   reservations Reservation[]
   invoices     Invoice[]
   housekeepingTasks HousekeepingTask[]
+  integrationConnections IntegrationConnection[]
 
   @@index([organizationId])
   @@map("properties")
@@ -149,6 +150,69 @@ model SeasonalRate {
   @@map("seasonal_rates")
 }
 
+enum IntegrationProvider {
+  channel_manager
+  pos
+}
+
+enum IntegrationStatus {
+  active
+  inactive
+  error
+}
+
+enum IntegrationSyncStatus {
+  pending
+  success
+  failed
+}
+
+model IntegrationConnection {
+  id          String            @id @default(uuid())
+  provider    IntegrationProvider
+  name        String
+  status      IntegrationStatus @default(active)
+  endpointUrl String?
+  config      Json              @default("{}")
+  lastSyncAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  organizationId String
+  syncLogs       IntegrationSyncLog[]
+
+  @@index([propertyId])
+  @@index([organizationId])
+  @@index([provider])
+  @@map("integration_connections")
+}
+
+model IntegrationSyncLog {
+  id            String                @id @default(uuid())
+  direction     String
+  status        IntegrationSyncStatus @default(pending)
+  recordsPulled Int                   @default(0)
+  recordsPushed Int                   @default(0)
+  summary       String?
+  errorMessage  String?
+  payload       Json?                 @default("{}")
+  createdAt     DateTime              @default(now())
+
+  connectionId String
+  connection   IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  organizationId String
+
+  @@index([connectionId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("integration_sync_logs")
+}
+
 model Guest {
   id                    String   @id @default(uuid())
   firstName             String
@@ -231,12 +295,33 @@ model Reservation {
 
   invoices Invoice[]
   payments Payment[]
+  guestCheckInSessions GuestCheckInSession[]
 
   @@index([propertyId])
   @@index([roomId])
   @@index([guestId])
   @@index([checkInDate, checkOutDate])
   @@map("reservations")
+}
+
+model GuestCheckInSession {
+  id          String    @id @default(uuid())
+  token       String    @unique
+  expiresAt   DateTime
+  submittedAt DateTime?
+  payload     Json?     @default("{}")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  organizationId String
+
+  @@index([reservationId])
+  @@index([organizationId])
+  @@index([expiresAt])
+  @@map("guest_check_in_sessions")
 }
 
 enum PaymentMethod {

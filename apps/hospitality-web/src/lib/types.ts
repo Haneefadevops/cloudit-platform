@@ -120,6 +120,86 @@ export interface ReservationQuote {
   }[];
 }
 
+export type IntegrationProvider = 'channel_manager' | 'pos';
+export type IntegrationStatus = 'active' | 'inactive' | 'error';
+export type IntegrationSyncStatus = 'pending' | 'success' | 'failed';
+
+export interface IntegrationSyncLog {
+  id: string;
+  direction: 'pull' | 'push' | 'bidirectional';
+  status: IntegrationSyncStatus;
+  recordsPulled: number;
+  recordsPushed: number;
+  summary?: string;
+  errorMessage?: string;
+  payload?: Record<string, any>;
+  connectionId: string;
+  organizationId: string;
+  createdAt: string;
+}
+
+export interface IntegrationConnection {
+  id: string;
+  provider: IntegrationProvider;
+  name: string;
+  status: IntegrationStatus;
+  endpointUrl?: string;
+  config?: Record<string, any>;
+  lastSyncAt?: string;
+  propertyId?: string;
+  property?: Property;
+  organizationId: string;
+  syncLogs?: IntegrationSyncLog[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GuestCheckInLink {
+  id: string;
+  token: string;
+  expiresAt: string;
+  url: string;
+  reservation: PublicCheckInReservation;
+}
+
+export interface PublicCheckInReservation {
+  id: string;
+  reservationNumber: string;
+  checkInDate: string;
+  checkOutDate: string;
+  status: ReservationStatus;
+  property: {
+    name: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+  };
+  room: {
+    roomNumber: string;
+    roomType?: string;
+  };
+  guest: {
+    firstName: string;
+    lastName: string;
+    email?: string;
+    phone?: string;
+    localPhone?: string;
+    nicNumber?: string;
+    passportNumber?: string;
+    nationality?: string;
+    address?: string;
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
+  };
+}
+
+export interface PublicCheckInSession {
+  token: string;
+  expiresAt: string;
+  submittedAt?: string;
+  reservation: PublicCheckInReservation;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   meta: {

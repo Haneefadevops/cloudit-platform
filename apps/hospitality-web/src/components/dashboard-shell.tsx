@@ -6,6 +6,7 @@ import {
   Building2,
   BedDouble,
   Sparkles,
+  PlugZap,
   Users,
   Calendar,
   ClipboardList,
@@ -25,6 +26,7 @@ const navItems = [
   { label: "Calendar", href: "/dashboard/calendar", icon: <Calendar className="h-4 w-4" /> },
   { label: "Invoices", href: "/dashboard/invoices", icon: <FileText className="h-4 w-4" /> },
   { label: "Reports", href: "/dashboard/reports", icon: <BarChart3 className="h-4 w-4" /> },
+  { label: "Integrations", href: "/dashboard/integrations", icon: <PlugZap className="h-4 w-4" /> },
   { label: "Settings", href: "/dashboard/settings", icon: <Settings className="h-4 w-4" /> },
 ];
 
