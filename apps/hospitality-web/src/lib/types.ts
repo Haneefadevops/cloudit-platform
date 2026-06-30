@@ -90,6 +90,54 @@ export interface PublicBookingConfirmation {
   paymentMethod: PaymentMethod;
 }
 
+export interface PublicBookingPortal {
+  token: string;
+  expiresAt: string;
+  submittedAt?: string;
+  links: {
+    selfCheckIn: string;
+    selfCheckOut: string;
+  };
+  reservation: {
+    id: string;
+    reservationNumber: string;
+    checkInDate: string;
+    checkOutDate: string;
+    status: ReservationStatus;
+    adults: number;
+    children: number;
+    totalAmount: number;
+    paidAmount: number;
+    balance: number;
+  };
+  property: {
+    name: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+    publicSlug?: string;
+  };
+  room: {
+    roomNumber: string;
+    roomType: string;
+    maxOccupancy: number;
+  };
+  guest: {
+    firstName: string;
+    lastName: string;
+    email?: string;
+    phone?: string;
+    localPhone?: string;
+  };
+  invoice?: {
+    id: string;
+    invoiceNumber: string;
+    totalAmount: number;
+    paidAmount: number;
+    status: InvoiceStatus;
+  } | null;
+}
+
 export interface SeasonalRate {
   id: string;
   name: string;

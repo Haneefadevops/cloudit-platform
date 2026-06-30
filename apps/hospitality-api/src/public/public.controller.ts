@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Public } from "../common/decorators/public.decorator";
 import { PublicAvailabilityDto } from "./dto/availability.dto";
@@ -21,5 +21,11 @@ export class PublicController {
   @ApiOperation({ summary: "Create public booking" })
   async createBooking(@Body() dto: CreatePublicBookingDto) {
     return this.publicService.createBooking(dto);
+  }
+
+  @Get("bookings/:token")
+  @ApiOperation({ summary: "Get public booking by guest token" })
+  async getBooking(@Param("token") token: string) {
+    return this.publicService.getBooking(token);
   }
 }

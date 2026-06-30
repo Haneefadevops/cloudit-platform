@@ -205,7 +205,7 @@ export class PublicService {
       return { guest, reservation, session };
     });
 
-    const guestPortalUrl = `/guest/check-in/${result.session.token}`;
+    const guestPortalUrl = `/guest/${result.session.token}`;
     void this.eventPublisher.publish(EventTypes.BOOKING_CREATED, {
       reservationId: result.reservation.id,
       reservationNumber: result.reservation.reservationNumber,
@@ -245,8 +245,94 @@ export class PublicService {
         phone: property.phone,
       },
       guestPortalUrl,
-      selfCheckInUrl: guestPortalUrl,
+      selfCheckInUrl: `/guest/check-in/${result.session.token}`,
       paymentMethod: dto.paymentMethod,
+    };
+  }
+
+  async getBooking(token: string) {
+    const session = await this.prisma.guestCheckInSession.findUnique({
+      where: { token },
+      include: {
+        reservation: {
+          include: {
+            guest: true,
+            property: true,
+            room: { include: { roomType: true } },
+            invoices: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              include: { payments: true },
+            },
+            payments: true,
+          },
+        },
+      },
+    });
+
+    if (!session || session.expiresAt <= new Date()) {
+      throw new NotFoundException("Booking link not found or expired");
+    }
+
+    const reservation = session.reservation;
+    const latestInvoice = reservation.invoices[0];
+    const paidAmount =
+      latestInvoice?.payments
+        ?.filter((payment) => payment.providerStatus === "succeeded")
+        .reduce((sum, payment) => sum + Number(payment.amount), 0) ??
+      Number(reservation.paidAmount);
+    const totalAmount = latestInvoice
+      ? Number(latestInvoice.totalAmount)
+      : Number(reservation.totalAmount);
+
+    return {
+      token: session.token,
+      expiresAt: session.expiresAt,
+      submittedAt: session.submittedAt,
+      links: {
+        selfCheckIn: `/guest/check-in/${session.token}`,
+        selfCheckOut: `/guest/${session.token}/checkout`,
+      },
+      reservation: {
+        id: reservation.id,
+        reservationNumber: reservation.reservationNumber,
+        checkInDate: reservation.checkInDate,
+        checkOutDate: reservation.checkOutDate,
+        status: reservation.status,
+        adults: reservation.adults,
+        children: reservation.children,
+        totalAmount,
+        paidAmount,
+        balance: Math.max(totalAmount - paidAmount, 0),
+      },
+      property: {
+        name: reservation.property.name,
+        address: reservation.property.address,
+        phone: reservation.property.phone,
+        email: reservation.property.email,
+        publicSlug: reservation.property.publicSlug,
+      },
+      room: {
+        roomNumber: reservation.room.roomNumber,
+        roomType: reservation.room.roomType.name,
+        maxOccupancy: reservation.room.roomType.maxOccupancy,
+      },
+      guest: {
+        firstName: reservation.guest.firstName,
+        lastName: reservation.guest.lastName,
+        email: reservation.guest.email,
+        phone: reservation.guest.phone,
+        localPhone: reservation.guest.localPhone,
+      },
+      invoice: latestInvoice
+        ? {
+            id: latestInvoice.id,
+            invoiceNumber: latestInvoice.invoiceNumber,
+            totalAmount: Number(latestInvoice.totalAmount),
+            paidAmount: Number(latestInvoice.paidAmount),
+            status: latestInvoice.status,
+          }
+        : null,
     };
   }
 
