@@ -25,6 +25,7 @@ export interface RoomType {
   maxOccupancy: number;
   amenities?: string[];
   propertyId: string;
+  seasonalRates?: SeasonalRate[];
   createdAt: string;
   updatedAt: string;
   _count?: {
@@ -32,7 +33,23 @@ export interface RoomType {
   };
 }
 
+export interface SeasonalRate {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  price: number;
+  minimumStay: number;
+  isActive: boolean;
+  roomTypeId: string;
+  organizationId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type RoomStatus = 'available' | 'occupied' | 'maintenance' | 'cleaning';
+export type HousekeepingTaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+export type HousekeepingTaskType = 'checkout_clean' | 'stayover_clean' | 'deep_clean' | 'maintenance_followup';
 
 export interface Room {
   id: string;
@@ -88,6 +105,21 @@ export interface Reservation {
   createdAt: string;
 }
 
+export interface ReservationQuote {
+  roomId: string;
+  roomTypeId: string;
+  nights: number;
+  currency: string;
+  totalAmount: number;
+  averageNightlyRate: number;
+  lines: {
+    date: string;
+    roomTypeId: string;
+    rateName: string;
+    amount: number;
+  }[];
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   meta: {
@@ -130,6 +162,25 @@ export interface Payment {
   metadata?: Record<string, any>;
   invoiceId: string;
   reservationId: string;
+  organizationId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HousekeepingTask {
+  id: string;
+  type: HousekeepingTaskType;
+  status: HousekeepingTaskStatus;
+  priority: number;
+  assignedTo?: string;
+  dueDate?: string;
+  startedAt?: string;
+  completedAt?: string;
+  notes?: string;
+  roomId: string;
+  room?: Room;
+  propertyId: string;
+  property?: Property;
   organizationId: string;
   createdAt: string;
   updatedAt: string;

@@ -196,8 +196,12 @@ export class InvoicesService {
           (1000 * 60 * 60 * 24),
       ),
     );
+    const reservationTotal = Number(reservation.totalAmount);
     const subtotal =
-      dto.subtotal ?? Number(reservation.room.roomType.basePrice) * nights;
+      dto.subtotal ??
+      (reservationTotal > 0
+        ? reservationTotal
+        : Number(reservation.room.roomType.basePrice) * nights);
 
     const calculation = await this.calculateTaxes(organizationId, subtotal);
     const invoiceNumber = await this.generateInvoiceNumber();

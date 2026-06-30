@@ -28,6 +28,7 @@ model Property {
   rooms        Room[]
   reservations Reservation[]
   invoices     Invoice[]
+  housekeepingTasks HousekeepingTask[]
 
   @@index([organizationId])
   @@map("properties")
@@ -47,6 +48,7 @@ model RoomType {
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   rooms Room[]
+  seasonalRates SeasonalRate[]
 
   @@index([propertyId])
   @@map("room_types")
@@ -74,11 +76,77 @@ model Room {
   roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
 
   reservations Reservation[]
+  housekeepingTasks HousekeepingTask[]
 
   @@unique([propertyId, roomNumber])
   @@index([propertyId])
   @@index([roomTypeId])
   @@map("rooms")
+}
+
+enum HousekeepingTaskStatus {
+  pending
+  in_progress
+  completed
+  cancelled
+}
+
+enum HousekeepingTaskType {
+  checkout_clean
+  stayover_clean
+  deep_clean
+  maintenance_followup
+}
+
+model HousekeepingTask {
+  id          String                 @id @default(uuid())
+  type        HousekeepingTaskType   @default(checkout_clean)
+  status      HousekeepingTaskStatus @default(pending)
+  priority    Int                    @default(3)
+  assignedTo  String?
+  dueDate     DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  notes       String?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  organizationId String
+
+  @@index([propertyId])
+  @@index([roomId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("housekeeping_tasks")
+}
+
+model SeasonalRate {
+  id          String   @id @default(uuid())
+  name        String
+  startDate   DateTime
+  endDate     DateTime
+  price       Decimal  @db.Decimal(10, 2)
+  minimumStay Int      @default(1)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roomTypeId String
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  organizationId String
+
+  @@index([roomTypeId])
+  @@index([organizationId])
+  @@index([startDate, endDate])
+  @@map("seasonal_rates")
 }
 
 model Guest {

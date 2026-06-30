@@ -20,8 +20,10 @@ import { ReportsModule } from "./reports/reports.module";
 import { EventsModule } from "./events/events.module";
 import { CommunicationsModule } from "./communications/communications.module";
 import { PaymentsModule } from "./payments/payments.module";
+import { HousekeepingModule } from "./housekeeping/housekeeping.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { ModuleGuard } from "./common/guards/module.guard";
+import { RolesGuard } from "./common/guards/roles.guard";
 import { RequestLoggingInterceptor } from "./common/interceptors/request-logging.interceptor";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
 import { TimeoutInterceptor } from "./common/interceptors/timeout.interceptor";
@@ -77,6 +79,7 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
     EventsModule,
     CommunicationsModule,
     PaymentsModule,
+    HousekeepingModule,
   ],
   controllers: [AppController],
   providers: [
@@ -92,6 +95,10 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
     {
       provide: APP_GUARD,
       useClass: ModuleGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
     {
       provide: APP_INTERCEPTOR,

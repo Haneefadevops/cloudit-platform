@@ -10,6 +10,8 @@ import { EventTypes } from "../events/event-types";
 import { CreateReservationDto } from "./dto/create-reservation.dto";
 import { UpdateReservationDto } from "./dto/update-reservation.dto";
 import {
+  HousekeepingTaskType,
+  HousekeepingTaskStatus,
   ReservationStatus,
   RoomStatus,
   PaymentStatus,
@@ -137,6 +139,11 @@ export class ReservationsService {
     }
 
     const reservationNumber = await this.generateReservationNumber();
+    const totalAmount =
+      dto.totalAmount && dto.totalAmount > 0
+        ? dto.totalAmount
+        : (await this.quote(organizationId, dto.roomId, checkIn, checkOut))
+            .totalAmount;
 
     const reservation = await this.prisma.reservation.create({
       data: {
@@ -149,10 +156,10 @@ export class ReservationsService {
         adults: dto.adults ?? 1,
         children: dto.children ?? 0,
         status: dto.status ?? ReservationStatus.pending,
-        totalAmount: dto.totalAmount ?? 0,
+        totalAmount,
         paidAmount: dto.paidAmount ?? 0,
         paymentStatus: dto.paidAmount
-          ? dto.paidAmount >= (dto.totalAmount ?? 0)
+          ? dto.paidAmount >= totalAmount
             ? PaymentStatus.paid
             : PaymentStatus.partial
           : PaymentStatus.pending,
@@ -323,6 +330,18 @@ export class ReservationsService {
         where: { id: reservation.roomId },
         data: { status: RoomStatus.cleaning },
       }),
+      this.prisma.housekeepingTask.create({
+        data: {
+          organizationId,
+          property: { connect: { id: reservation.propertyId } },
+          room: { connect: { id: reservation.roomId } },
+          type: HousekeepingTaskType.checkout_clean,
+          status: HousekeepingTaskStatus.pending,
+          priority: 2,
+          dueDate: new Date(),
+          notes: `Checkout clean for ${reservation.reservationNumber}`,
+        },
+      }),
     ]);
 
     // Auto-generate invoice on checkout
@@ -436,6 +455,83 @@ export class ReservationsService {
     return Object.values(days);
   }
 
+  async quote(
+    organizationId: string,
+    roomId: string,
+    checkIn: Date,
+    checkOut: Date,
+  ) {
+    if (checkIn >= checkOut) {
+      throw new BadRequestException(
+        "Check-out date must be after check-in date",
+      );
+    }
+
+    const room = await this.prisma.room.findFirst({
+      where: { id: roomId, property: { organizationId } },
+      include: {
+        roomType: {
+          include: {
+            seasonalRates: {
+              where: {
+                organizationId,
+                isActive: true,
+                startDate: { lt: checkOut },
+                endDate: { gte: checkIn },
+              },
+              orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
+            },
+          },
+        },
+      },
+    });
+    if (!room) {
+      throw new BadRequestException("Room not found or access denied");
+    }
+
+    const nights = this.getNights(checkIn, checkOut);
+    const basePrice = Number(room.roomType.basePrice);
+    const lines: {
+      date: string;
+      roomTypeId: string;
+      rateName: string;
+      amount: number;
+    }[] = [];
+
+    for (let offset = 0; offset < nights; offset++) {
+      const date = new Date(checkIn);
+      date.setDate(checkIn.getDate() + offset);
+      const seasonalRate = room.roomType.seasonalRates.find((rate) => {
+        const start = new Date(rate.startDate);
+        const end = new Date(rate.endDate);
+        end.setHours(23, 59, 59, 999);
+        return date >= start && date <= end && nights >= rate.minimumStay;
+      });
+      lines.push({
+        date: date.toISOString().slice(0, 10),
+        roomTypeId: room.roomTypeId,
+        rateName: seasonalRate?.name ?? "Base Rate",
+        amount: Number(seasonalRate?.price ?? basePrice),
+      });
+    }
+
+    return {
+      roomId: room.id,
+      roomTypeId: room.roomTypeId,
+      nights,
+      currency: "LKR",
+      totalAmount: Number(
+        lines.reduce((sum, line) => sum + line.amount, 0).toFixed(2),
+      ),
+      averageNightlyRate: Number(
+        (
+          lines.reduce((sum, line) => sum + line.amount, 0) / nights
+        ).toFixed(2),
+      ),
+      lines,
+    };
+  }
+
   private async isRoomAvailable(
     roomId: string,
     checkIn: Date,
@@ -459,6 +555,15 @@ export class ReservationsService {
 
     const overlapping = await this.prisma.reservation.count({ where });
     return overlapping === 0;
+  }
+
+  private getNights(checkIn: Date, checkOut: Date) {
+    return Math.max(
+      1,
+      Math.ceil(
+        (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24),
+      ),
+    );
   }
 
   private async validateRelations(
