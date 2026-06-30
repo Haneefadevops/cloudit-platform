@@ -214,10 +214,13 @@ export class ReportsService {
     const byInvoice = invoices.map((invoice) => {
       const taxes = invoice.taxBreakdown as any[];
       const tdl = taxes.find((tax) => tax.name === "TDL");
+      const serviceCharge = taxes.find((tax) => tax.name === "Service Charge");
+      const taxableRevenue =
+        tdl?.taxableBase ?? Number(invoice.subtotal) + Number(serviceCharge?.amount ?? 0);
       return {
         invoiceNumber: invoice.invoiceNumber,
         issueDate: invoice.issueDate,
-        taxableRevenue: Number(invoice.subtotal),
+        taxableRevenue: Number(taxableRevenue),
         tdlRate: Number(tdl?.rate ?? 0),
         tdlAmount: Number(tdl?.amount ?? 0),
         totalAmount: Number(invoice.totalAmount),

@@ -306,8 +306,9 @@ export class InvoicesService {
     const vatRate = getRate("VAT");
 
     const serviceCharge = calculateAmount(serviceChargeRate, subtotal);
-    const tdl = calculateAmount(tdlRate, subtotal);
-    const sscl = calculateAmount(ssclRate, subtotal);
+    const tdlBase = subtotal + serviceCharge;
+    const tdl = calculateAmount(tdlRate, tdlBase);
+    const sscl = calculateAmount(ssclRate, tdlBase);
     const vatBase = subtotal + serviceCharge + tdl + sscl;
     const vat = calculateAmount(vatRate, vatBase);
 
@@ -325,7 +326,7 @@ export class InvoicesService {
       taxBreakdown.push({
         name: "TDL",
         rate: Number(tdlRate.rate),
-        taxableBase: Number(subtotal.toFixed(2)),
+        taxableBase: Number(tdlBase.toFixed(2)),
         amount: Number(tdl.toFixed(2)),
       });
     }
@@ -333,7 +334,7 @@ export class InvoicesService {
       taxBreakdown.push({
         name: "SSCL",
         rate: Number(ssclRate.rate),
-        taxableBase: Number(subtotal.toFixed(2)),
+        taxableBase: Number(tdlBase.toFixed(2)),
         amount: Number(sscl.toFixed(2)),
       });
     }
