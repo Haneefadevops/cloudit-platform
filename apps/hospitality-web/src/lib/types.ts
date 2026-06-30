@@ -116,6 +116,44 @@ export interface CalendarDay {
 
 export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'overdue' | 'cancelled';
 
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'payhere' | 'stripe';
+export type PaymentProviderStatus = 'pending' | 'succeeded' | 'failed' | 'cancelled';
+
+export interface Payment {
+  id: string;
+  amount: number;
+  method: PaymentMethod;
+  providerStatus: PaymentProviderStatus;
+  providerRef?: string;
+  transactionDate: string;
+  notes?: string;
+  metadata?: Record<string, any>;
+  invoiceId: string;
+  reservationId: string;
+  organizationId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentIntent {
+  provider: 'payhere' | 'stripe';
+  providerRef: string;
+  amount: number;
+  currency: string;
+  checkoutUrl?: string;
+  invoice: {
+    id: string;
+    invoiceNumber: string;
+    totalAmount: number;
+    paidAmount: number;
+  };
+  customer: {
+    name: string;
+    email?: string;
+    phone?: string;
+  };
+}
+
 export interface TaxBreakdownItem {
   name: string;
   rate: number;
@@ -161,6 +199,7 @@ export interface Invoice {
   property?: Property;
   guest?: Guest;
   reservation?: InvoiceReservationInfo;
+  payments?: Payment[];
   createdAt: string;
 }
 
@@ -196,6 +235,7 @@ export interface InvoicePreview {
   totalAmount: number;
   paidAmount: number;
   status: InvoiceStatus;
+  payments?: Payment[];
   notes?: string;
 }
 

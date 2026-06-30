@@ -162,12 +162,27 @@ model Reservation {
   guest   Guest  @relation(fields: [guestId], references: [id], onDelete: Restrict)
 
   invoices Invoice[]
+  payments Payment[]
 
   @@index([propertyId])
   @@index([roomId])
   @@index([guestId])
   @@index([checkInDate, checkOutDate])
   @@map("reservations")
+}
+
+enum PaymentMethod {
+  cash
+  bank_transfer
+  payhere
+  stripe
+}
+
+enum PaymentProviderStatus {
+  pending
+  succeeded
+  failed
+  cancelled
 }
 
 enum TaxRateType {
@@ -224,10 +239,39 @@ model Invoice {
   guestId String
   guest   Guest  @relation(fields: [guestId], references: [id], onDelete: Restrict)
 
+  payments Payment[]
+
   @@index([propertyId])
   @@index([reservationId])
   @@index([guestId])
   @@map("invoices")
+}
+
+model Payment {
+  id              String                @id @default(uuid())
+  amount          Decimal               @db.Decimal(10, 2)
+  method          PaymentMethod
+  providerStatus  PaymentProviderStatus @default(succeeded)
+  providerRef     String?
+  transactionDate DateTime              @default(now())
+  notes           String?
+  metadata        Json?                 @default("{}")
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  organizationId String
+
+  @@index([invoiceId])
+  @@index([reservationId])
+  @@index([organizationId])
+  @@index([method])
+  @@map("payments")
 }
 
 enum EventStatus {

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Modal, Button, Card, CardContent, Badge } from "@cloudit/ui";
 import { api } from "@/lib/api";
 import { formatDate, formatLkr } from "@/lib/format";
-import type { InvoicePreview } from "@/lib/types";
+import type { InvoicePreview, PaymentMethod, PaymentProviderStatus } from "@/lib/types";
 
 interface InvoicePreviewModalProps {
   open: boolean;
@@ -36,6 +36,20 @@ export function InvoicePreviewModal({ open, onClose, invoiceId }: InvoicePreview
       setIsLoading(false);
     }
   }
+
+  const methodLabels: Record<PaymentMethod, string> = {
+    cash: "Cash",
+    bank_transfer: "Bank Transfer",
+    payhere: "PayHere",
+    stripe: "Stripe",
+  };
+
+  const statusBadgeVariant: Record<PaymentProviderStatus, string> = {
+    pending: "secondary",
+    succeeded: "default",
+    failed: "destructive",
+    cancelled: "outline",
+  };
 
   return (
     <Modal
@@ -144,6 +158,40 @@ export function InvoicePreviewModal({ open, onClose, invoiceId }: InvoicePreview
               </span>
             </div>
           </div>
+
+          {!!preview.payments?.length && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Payments</p>
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium">Date</th>
+                      <th className="px-4 py-2 text-left font-medium">Method</th>
+                      <th className="px-4 py-2 text-left font-medium">Status</th>
+                      <th className="px-4 py-2 text-left font-medium">Reference</th>
+                      <th className="px-4 py-2 text-right font-medium">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.payments.map((payment) => (
+                      <tr key={payment.id} className="border-t">
+                        <td className="px-4 py-2">{formatDate(payment.transactionDate)}</td>
+                        <td className="px-4 py-2">{methodLabels[payment.method]}</td>
+                        <td className="px-4 py-2">
+                          <Badge variant={statusBadgeVariant[payment.providerStatus] as any}>
+                            {payment.providerStatus}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2 text-muted-foreground">{payment.providerRef || "-"}</td>
+                        <td className="px-4 py-2 text-right">{formatLkr(payment.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {preview.notes && (
             <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">

@@ -19,6 +19,7 @@ import { TaxesModule } from "./taxes/taxes.module";
 import { ReportsModule } from "./reports/reports.module";
 import { EventsModule } from "./events/events.module";
 import { CommunicationsModule } from "./communications/communications.module";
+import { PaymentsModule } from "./payments/payments.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { ModuleGuard } from "./common/guards/module.guard";
 import { RequestLoggingInterceptor } from "./common/interceptors/request-logging.interceptor";
@@ -75,6 +76,7 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
     ReportsModule,
     EventsModule,
     CommunicationsModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [

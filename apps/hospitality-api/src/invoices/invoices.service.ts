@@ -5,7 +5,12 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateInvoiceDto } from "./dto/create-invoice.dto";
-import { InvoiceStatus, ReservationStatus } from "@prisma/client-hospitality";
+import {
+  InvoiceStatus,
+  PaymentMethod,
+  PaymentProviderStatus,
+  ReservationStatus,
+} from "@prisma/client-hospitality";
 import { EventPublisherService } from "../events/event-publisher.service";
 import { EventTypes } from "../events/event-types";
 
@@ -53,6 +58,7 @@ export class InvoicesService {
         include: {
           guest: true,
           property: true,
+          payments: true,
           reservation: {
             select: {
               id: true,
@@ -83,6 +89,7 @@ export class InvoicesService {
       include: {
         guest: true,
         property: true,
+        payments: true,
         reservation: {
           include: {
             room: { include: { roomType: true } },
@@ -135,6 +142,15 @@ export class InvoicesService {
       taxBreakdown: invoice.taxBreakdown,
       totalAmount: Number(invoice.totalAmount),
       paidAmount: Number(invoice.paidAmount),
+      payments: invoice.payments.map((payment) => ({
+        id: payment.id,
+        amount: Number(payment.amount),
+        method: payment.method,
+        providerStatus: payment.providerStatus,
+        providerRef: payment.providerRef,
+        transactionDate: payment.transactionDate,
+        notes: payment.notes,
+      })),
       status: invoice.status,
       notes: invoice.notes,
     };
@@ -261,19 +277,47 @@ export class InvoicesService {
 
   async markPaid(id: string, organizationId: string) {
     const invoice = await this.findOne(id, organizationId);
+    const balance = Number(invoice.totalAmount) - Number(invoice.paidAmount);
 
-    return this.prisma.invoice.update({
-      where: { id },
-      data: {
-        paidAmount: invoice.totalAmount,
-        status: InvoiceStatus.paid,
-      },
-      include: {
-        guest: true,
-        property: true,
-        reservation: true,
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (balance > 0) {
+        await tx.payment.create({
+          data: {
+            invoice: { connect: { id: invoice.id } },
+            reservation: { connect: { id: invoice.reservationId } },
+            organizationId,
+            amount: balance,
+            method: PaymentMethod.cash,
+            providerStatus: PaymentProviderStatus.succeeded,
+            notes: "Marked paid from invoice action",
+          },
+        });
+      }
+
+      await tx.reservation.update({
+        where: { id: invoice.reservationId },
+        data: {
+          paidAmount: invoice.totalAmount,
+          paymentStatus: "paid",
+        },
+      });
+
+      return tx.invoice.update({
+        where: { id },
+        data: {
+          paidAmount: invoice.totalAmount,
+          status: InvoiceStatus.paid,
+        },
+        include: {
+          guest: true,
+          property: true,
+          reservation: true,
+          payments: true,
+        },
+      });
     });
+
+    return updated;
   }
 
   async generateFromCheckout(reservationId: string, organizationId: string) {
