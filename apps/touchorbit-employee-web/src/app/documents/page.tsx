@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { FileText, CheckCircle, Clock, X, FileSignature, ChevronRight, PenTool, ShieldCheck, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAutoLinkEmployee } from '@/hooks/use-auto-link-employee'
@@ -19,7 +20,7 @@ interface SentDocument {
 }
 
 export default function DocumentsPage() {
-  const { userId, isLoaded, isSignedIn, organizationId } = useAuth()
+  const { isLoaded, isSignedIn } = useAuth()
   const { isLinked } = useAutoLinkEmployee()
   const [documents, setDocuments] = useState<SentDocument[]>([])
   const [selectedDoc, setSelectedDoc] = useState<SentDocument | null>(null)
@@ -39,12 +40,18 @@ export default function DocumentsPage() {
 
   async function loadDocuments() {
     setLoading(true)
-    const { data: employee } = await supabase.from('employees').select('id').eq('user_id', userId).single()
-    if (!employee) { setLoading(false); return }
+    try {
+      const meRes = await api.get<{ id: string }>('/employees/me')
+      if (!meRes.ok || !meRes.data?.id) { setLoading(false); return }
+      const employeeId = meRes.data.id
 
-    const { data, error } = await supabase.from('sent_documents').select('*').eq('employee_id', employee.id).order('created_at', { ascending: false })
-    if (!error) setDocuments(data || [])
-    setLoading(false)
+      const res = await api.get<SentDocument[]>('/documents')
+      if (res.ok && res.data) {
+        setDocuments(res.data.filter((d: any) => d.employee_id === employeeId || d.employee?.id === employeeId))
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   function handleViewDocument(doc: SentDocument) {
@@ -89,11 +96,17 @@ export default function DocumentsPage() {
         latitude = pos.coords.latitude; longitude = pos.coords.longitude
       } catch (e) {}
 
-      const { error } = await supabase.from('sent_documents').update({ status: 'signed', signature_url: urlData.publicUrl, signed_at: new Date().toISOString(), signed_latitude: latitude, signed_longitude: longitude }).eq('id', selectedDoc.id)
-      if (error) throw error
+      const res = await api.patch<SentDocument>(`/documents/${selectedDoc.id}`, {
+        status: 'signed',
+        signature_url: urlData.publicUrl,
+        signed_at: new Date().toISOString(),
+        signed_latitude: latitude,
+        signed_longitude: longitude,
+      })
+      if (!res.ok) throw new Error(res.error || 'Signing failed')
 
       toast.success('Document signed!'); setSelectedDoc(null); loadDocuments()
-    } catch (error) { toast.error('Signing failed') }
+    } catch (error: any) { toast.error('Signing failed: ' + (error?.message || 'Unknown error')) }
   }
 
   return (

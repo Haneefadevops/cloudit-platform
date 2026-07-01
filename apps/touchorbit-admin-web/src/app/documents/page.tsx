@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { Plus, Edit2, Trash2, Send, FileText, CheckCircle, Clock, XCircle, RefreshCw, X, ChevronRight, FileSignature } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -35,7 +36,7 @@ interface Employee {
 }
 
 export default function DocumentsPage() {
-  const { organizationId, userId, isLoaded } = useAuth()
+  const { isLoaded } = useAuth()
   const [activeTab, setActiveTab] = useState<'templates' | 'sent'>('templates')
   const [templates, setTemplates] = useState<DocumentTemplate[]>([])
   const [sentDocuments, setSentDocuments] = useState<SentDocument[]>([])
@@ -50,58 +51,87 @@ export default function DocumentsPage() {
   const [sendForm, setSendForm] = useState({ employeeId: '', notes: '' })
 
   useEffect(() => {
-    if (isLoaded && organizationId) {
+    if (isLoaded) {
       loadData()
     }
-  }, [isLoaded, organizationId, activeTab])
+  }, [isLoaded, activeTab])
 
   async function loadData() {
     setLoading(true)
-    if (activeTab === 'templates') {
-      const { data } = await supabase.from('document_templates').select('*').eq('organization_id', organizationId).order('created_at', { ascending: false })
-      setTemplates(data || [])
-    } else {
-      const { data } = await supabase.from('sent_documents').select('*, employee:employees(first_name, last_name)').eq('organization_id', organizationId).order('created_at', { ascending: false })
-      setSentDocuments(data as any || [])
+    try {
+      if (activeTab === 'templates') {
+        const res = await api.get<DocumentTemplate[]>('/document-templates')
+        setTemplates(res.data || [])
+      } else {
+        const res = await api.get<SentDocument[]>('/documents')
+        setSentDocuments(res.data || [])
+      }
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   async function loadEmployees() {
-    const { data } = await supabase.from('employees').select('id, first_name, last_name, employee_number').eq('organization_id', organizationId).eq('employment_status', 'active').order('first_name')
-    setEmployees(data || [])
+    const res = await api.get<Employee[]>('/employees?status=active&limit=500')
+    setEmployees(res.data || [])
   }
 
   async function handleSaveTemplate(e: React.FormEvent) {
     e.preventDefault()
     if (!templateForm.name.trim() || !templateForm.content.trim()) { toast.error('Required fields missing'); return }
 
-    const data = { name: templateForm.name, description: templateForm.description, content: templateForm.content }
-    if (editingTemplate) {
-      await supabase.from('document_templates').update(data).eq('id', editingTemplate.id)
-      toast.success('Template updated')
-    } else {
-      await supabase.from('document_templates').insert({ ...data, organization_id: organizationId })
+    try {
+      const payload = { name: templateForm.name, description: templateForm.description, content: templateForm.content }
+      if (editingTemplate) {
+        // Backend currently has no template update endpoint
+        toast.error('Template editing is not supported by the backend yet')
+        return
+      }
+      const res = await api.post<DocumentTemplate>('/document-templates', payload)
+      if (!res.ok) throw new Error(res.error || 'Failed')
       toast.success('Template created')
+      setShowTemplateForm(false)
+      setEditingTemplate(null)
+      setTemplateForm({ name: '', description: '', content: '' })
+      loadData()
+    } catch (error: any) {
+      toast.error('Failed to save template: ' + (error?.message || 'Unknown error'))
     }
-    setShowTemplateForm(false); setEditingTemplate(null); setTemplateForm({ name: '', description: '', content: '' }); loadData()
   }
 
   async function handleSendDocument(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedTemplate || !sendForm.employeeId) { toast.error('Select an employee'); return }
-    const { error } = await supabase.from('sent_documents').insert({
-        organization_id: organizationId, template_id: selectedTemplate.id, employee_id: sendForm.employeeId,
-        sender_id: userId, title: selectedTemplate.name, content: selectedTemplate.content, notes: sendForm.notes, status: 'pending',
-    })
-    if (error) { toast.error('Failed to send'); return }
-    toast.success('Document sent!'); setShowSendForm(false); setSelectedTemplate(null); setSendForm({ employeeId: '', notes: '' }); setActiveTab('sent')
+    try {
+      const res = await api.post<SentDocument>('/documents', {
+        template_id: selectedTemplate.id,
+        employee_id: sendForm.employeeId,
+        title: selectedTemplate.name,
+        content: selectedTemplate.content,
+        notes: sendForm.notes,
+      })
+      if (!res.ok) throw new Error(res.error || 'Failed')
+      toast.success('Document sent!')
+      setShowSendForm(false)
+      setSelectedTemplate(null)
+      setSendForm({ employeeId: '', notes: '' })
+      setActiveTab('sent')
+    } catch (error: any) {
+      toast.error('Failed to send: ' + (error?.message || 'Unknown error'))
+    }
   }
 
   async function handleDeleteTemplate(id: string) {
     if (!confirm('Delete this template?')) return
-    await supabase.from('document_templates').delete().eq('id', id)
-    toast.success('Template deleted'); loadData()
+    try {
+      // Backend has no template delete endpoint yet; keep Supabase fallback
+      const { error } = await supabase.from('document_templates').delete().eq('id', id)
+      if (error) throw error
+      toast.success('Template deleted')
+      loadData()
+    } catch (error: any) {
+      toast.error('Failed to delete template: ' + (error?.message || 'Unknown error'))
+    }
   }
 
   return (
