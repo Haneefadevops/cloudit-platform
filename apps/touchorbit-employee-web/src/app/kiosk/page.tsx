@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Search, Clock, X, ArrowLeft } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { useState, useEffect, useCallback } from 'react'
+import { Search, Clock, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { CameraCapture } from '@/components/camera-capture'
 import { toast } from 'sonner'
@@ -17,11 +16,6 @@ interface Employee {
   organization_id: string
 }
 
-interface ClockEvent {
-  event_type: 'clock_in' | 'clock_out'
-  timestamp: string
-}
-
 export default function KioskPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([])
@@ -33,64 +27,8 @@ export default function KioskPage() {
 
   const [orgId, setOrgId] = useState<string | null>(null)
 
-  useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('org')
-    setOrgId(id)
-  }, [])
-
-  useEffect(() => {
-    if (orgId) {
-      loadEmployees()
-    }
-  }, [orgId])
-
-  useEffect(() => {
-    // Filter employees based on search
-    if (searchQuery.trim() === '') {
-      setFilteredEmployees(employees)
-    } else {
-      const query = searchQuery.toLowerCase()
-      setFilteredEmployees(
-        employees.filter(emp =>
-          emp.first_name.toLowerCase().includes(query) ||
-          emp.last_name.toLowerCase().includes(query) ||
-          emp.employee_number?.toLowerCase().includes(query) ||
-          emp.department?.toLowerCase().includes(query)
-        )
-      )
-    }
-  }, [searchQuery, employees])
-
-  async function loadEmployees() {
-    setLoading(true)
-
-    // Get all active employees for this organization
-    const { data, error } = await supabase
-      .from('employees')
-      .select('*')
-      .eq('organization_id', orgId)
-      .eq('employment_status', 'active')
-      .order('first_name')
-
-    if (error) {
-      console.error('Error loading employees:', error)
-      toast.error('Failed to load employees')
-      setLoading(false)
-      return
-    }
-
-    setEmployees(data || [])
-    setFilteredEmployees(data || [])
-
-    // Load today's clock statuses for all employees
-    await loadClockStatuses(data || [])
-
-    setLoading(false)
-  }
-
-  async function loadClockStatuses(emps: Employee[]) {
+  const loadClockStatuses = async (emps: Employee[]) => {
     const today = new Date().toISOString().split('T')[0]
-    const employeeIds = emps.map(e => e.id)
 
     const result = await api.get<any[]>(`/attendance?from=${encodeURIComponent(today + 'T00:00:00')}&to=${encodeURIComponent(today + 'T23:59:59')}&limit=500`)
     const data = result.ok ? result.data || [] : []
@@ -113,6 +51,70 @@ export default function KioskPage() {
     setClockStatuses(statusMap)
   }
 
+  const loadEmployees = useCallback(async () => {
+    setLoading(true)
+
+    try {
+      const result = await api.get<any[]>('/employees?status=active&limit=500')
+
+      if (!result.ok) {
+        console.error('Error loading employees:', result.error)
+        toast.error('Failed to load employees')
+        setLoading(false)
+        return
+      }
+
+      const data = (result.data || []).map((emp: any): Employee => ({
+        id: emp.id,
+        first_name: emp.first_name,
+        last_name: emp.last_name,
+        employee_number: emp.employee_number ?? null,
+        job_title: emp.job_title ?? null,
+        department: emp.department_name || emp.department || null,
+        organization_id: emp.organization_id,
+      }))
+
+      setEmployees(data)
+      setFilteredEmployees(data)
+
+      // Load today's clock statuses for all employees
+      await loadClockStatuses(data)
+    } catch (error) {
+      console.error('Error loading employees:', error)
+      toast.error('Failed to load employees')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('org')
+    setOrgId(id)
+  }, [])
+
+  useEffect(() => {
+    if (orgId) {
+      loadEmployees()
+    }
+  }, [orgId, loadEmployees])
+
+  useEffect(() => {
+    // Filter employees based on search
+    if (searchQuery.trim() === '') {
+      setFilteredEmployees(employees)
+    } else {
+      const query = searchQuery.toLowerCase()
+      setFilteredEmployees(
+        employees.filter(emp =>
+          emp.first_name.toLowerCase().includes(query) ||
+          emp.last_name.toLowerCase().includes(query) ||
+          emp.employee_number?.toLowerCase().includes(query) ||
+          emp.department?.toLowerCase().includes(query)
+        )
+      )
+    }
+  }, [searchQuery, employees])
+
   function handleEmployeeSelect(employee: Employee) {
     setSelectedEmployee(employee)
     setShowCamera(true)
@@ -122,6 +124,7 @@ export default function KioskPage() {
     if (!selectedEmployee) return
 
     const eventType = clockStatuses[selectedEmployee.id] === 'in' ? 'clock_out' : 'clock_in'
+    const endpoint = eventType === 'clock_in' ? '/kiosk/clock-in' : '/kiosk/clock-out'
 
     console.log('🎬 Kiosk clock attempt:', {
       employee: selectedEmployee.first_name,
@@ -131,13 +134,12 @@ export default function KioskPage() {
     })
 
     try {
-      const result = await api.post<any>('/attendance/clock-events', {
+      const result = await api.post<any>(endpoint, {
         employeeId: selectedEmployee.id,
-        eventType,
-        timestamp: new Date().toISOString(),
         selfieUrl,
         deviceInfo: navigator.userAgent,
-        notes: JSON.stringify({ method: 'tablet_kiosk', location_verified: true }),
+        locationVerified: true,
+        notes: { method: 'tablet_kiosk', location_verified: true },
       })
 
       if (!result.ok) {
