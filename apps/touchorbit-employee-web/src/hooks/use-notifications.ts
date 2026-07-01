@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 
 export interface Notification {
@@ -23,18 +23,10 @@ export function useNotifications() {
 
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('organization_id', organizationId)
-        .order('created_at', { ascending: false })
-        .limit(50)
-
-      if (error) throw error
-
-      setNotifications(data || [])
-      setUnreadCount(data?.filter(n => !n.read).length || 0)
+      const res = await api.get<Notification[]>('/notifications')
+      const data = res.data || []
+      setNotifications(data)
+      setUnreadCount(data.filter(n => !n.read).length)
     } catch (error) {
       console.error('Error loading notifications:', error)
     } finally {
@@ -44,14 +36,9 @@ export function useNotifications() {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', notificationId)
+      const res = await api.patch<Notification>(`/notifications/${notificationId}/read`, {})
+      if (!res.ok) throw new Error(res.error || 'Failed')
 
-      if (error) throw error
-
-      // Update local state
       setNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
       )
@@ -65,16 +52,9 @@ export function useNotifications() {
     if (!userId) return
 
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('user_id', userId)
-        .eq('organization_id', organizationId)
-        .eq('read', false)
+      const unreadIds = notifications.filter(n => !n.read).map(n => n.id)
+      await Promise.all(unreadIds.map(id => api.patch<Notification>(`/notifications/${id}/read`, {})))
 
-      if (error) throw error
-
-      // Update local state
       setNotifications(prev => prev.map(n => ({ ...n, read: true })))
       setUnreadCount(0)
     } catch (error) {
@@ -84,14 +64,9 @@ export function useNotifications() {
 
   const deleteNotification = async (notificationId: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('id', notificationId)
+      const res = await api.del<{ id: string }>(`/notifications/${notificationId}`)
+      if (!res.ok) throw new Error(res.error || 'Failed')
 
-      if (error) throw error
-
-      // Update local state
       const wasUnread = notifications.find(n => n.id === notificationId)?.read === false
       setNotifications(prev => prev.filter(n => n.id !== notificationId))
       if (wasUnread) {
@@ -105,31 +80,8 @@ export function useNotifications() {
   useEffect(() => {
     if (userId) {
       loadNotifications()
-
-      // Set up real-time subscription
-      const channel = supabase
-        .channel(`notifications-${userId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'notifications',
-            filter: `user_id=eq.${userId}`,
-          },
-          (payload) => {
-            const newNotification = payload.new as Notification
-            setNotifications(prev => [newNotification, ...prev])
-            setUnreadCount(prev => prev + 1)
-          }
-        )
-        .subscribe()
-
-      return () => {
-        supabase.removeChannel(channel)
-      }
     }
-  }, [userId])
+  }, [userId, organizationId])
 
   return {
     notifications,
