@@ -18,4 +18,28 @@ export class DashboardController {
     const rows = await this.dashboardService.findAll(organizationId);
     return { ok: true, data: rows };
   }
+
+  @Get("summary")
+  @RequireModule("touchorbit", "dashboard")
+  @ApiOperation({ summary: "Get dashboard summary" })
+  async summary(@CurrentOrganization() organizationId: string) {
+    const data = await this.dashboardService.summary(organizationId);
+    return { ok: true, data };
+  }
+
+  @Get("widgets")
+  @RequireModule("touchorbit", "dashboard")
+  @ApiOperation({ summary: "Get dashboard widgets" })
+  async widgets(@CurrentOrganization() organizationId: string) {
+    const data = await this.dashboardService.widgets(organizationId);
+    return { ok: true, data };
+  }
+
+  @Get("activities")
+  @RequireModule("touchorbit", "dashboard")
+  @ApiOperation({ summary: "Get dashboard activities" })
+  async activities(@CurrentOrganization() organizationId: string) {
+    const data = await this.dashboardService.activities(organizationId);
+    return { ok: true, data };
+  }
 }
