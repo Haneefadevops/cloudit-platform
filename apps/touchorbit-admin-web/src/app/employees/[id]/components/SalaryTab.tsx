@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DollarSign, TrendingUp, RefreshCcw, Plus, X, ArrowUpRight, Eye, EyeOff, Lock, Unlock } from 'lucide-react'
 import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
@@ -13,6 +13,22 @@ interface SalaryRevision {
   new_salary: number
   effective_date: string
   reason?: string
+}
+
+interface SalaryComponent {
+  id: string
+  name: string
+  type: 'earning' | 'deduction'
+  calculation_type: 'fixed' | 'percentage' | 'formula'
+  default_amount: number | null
+}
+
+interface StructureRow {
+  id?: string
+  component_id: string
+  component_name?: string
+  amount: number
+  effective_from?: string
 }
 
 interface Employee {
@@ -47,6 +63,31 @@ export function SalaryTab({ employee, salaryHistory, isLoading, userEmail, onUpd
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [password, setPassword] = useState('')
   const [verifying, setVerifying] = useState(false)
+
+  const [components, setComponents] = useState<SalaryComponent[]>([])
+  const [structure, setStructure] = useState<StructureRow[]>([])
+  const [loadingStructure, setLoadingStructure] = useState(false)
+  const [savingStructure, setSavingStructure] = useState(false)
+
+  useEffect(() => {
+    if (!employee.id) return
+    let cancelled = false
+    setLoadingStructure(true)
+    Promise.all([
+      api.get<SalaryComponent[]>('/payroll/salary-components'),
+      api.get<StructureRow[]>(`/payroll/structures/${employee.id}`),
+    ])
+      .then(([componentsResult, structureResult]) => {
+        if (cancelled) return
+        if (componentsResult.ok) setComponents(componentsResult.data || [])
+        if (structureResult.ok) setStructure(structureResult.data || [])
+      })
+      .catch((err) => console.error('Error loading salary structure:', err))
+      .finally(() => {
+        if (!cancelled) setLoadingStructure(false)
+      })
+    return () => { cancelled = true }
+  }, [employee.id])
 
   const currentSalary = employee.basic_salary || 0
   const sparklineData = salaryHistory.length > 1
@@ -112,6 +153,48 @@ export function SalaryTab({ employee, salaryHistory, isLoading, userEmail, onUpd
       toast.error(e.message || 'Failed to save revision')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const addStructureRow = () => {
+    setStructure([...structure, { component_id: '', amount: 0, effective_from: new Date().toISOString().split('T')[0] }])
+  }
+
+  const removeStructureRow = (index: number) => {
+    setStructure(structure.filter((_, i) => i !== index))
+  }
+
+  const updateStructureRow = (index: number, patch: Partial<StructureRow>) => {
+    const next = [...structure]
+    next[index] = { ...next[index], ...patch }
+    setStructure(next)
+  }
+
+  const handleSaveStructure = async () => {
+    const payload = structure
+      .filter((row) => row.component_id)
+      .map((row) => ({
+        component_id: row.component_id,
+        amount: Number(row.amount) || 0,
+        effective_from: row.effective_from || new Date().toISOString().split('T')[0],
+      }))
+
+    if (payload.length === 0 && structure.length > 0) {
+      toast.error('Select a component for each row')
+      return
+    }
+
+    setSavingStructure(true)
+    try {
+      const result = await api.post<StructureRow[]>(`/payroll/structures/${employee.id}`, payload)
+      if (!result.ok) throw new Error(result.error || 'Failed to save salary structure')
+      toast.success('Salary structure saved')
+      const reload = await api.get<StructureRow[]>(`/payroll/structures/${employee.id}`)
+      if (reload.ok) setStructure(reload.data || [])
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to save salary structure')
+    } finally {
+      setSavingStructure(false)
     }
   }
 
@@ -335,6 +418,77 @@ export function SalaryTab({ employee, salaryHistory, isLoading, userEmail, onUpd
               })}
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Salary Structure */}
+      <div className="bg-white rounded-2xl border border-[#C7C3D0] p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-[13px] font-black text-[#1A1727] uppercase tracking-widest flex items-center gap-2">
+            <DollarSign size={16} className="text-[#534AB7]" /> Salary Structure
+          </h3>
+          <button
+            onClick={addStructureRow}
+            disabled={loadingStructure || components.length === 0}
+            className="flex items-center gap-2 px-3 py-1.5 bg-[#F3E8FF] text-[#534AB7] rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-[#DDD6FE] transition-colors disabled:opacity-50"
+          >
+            <Plus size={12} /> Add Component
+          </button>
+        </div>
+
+        {loadingStructure ? (
+          <div className="py-8 text-center text-[10px] font-black text-[#D1D5DB] uppercase tracking-widest animate-pulse">Loading Structure...</div>
+        ) : components.length === 0 ? (
+          <div className="py-8 text-center text-[13px] font-bold text-[#9CA3AF]">No salary components available. Create components in Payroll &rarr; Components first.</div>
+        ) : (
+          <>
+            {structure.length === 0 ? (
+              <div className="py-6 text-center text-[12px] font-bold text-[#9CA3AF]">No components assigned to this employee yet.</div>
+            ) : (
+              <div className="space-y-3 mb-5">
+                {structure.map((row, i) => (
+                  <div key={`${row.component_id}-${i}`} className="grid grid-cols-[1fr_auto_120px_auto] gap-3 items-center p-3 bg-[#F8F7F9] rounded-xl border border-[#F1F0F4]">
+                    <select
+                      value={row.component_id}
+                      onChange={(e) => updateStructureRow(i, { component_id: e.target.value })}
+                      className="px-3 py-2 bg-white border border-[#F1F0F4] rounded-lg text-[11px] font-bold text-[#1A1727] outline-none focus:ring-2 focus:ring-[#534AB7]/20"
+                    >
+                      <option value="">Select component</option>
+                      {components.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                      ))}
+                    </select>
+                    <div className="text-[10px] font-black text-[#9CA3AF] uppercase tracking-widest">
+                      {components.find((c) => c.id === row.component_id)?.calculation_type === 'percentage' ? '%' : 'LKR'}
+                    </div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={row.amount}
+                      onChange={(e) => updateStructureRow(i, { amount: parseFloat(e.target.value) || 0 })}
+                      className="px-3 py-2 bg-white border border-[#F1F0F4] rounded-lg text-[11px] font-bold text-[#1A1727] outline-none focus:ring-2 focus:ring-[#534AB7]/20"
+                      placeholder="0.00"
+                    />
+                    <button
+                      onClick={() => removeStructureRow(i)}
+                      className="p-1.5 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button
+              onClick={handleSaveStructure}
+              disabled={savingStructure || structure.length === 0}
+              className="px-6 py-2.5 bg-[#534AB7] text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-sm hover:bg-[#1E1854] transition-colors disabled:opacity-50"
+            >
+              {savingStructure ? 'Saving...' : 'Save Salary Structure'}
+            </button>
+          </>
         )}
       </div>
     </div>

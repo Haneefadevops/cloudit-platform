@@ -1,12 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { usePermissions } from '@/hooks/use-permissions'
-import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Lock, Download, Mail, Users, DollarSign, TrendingDown, Banknote } from 'lucide-react'
+import { api } from '@/lib/api'
+import { ArrowLeft, Download, Mail, Users, DollarSign, TrendingDown, Banknote } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
@@ -29,6 +29,7 @@ interface PayrollRun {
 interface PayrollItem {
   id: string
   employee_id: string
+  employee_name: string
   basic_salary: number
   days_worked: number
   days_on_leave: number
@@ -42,11 +43,6 @@ interface PayrollItem {
   net_salary: number
   bank_name: string | null
   bank_account: string | null
-  employees: {
-    first_name: string
-    last_name: string
-    employee_number: string
-  }
 }
 
 const MONTHS = [
@@ -56,85 +52,57 @@ const MONTHS = [
 
 export default function PayrollDetailPage() {
   const params = useParams()
-  const router = useRouter()
-  const { organizationId, userId } = useAuth()
-  const { can } = usePermissions(['payroll.finalize', 'payroll.send_payslips'])
+  const { organizationId } = useAuth()
+  const { can } = usePermissions(['payroll.send_payslips'])
   const [run, setRun] = useState<PayrollRun | null>(null)
   const [items, setItems] = useState<PayrollItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [finalizing, setFinalizing] = useState(false)
   const [sendingEmails, setSendingEmails] = useState(false)
 
+  const runId = params.id as string
+
   useEffect(() => {
-    if (organizationId && params.id) {
+    if (organizationId && runId) {
       loadPayrollData()
     }
-  }, [organizationId, params.id])
+  }, [organizationId, runId])
 
   const loadPayrollData = async () => {
-    if (!organizationId || !params.id) return
+    if (!organizationId || !runId) return
     setLoading(true)
     try {
-      const { data: runData, error: runError } = await supabase
-        .from('payroll_runs')
-        .select('*')
-        .eq('id', params.id)
-        .eq('organization_id', organizationId)
-        .single()
-      if (runError) throw runError
-      setRun(runData)
-
-      const { data: itemsData, error: itemsError } = await supabase
-        .from('payroll_items')
-        .select(`*, employees (first_name, last_name, employee_number)`)
-        .eq('payroll_run_id', params.id)
-        .order('employees(employee_number)')
-      if (itemsError) throw itemsError
-      setItems(itemsData || [])
-    } catch (error) {
-      toast.error('Failed to load payroll data')
+      const [runResult, itemsResult] = await Promise.all([
+        api.get<PayrollRun>(`/payroll/runs/${runId}`),
+        api.get<PayrollItem[]>(`/payroll/runs/${runId}/items`),
+      ])
+      if (!runResult.ok) throw new Error(runResult.error || 'Failed to load payroll run')
+      if (!itemsResult.ok) throw new Error(itemsResult.error || 'Failed to load payroll items')
+      setRun(runResult.data || null)
+      setItems(itemsResult.data || [])
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to load payroll data')
     } finally {
       setLoading(false)
     }
   }
 
-  const finalizePayroll = async () => {
-    if (!run || !userId) return
-    if (!confirm(`Are you sure you want to finalize payroll for ${MONTHS[run.month - 1]} ${run.year}? This action cannot be undone.`)) return
-    setFinalizing(true)
-    try {
-      const { error } = await supabase.from('payroll_runs').update({
-        status: 'finalized',
-        finalized_at: new Date().toISOString(),
-        finalized_by: userId
-      }).eq('id', run.id)
-      if (error) throw error
-      toast.success('Payroll finalized successfully')
-      await loadPayrollData()
-    } catch (error) {
-      toast.error('Failed to finalize payroll')
-    } finally {
-      setFinalizing(false)
-    }
-  }
-
   const downloadBankFile = () => {
-    if (!items.length) return
+    if (!items.length || !run) return
     const csvRows = [
       ['Account Number', 'Account Name', 'Amount', 'Bank Name', 'Reference'],
       ...items.map(item => [
         item.bank_account || 'N/A',
-        `${item.employees.first_name} ${item.employees.last_name}`,
+        item.employee_name,
         item.net_salary.toFixed(2),
         item.bank_name || 'N/A',
-        `Salary ${MONTHS[run!.month - 1]} ${run!.year}`
+        `Salary ${MONTHS[run.month - 1]} ${run.year}`
       ])
     ]
     const csvContent = csvRows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.setAttribute('href', URL.createObjectURL(blob))
-    link.setAttribute('download', `payroll_${run!.year}_${run!.month}_bank_file.csv`)
+    link.setAttribute('download', `payroll_${run.year}_${run.month}_bank_file.csv`)
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()
@@ -147,17 +115,13 @@ export default function PayrollDetailPage() {
     if (!confirm(`Send payslip emails to ${items.length} employees for ${MONTHS[run.month - 1]} ${run.year}?`)) return
     setSendingEmails(true)
     try {
-      const response = await fetch('/api/send-payslips', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payrollRunId: run.id })
-      })
-      if (!response.ok) {
-        const error = await response.json().catch(() => null)
-        throw new Error(error?.error || 'Failed to send emails')
-      }
-      const result = await response.json()
-      toast.success(`Sent ${result.success} payslips, ${result.failed} failed`)
+      const result = await api.post<{ sent: boolean; run_id: string; employee_ids: string[] }>(
+        '/payroll/payslips/send',
+        { run_id: run.id }
+      )
+      if (!result.ok) throw new Error(result.error || 'Failed to send emails')
+      const data = result.data
+      toast.success(`Payslip send request submitted for ${data?.employee_ids?.length || items.length} employees`)
     } catch (error: any) {
       toast.error(error?.message || 'Failed to send payslip emails')
     } finally {
@@ -236,16 +200,6 @@ export default function PayrollDetailPage() {
                 </button>
               </>
             )}
-            {run.status === 'draft' && can('payroll.finalize') && (
-              <button
-                onClick={finalizePayroll}
-                disabled={finalizing || items.length === 0}
-                className="flex items-center gap-2 px-4 py-1.5 bg-[#534AB7] text-white rounded-lg hover:bg-[#1E1854] disabled:opacity-50 text-xs font-bold transition-all shadow-md shadow-purple-900/20"
-              >
-                <Lock size={13} strokeWidth={2.5} />
-                {finalizing ? 'Finalizing...' : 'Finalize Payroll'}
-              </button>
-            )}
           </div>
         </div>
 
@@ -303,16 +257,16 @@ export default function PayrollDetailPage() {
                   <tbody className="divide-y divide-[#F1F0F4]">
                     {items.map((item) => {
                       const otherDeductions = Math.max(0, item.total_deductions - item.epf_employee - item.paye_tax);
+                      const initials = item.employee_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
                       return (
                         <tr key={item.id} className="hover:bg-[#F8F7F9] transition-all">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full bg-[#F3E8FF] border-2 border-white flex items-center justify-center text-[#534AB7] font-black text-[10px]">
-                                {item.employees.first_name[0]}
+                                {initials}
                               </div>
                               <div>
-                                <div className="text-[13px] font-black text-[#1A1727]">{item.employees.first_name} {item.employees.last_name}</div>
-                                <div className="text-[10px] text-[#9CA3AF] font-bold uppercase tracking-tighter">#{item.employees.employee_number}</div>
+                                <div className="text-[13px] font-black text-[#1A1727]">{item.employee_name}</div>
                               </div>
                             </div>
                           </td>

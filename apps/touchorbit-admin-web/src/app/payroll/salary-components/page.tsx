@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
-import { Plus, Edit, Trash2, DollarSign, TrendingUp, TrendingDown, X } from 'lucide-react'
+import { api } from '@/lib/api'
+import { Plus, TrendingUp, TrendingDown, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface SalaryComponent {
@@ -23,7 +23,6 @@ export default function SalaryComponentsPage() {
   const [components, setComponents] = useState<SalaryComponent[]>([])
   const [loading, setLoading] = useState(true)
   const [showDialog, setShowDialog] = useState(false)
-  const [editingComponent, setEditingComponent] = useState<SalaryComponent | null>(null)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -41,17 +40,11 @@ export default function SalaryComponentsPage() {
   }, [isLoaded, organizationId])
 
   const loadComponents = async () => {
-    if (!organizationId) return
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('salary_components')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .order('type', { ascending: true })
-        .order('name', { ascending: true })
-      if (error) throw error
-      setComponents(data || [])
+      const result = await api.get<SalaryComponent[]>('/payroll/salary-components')
+      if (!result.ok) throw new Error(result.error || 'Failed to load salary components')
+      setComponents(result.data || [])
     } catch (error) {
       toast.error('Failed to load salary components')
     } finally {
@@ -61,58 +54,25 @@ export default function SalaryComponentsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!organizationId) return
     try {
       const componentData = {
-        organization_id: organizationId,
         name: formData.name,
         type: formData.type,
         calculation_type: formData.calculation_type,
-        default_amount: formData.default_amount ? parseFloat(formData.default_amount) : null,
+        default_amount: formData.default_amount ? parseFloat(formData.default_amount) : undefined,
         is_statutory: false,
         is_taxable: formData.is_taxable,
-        description: formData.description || null
+        description: formData.description || undefined
       }
-      if (editingComponent) {
-        const { error } = await supabase.from('salary_components').update(componentData).eq('id', editingComponent.id)
-        if (error) throw error
-        toast.success('Component updated successfully')
-      } else {
-        const { error } = await supabase.from('salary_components').insert(componentData)
-        if (error) throw error
-        toast.success('Component created successfully')
-      }
+      const result = await api.post<SalaryComponent>('/payroll/salary-components', componentData)
+      if (!result.ok) throw new Error(result.error || 'Failed to create component')
+
+      toast.success('Component created successfully')
       setShowDialog(false)
-      setEditingComponent(null)
       resetForm()
       await loadComponents()
-    } catch (error) {
-      toast.error('Failed to save component')
-    }
-  }
-
-  const handleEdit = (component: SalaryComponent) => {
-    setEditingComponent(component)
-    setFormData({
-      name: component.name,
-      type: component.type,
-      calculation_type: component.calculation_type,
-      default_amount: component.default_amount?.toString() || '',
-      is_taxable: component.is_taxable,
-      description: component.description || ''
-    })
-    setShowDialog(true)
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this component?')) return
-    try {
-      const { error } = await supabase.from('salary_components').delete().eq('id', id)
-      if (error) throw error
-      toast.success('Component deleted successfully')
-      await loadComponents()
-    } catch (error) {
-      toast.error('Failed to delete component')
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to save component')
     }
   }
 
@@ -133,7 +93,7 @@ export default function SalaryComponentsPage() {
             <p className="text-[11px] text-[#9CA3AF]">Manage earnings and deductions for payroll</p>
           </div>
           <button
-            onClick={() => { resetForm(); setEditingComponent(null); setShowDialog(true) }}
+            onClick={() => { resetForm(); setShowDialog(true) }}
             className="flex items-center gap-2 px-4 py-1.5 bg-[#534AB7] text-white rounded-lg hover:bg-[#1E1854] transition-all text-xs font-bold shadow-md shadow-purple-900/20"
           >
             <Plus size={13} strokeWidth={3} />
@@ -161,7 +121,7 @@ export default function SalaryComponentsPage() {
                   ) : (
                     <div className="space-y-3">
                       {earnings.map((component) => (
-                        <div key={component.id} className="p-4 border border-[#F1F0F4] rounded-xl hover:border-[#A78BFA] transition-all group">
+                        <div key={component.id} className="p-4 border border-[#F1F0F4] rounded-xl hover:border-[#A78BFA] transition-all">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -178,23 +138,13 @@ export default function SalaryComponentsPage() {
                               )}
                               <div className="flex items-center gap-3 mt-2 text-[11px] text-[#6B7280] font-bold">
                                 <span className="capitalize">{component.calculation_type}</span>
-                                {component.default_amount && (
+                                {component.default_amount !== null && component.default_amount !== undefined && (
                                   <span className="text-emerald-600">
                                     {component.calculation_type === 'percentage' ? `${component.default_amount}%` : `LKR ${component.default_amount.toLocaleString()}`}
                                   </span>
                                 )}
                               </div>
                             </div>
-                            {!component.is_statutory && (
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => handleEdit(component)} className="p-1.5 bg-[#F8F7F9] hover:bg-[#F3E8FF] text-[#9CA3AF] hover:text-[#534AB7] rounded-lg transition-all">
-                                  <Edit size={13} />
-                                </button>
-                                <button onClick={() => handleDelete(component.id)} className="p-1.5 bg-red-50 hover:bg-red-500 text-red-400 hover:text-white rounded-lg transition-all">
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            )}
                           </div>
                         </div>
                       ))}
@@ -218,7 +168,7 @@ export default function SalaryComponentsPage() {
                   ) : (
                     <div className="space-y-3">
                       {deductions.map((component) => (
-                        <div key={component.id} className="p-4 border border-[#F1F0F4] rounded-xl hover:border-[#A78BFA] transition-all group">
+                        <div key={component.id} className="p-4 border border-[#F1F0F4] rounded-xl hover:border-[#A78BFA] transition-all">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -232,23 +182,13 @@ export default function SalaryComponentsPage() {
                               )}
                               <div className="flex items-center gap-3 mt-2 text-[11px] text-[#6B7280] font-bold">
                                 <span className="capitalize">{component.calculation_type}</span>
-                                {component.default_amount && (
+                                {component.default_amount !== null && component.default_amount !== undefined && (
                                   <span className="text-red-500">
                                     {component.calculation_type === 'percentage' ? `${component.default_amount}%` : `LKR ${component.default_amount.toLocaleString()}`}
                                   </span>
                                 )}
                               </div>
                             </div>
-                            {!component.is_statutory && (
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => handleEdit(component)} className="p-1.5 bg-[#F8F7F9] hover:bg-[#F3E8FF] text-[#9CA3AF] hover:text-[#534AB7] rounded-lg transition-all">
-                                  <Edit size={13} />
-                                </button>
-                                <button onClick={() => handleDelete(component.id)} className="p-1.5 bg-red-50 hover:bg-red-500 text-red-400 hover:text-white rounded-lg transition-all">
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            )}
                           </div>
                         </div>
                       ))}
@@ -260,13 +200,13 @@ export default function SalaryComponentsPage() {
           )}
         </div>
 
-        {/* Add/Edit Dialog */}
+        {/* Add Dialog */}
         {showDialog && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#1A1727]/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 border border-[#F1F0F4]">
               <div className="flex justify-between items-center mb-8">
-                <h2 className="text-xl font-black text-[#1A1727] tracking-tight">{editingComponent ? 'Edit' : 'New'} Component</h2>
-                <button onClick={() => { setShowDialog(false); setEditingComponent(null); resetForm() }} className="p-2 text-[#9CA3AF] hover:text-[#1A1727] transition-all"><X size={20} strokeWidth={2.5} /></button>
+                <h2 className="text-xl font-black text-[#1A1727] tracking-tight">New Component</h2>
+                <button onClick={() => { setShowDialog(false); resetForm() }} className="p-2 text-[#9CA3AF] hover:text-[#1A1727] transition-all"><X size={20} strokeWidth={2.5} /></button>
               </div>
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
@@ -339,8 +279,8 @@ export default function SalaryComponentsPage() {
                   <span className="text-[11px] font-black text-[#374151] uppercase tracking-widest">Taxable Component</span>
                 </label>
                 <div className="flex gap-4 pt-2">
-                  <button type="button" onClick={() => { setShowDialog(false); setEditingComponent(null); resetForm() }} className="flex-1 py-3 text-[11px] font-black uppercase tracking-widest text-[#9CA3AF] hover:bg-[#F8F7F9] rounded-xl transition-all">Cancel</button>
-                  <button type="submit" className="flex-1 py-3 bg-[#534AB7] text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/20 active:scale-95 transition-all">{editingComponent ? 'Update' : 'Create'}</button>
+                  <button type="button" onClick={() => { setShowDialog(false); resetForm() }} className="flex-1 py-3 text-[11px] font-black uppercase tracking-widest text-[#9CA3AF] hover:bg-[#F8F7F9] rounded-xl transition-all">Cancel</button>
+                  <button type="submit" className="flex-1 py-3 bg-[#534AB7] text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/20 active:scale-95 transition-all">Create</button>
                 </div>
               </form>
             </div>

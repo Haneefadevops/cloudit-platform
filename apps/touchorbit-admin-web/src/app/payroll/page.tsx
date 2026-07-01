@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { usePermissions } from '@/hooks/use-permissions'
-import { supabase } from '@/lib/supabase'
-import { DollarSign, Play, Eye, Download, Plus, Settings, Trash2, RefreshCcw, Shield, TrendingUp } from 'lucide-react'
+import { api } from '@/lib/api'
+import { DollarSign, Play, Eye, Plus, Settings } from 'lucide-react'
 import { ToBadge } from '@/components/ui/ToBadge'
 import { ToEmptyState } from '@/components/ui/ToEmptyState'
 import { TableSkeleton } from '@/components/ui/ToSkeleton'
@@ -42,7 +42,7 @@ const statusColors = {
 
 export default function PayrollPage() {
   const { organizationId, isLoaded } = useAuth()
-  const { can } = usePermissions(['payroll.process', 'payroll.delete_run', 'payroll.manage_components'])
+  const { can } = usePermissions(['payroll.process', 'payroll.manage_components'])
   const [runs, setRuns] = useState<PayrollRun[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -53,20 +53,11 @@ export default function PayrollPage() {
   }, [isLoaded, organizationId])
 
   const loadPayrollRuns = async () => {
-    if (!organizationId) return
-
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('payroll_runs')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .order('year', { ascending: false })
-        .order('month', { ascending: false })
-
-      if (error) throw error
-
-      setRuns(data || [])
+      const result = await api.get<PayrollRun[]>('/payroll/runs')
+      if (!result.ok) throw new Error(result.error || 'Failed to load payroll runs')
+      setRuns(result.data || [])
     } catch (error) {
       console.error('Error loading payroll runs:', error)
       toast.error('Failed to load payroll runs')
@@ -75,106 +66,29 @@ export default function PayrollPage() {
     }
   }
 
-  const handleDelete = async (run: PayrollRun) => {
-    const label = `${MONTHS[run.month - 1]} ${run.year}`
-    if (!confirm(`Delete payroll run for ${label}? This will also delete all calculated payroll items and cannot be undone.`)) return
-
-    try {
-      const { error } = await supabase
-        .from('payroll_runs')
-        .delete()
-        .eq('id', run.id)
-
-      if (error) throw error
-
-      toast.success(`Payroll run for ${label} deleted`)
-      await loadPayrollRuns()
-    } catch (error) {
-      console.error('Error deleting payroll run:', error)
-      toast.error('Failed to delete payroll run')
-    }
-  }
-
-  const handleResetToDraft = async (run: PayrollRun) => {
-    const label = `${MONTHS[run.month - 1]} ${run.year}`
-    if (!confirm(`Reset ${label} payroll? This will delete all calculated items so you can re-process from scratch.`)) return
-
-    try {
-      // Delete all payroll items for this run
-      const { error: itemsError } = await supabase
-        .from('payroll_items')
-        .delete()
-        .eq('payroll_run_id', run.id)
-
-      if (itemsError) throw itemsError
-
-      // Reset run totals and status back to draft
-      const { error: runError } = await supabase
-        .from('payroll_runs')
-        .update({
-          status: 'draft',
-          total_employees: 0,
-          total_gross: 0,
-          total_net: 0,
-          total_epf_employee: 0,
-          total_epf_employer: 0,
-          total_etf: 0,
-          total_paye: 0,
-          finalized_at: null,
-        })
-        .eq('id', run.id)
-
-      if (runError) throw runError
-
-      toast.success(`${label} payroll reset to draft — ready to re-process`)
-      await loadPayrollRuns()
-    } catch (error) {
-      console.error('Error resetting payroll run:', error)
-      toast.error('Failed to reset payroll run')
-    }
-  }
-
   const createNewPayrollRun = async () => {
-    if (!organizationId) return
-
     const today = new Date()
     const currentMonth = today.getMonth() + 1
     const currentYear = today.getFullYear()
 
+    const existing = runs.find((r) => r.month === currentMonth && r.year === currentYear)
+    if (existing) {
+      toast.error(`Payroll run for ${MONTHS[currentMonth - 1]} ${currentYear} already exists`)
+      return
+    }
+
     try {
-      // Check if payroll run already exists for this month
-      const { data: existing } = await supabase
-        .from('payroll_runs')
-        .select('id')
-        .eq('organization_id', organizationId)
-        .eq('month', currentMonth)
-        .eq('year', currentYear)
-        .single()
-
-      if (existing) {
-        toast.error(`Payroll run for ${MONTHS[currentMonth - 1]} ${currentYear} already exists`)
-        return
-      }
-
-      // Create new payroll run
-      const { data, error } = await supabase
-        .from('payroll_runs')
-        .insert({
-          organization_id: organizationId,
-          month: currentMonth,
-          year: currentYear,
-          status: 'draft',
-        })
-        .select()
-        .single()
-
-      if (error) throw error
+      const result = await api.post<PayrollRun>('/payroll/runs', {
+        month: currentMonth,
+        year: currentYear,
+      })
+      if (!result.ok) throw new Error(result.error || 'Failed to create payroll run')
 
       toast.success('Payroll run created successfully')
       await loadPayrollRuns()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating payroll run:', error)
-      toast.error('Failed to create payroll run')
+      toast.error(error?.message || 'Failed to create payroll run')
     }
   }
 
@@ -215,9 +129,9 @@ export default function PayrollPage() {
             {[
               { label: 'Total Net Pay',  value: `LKR ${runs.reduce((s, r) => s + (r.total_net || 0), 0).toLocaleString()}`, color: '#534AB7', sub: `${runs.length} total runs`, icon: DollarSign },
               { label: 'Gross Salaries', value: `LKR ${runs.reduce((s, r) => s + (r.total_gross || 0), 0).toLocaleString()}`, color: '#2563EB', sub: 'incl. OT + allowances', icon: Play },
-              { label: 'EPF (8%)',      value: `LKR ${runs.reduce((s, r) => s + (r.total_epf_employee || 0), 0).toLocaleString()}`, color: '#10B981', sub: 'Employee share', icon: TrendingUp },
-              { label: 'EPF (12%)',     value: `LKR ${runs.reduce((s, r) => s + (r.total_epf_employer || 0), 0).toLocaleString()}`, color: '#D97706', sub: 'Employer share', icon: Shield },
-              { label: 'ETF (3%)',      value: `LKR ${runs.reduce((s, r) => s + (r.total_etf || 0), 0).toLocaleString()}`, color: '#6366F1', sub: 'Employer share', icon: Shield },
+              { label: 'EPF (8%)',      value: `LKR ${runs.reduce((s, r) => s + (r.total_epf_employee || 0), 0).toLocaleString()}`, color: '#10B981', sub: 'Employee share', icon: Play },
+              { label: 'EPF (12%)',     value: `LKR ${runs.reduce((s, r) => s + (r.total_epf_employer || 0), 0).toLocaleString()}`, color: '#D97706', sub: 'Employer share', icon: Play },
+              { label: 'ETF (3%)',      value: `LKR ${runs.reduce((s, r) => s + (r.total_etf || 0), 0).toLocaleString()}`, color: '#6366F1', sub: 'Employer share', icon: Play },
             ].map(s => (
               <div key={s.label} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
                 <div className="flex justify-between items-start mb-3">
@@ -326,24 +240,6 @@ export default function PayrollPage() {
                             <Play size={15} strokeWidth={2} />
                           </Link>
                         )}
-                        {can('payroll.process') && ((run.status === 'draft' && run.total_employees > 0) || run.status === 'finalized' || run.status === 'paid') ? (
-                          <button
-                            onClick={() => handleResetToDraft(run)}
-                            className="p-1.5 hover:bg-amber-50 hover:text-amber-500 rounded-lg transition-colors"
-                            title="Reset"
-                          >
-                            <RefreshCcw size={15} strokeWidth={2} />
-                          </button>
-                        ) : null}
-                        {can('payroll.delete_run') && (
-                          <button
-                            onClick={() => handleDelete(run)}
-                            className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 size={15} strokeWidth={2} />
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -356,4 +252,3 @@ export default function PayrollPage() {
     </DashboardLayout>
   )
 }
-
