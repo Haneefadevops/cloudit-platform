@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 
 interface LocationSample {
   latitude: number
@@ -176,13 +176,10 @@ export function useGeolocation() {
   ): Promise<GeofenceResult> {
     try {
       // Fetch active geofences for the organization
-      const { data: geofences, error } = await supabase
-        .from('geofences')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .eq('status', 'active')
+      const result = await api.get<any[]>('/attendance/geofences')
+      if (!result.ok) throw new Error(result.error || 'Failed to fetch geofences')
 
-      if (error) throw error
+      const geofences = (result.data || []).filter((g: any) => g.status === 'active')
 
       if (!geofences || geofences.length === 0) {
         // No geofences configured - allow clock-in from anywhere

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { WidgetShell } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
@@ -26,33 +26,27 @@ export function RecentClockInsWidget({ organizationId, editMode, onRemove }: Wid
     setError(false)
     try {
       const today = new Date().toISOString().split('T')[0]
-      const { data: recent } = await supabase
-        .from('clock_events')
-        .select('employee_id, timestamp, employee:employees(first_name, last_name, departments:departments(name))')
-        .eq('organization_id', organizationId)
-        .eq('event_type', 'clock_in')
-        .gte('timestamp', today)
-        .order('timestamp', { ascending: false })
-        .limit(15) // Fetch more to allow for de-duplication
+      const result = await api.get<any[]>(`/attendance?event_type=clock_in&from=${encodeURIComponent(today + 'T00:00:00')}&to=${encodeURIComponent(today + 'T23:59:59')}&limit=100`)
+      if (!result.ok) throw new Error(result.error || 'Failed to load recent clock-ins')
 
-      if (recent) {
-        const seen = new Set<string>()
-        const list: RecentClockIn[] = []
-        for (const r of recent as any[]) {
-          if (seen.has(r.employee_id)) continue
-          seen.add(r.employee_id)
-          if (list.length >= 8) break // Spec says show last 8
+      const recent = (result.data || []).sort((a: any, b: any) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )
 
-          const emp = r.employee
-          const name = emp ? `${emp.first_name} ${emp.last_name}` : 'Unknown'
-          const dept = emp?.departments?.name || '—'
-          const initials = emp ? `${emp.first_name?.[0] || ''}${emp.last_name?.[0] || ''}`.toUpperCase() : '?'
-          const time = new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          
-          list.push({ employee_id: r.employee_id, employee_name: name, department: dept, time, initials })
-        }
-        setData(list)
+      const seen = new Set<string>()
+      const list: RecentClockIn[] = []
+      for (const r of recent as any[]) {
+        if (seen.has(r.employee_id)) continue
+        seen.add(r.employee_id)
+        if (list.length >= 8) break // Spec says show last 8
+
+        const name = r.employee_name || 'Unknown'
+        const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase() || '?'
+        const time = new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        
+        list.push({ employee_id: r.employee_id, employee_name: name, department: '—', time, initials })
       }
+      setData(list)
     } catch (error) {
       console.error('Error loading recent clock-ins widget data:', error)
       setError(true)

@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
 import { usePermissions } from '@/hooks/use-permissions'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import {
   LayoutDashboard,
   Users,
@@ -117,24 +118,16 @@ export function Sidebar({ collapsed = false, onToggle, mobileOpen, onMobileClose
 
     async function refreshSuspiciousCount() {
       if (!organizationId) return
-      const { count } = await supabase
-        .from('clock_events')
-        .select('*', { count: 'exact', head: true })
-        .eq('organization_id', organizationId)
-        .eq('admin_review_status', 'flagged')
-      setSuspiciousCount(count ?? 0)
+      const result = await api.get<any[]>('/attendance?limit=500')
+      if (result.ok) {
+        const count = (result.data || []).filter((e: any) => e.admin_review_status === 'flagged').length
+        setSuspiciousCount(count)
+      }
     }
 
     loadData()
 
-    const channel = supabase
-      .channel('suspicious-count')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'clock_events', filter: `organization_id=eq.${organizationId}` }, () => {
-        refreshSuspiciousCount()
-      })
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    // TODO: re-introduce live suspicious count updates once backend exposes WebSocket/SSE
   }, [organizationId])
 
   const userInitials = userProfile?.first_name && userProfile?.last_name

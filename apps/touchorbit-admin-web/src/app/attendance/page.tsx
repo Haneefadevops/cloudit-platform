@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { Clock, UserCheck, UserX, AlertTriangle, RefreshCw, Download, Shield, CheckCircle, XCircle, Eye, ChevronRight, MapPin, Map, Search, ShieldAlert, ExternalLink, MessageSquare, X, ListFilter, SlidersHorizontal, Sparkles, List, Maximize2, Activity } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -309,58 +310,8 @@ export default function AttendancePage() {
     boardRef.current = board
   }, [board])
 
-  // Live Activity Realtime
-  useEffect(() => {
-    if (!isLiveMode || !organizationId) return
-
-    const reloadScopedAttendance = () => {
-      if ((isDeptManager || isBranchManager) && !managedScopeId) return
-      const scopeId = isDeptManager || isBranchManager ? managedScopeId : undefined
-      loadAttendance(scopeId)
-      loadSuspiciousEvents(scopeId)
-    }
-
-    const findEmployeeName = (employeeId: string) => {
-      const entry = boardRef.current.find(e => e.employee.id === employeeId)
-      return entry ? `${entry.employee.first_name} ${entry.employee.last_name}` : 'Employee'
-    }
-
-    const channel = supabase
-      .channel('attendance-realtime')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'clock_events', filter: `organization_id=eq.${organizationId}` }, (payload) => {
-        const event = payload.new
-        const tone: ActivityFeedItem['tone'] = event.suspicious_flags?.length > 0 ? 'danger' : event.event_type === 'clock_in' ? 'success' : 'normal'
-        reloadScopedAttendance()
-        setActivityFeed(prev => [{
-          id: event.id,
-          msg: event.event_type === 'clock_in' ? 'Clocked in' : 'Clocked out',
-          time: event.timestamp,
-          employeeName: findEmployeeName(event.employee_id),
-          tone,
-        }, ...prev.filter(item => item.id !== event.id && new Date(item.time).getTime() >= Date.now() - (60 * 60 * 1000))])
-
-        if (event.suspicious_flags?.length > 0) {
-          toast.error('Suspicious activity detected')
-        } else if (event.event_type === 'clock_in') {
-          toast.success('New clock-in received')
-        }
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'break_events', filter: `organization_id=eq.${organizationId}` }, (payload) => {
-        const breakEvent = payload.new
-        reloadScopedAttendance()
-        setActivityFeed(prev => [{
-          id: breakEvent.id,
-          msg: breakEvent.break_end ? 'Returned from break' : 'Started break',
-          time: breakEvent.break_end || breakEvent.break_start,
-          employeeName: findEmployeeName(breakEvent.employee_id),
-          tone: 'normal' as const,
-        }, ...prev.filter(item => item.id !== breakEvent.id && new Date(item.time).getTime() >= Date.now() - (60 * 60 * 1000))])
-        toast.info(breakEvent.break_end ? 'Employee returned from break' : 'Employee started a break')
-      })
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [isLiveMode, organizationId, managedScopeId, isDeptManager, isBranchManager, selectedDate])
+  // Real-time updates are now handled via the polling refresh below.
+  // TODO: re-introduce WebSocket/SSE live updates once the NestJS backend exposes them.
 
   // Reset tab when selection changes
   useEffect(() => {
@@ -445,18 +396,26 @@ export default function AttendancePage() {
     }
 
     const targetDate = selectedDate
-    const [{ data: events }, { data: geoData }] = await Promise.all([
-      supabase.from('clock_events').select('*, branch:branches(name)').eq('organization_id', organizationId).gte('timestamp', targetDate + 'T00:00:00').lte('timestamp', targetDate + 'T23:59:59').order('timestamp', { ascending: true }),
-      supabase.from('geofences').select('id, name, latitude, longitude, radius_meters').eq('organization_id', organizationId)
+    const fromParam = `${targetDate}T00:00:00`
+    const toParam = `${targetDate}T23:59:59`
+    const [eventsResult, geoResult, breakResult] = await Promise.all([
+      api.get<any[]>(`/attendance?from=${encodeURIComponent(fromParam)}&to=${encodeURIComponent(toParam)}&limit=500`),
+      api.get<any[]>('/attendance/geofences'),
+      api.get<any[]>('/attendance/break-events'),
     ])
-    setGeofences(geoData || [])
 
-    const { data: breakEvents } = await supabase
-      .from('break_events')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .gte('break_start', targetDate + 'T00:00:00')
-      .lte('break_start', targetDate + 'T23:59:59')
+    if (!eventsResult.ok) {
+      console.error('Error loading clock events:', eventsResult.error)
+      toast.error('Failed to load attendance')
+      setLoading(false)
+      return
+    }
+    const events = eventsResult.data || []
+    setGeofences(geoResult.data || [])
+
+    const breakEvents = (breakResult.data || []).filter((b: any) =>
+      b.break_start >= fromParam && b.break_start <= toParam
+    )
 
     const { data: rosterRows } = await supabase
       .from('roster_assignments')
@@ -506,7 +465,7 @@ export default function AttendancePage() {
         breakMinutes: totalBreakMinutes,
         suspiciousFlags: clockIn?.suspicious_flags || [],
         adminReviewStatus: clockIn?.admin_review_status || null,
-        branchName: clockIn?.branch?.name || null,
+        branchName: clockIn?.branch?.name || clockIn?.branch_name || null,
         rawEvents: empEvents,
         breaks: empBreaks,
       }
@@ -550,22 +509,34 @@ export default function AttendancePage() {
   const loadSuspiciousEvents = async (scopeId?: string | null) => {
     if (!organizationId) return
     const targetDate = selectedDate
-    let query = supabase
-      .from('clock_events')
-      .select('id, employee_id, event_type, timestamp, suspicious_flags, latitude, longitude, gps_accuracy, location_variance, admin_review_status, selfie_url, employees!inner(first_name, last_name, department_id, branch_id), branches(name)')
-      .eq('organization_id', organizationId)
-      .eq('admin_review_status', 'flagged')
-      .gte('timestamp', targetDate + 'T00:00:00')
-      .lte('timestamp', targetDate + 'T23:59:59')
+    const fromParam = `${targetDate}T00:00:00`
+    const toParam = `${targetDate}T23:59:59`
 
-    if (isDeptManager && scopeId) query = (query as any).eq('employees.department_id', scopeId)
-    else if (isBranchManager && scopeId) query = (query as any).eq('employees.branch_id', scopeId)
-    const { data, error } = await query.order('timestamp', { ascending: false }).limit(20)
-    if (error) { console.error('Error loading suspicious events:', error); return }
-    setSuspiciousEvents((data || []).map((e: any) => ({
+    // Fetch the scoped employee list so we can filter manager views client-side.
+    let scopedEmployeeIds = new Set<string>()
+    if ((isDeptManager || isBranchManager) && scopeId) {
+      let empQuery = supabase
+        .from('employees')
+        .select('id')
+        .eq('organization_id', organizationId)
+      if (isDeptManager && scopeId) empQuery = empQuery.eq('department_id', scopeId)
+      else if (isBranchManager && scopeId) empQuery = empQuery.eq('branch_id', scopeId)
+      const { data } = await empQuery
+      ;(data || []).forEach((e: any) => scopedEmployeeIds.add(e.id))
+    }
+
+    const result = await api.get<any[]>(`/attendance?from=${encodeURIComponent(fromParam)}&to=${encodeURIComponent(toParam)}&limit=500`)
+    if (!result.ok) { console.error('Error loading suspicious events:', result.error); return }
+
+    let data = (result.data || []).filter((e: any) => e.admin_review_status === 'flagged')
+    if ((isDeptManager || isBranchManager) && scopeId) {
+      data = data.filter((e: any) => scopedEmployeeIds.has(e.employee_id))
+    }
+
+    setSuspiciousEvents(data.slice(0, 20).map((e: any) => ({
       id: e.id,
       employee_id: e.employee_id,
-      employee_name: `${e.employees.first_name} ${e.employees.last_name}`,
+      employee_name: e.employee_name || 'Unknown',
       event_type: e.event_type,
       timestamp: e.timestamp,
       suspicious_flags: e.suspicious_flags || [],
@@ -575,20 +546,18 @@ export default function AttendancePage() {
       location_variance: e.location_variance,
       admin_review_status: e.admin_review_status,
       selfie_url: e.selfie_url,
-      branch_name: e.branches?.name || null,
+      branch_name: e.branch_name || null,
     })))
   }
 
   const reviewEvent = async (eventId: string, status: 'approved' | 'rejected') => {
     setSuspiciousEvents(prev => prev.filter(e => e.id !== eventId))
-    const { error } = await supabase.rpc('review_clock_event', {
-      p_event_id: eventId,
-      p_status: status,
-      p_reviewed_by: userId,
-      p_notes: status === 'approved' ? 'Reviewed and approved by admin' : 'Rejected due to suspicious activity',
+    const result = await api.post<any>(`/attendance/clock-events/${eventId}/review`, {
+      status,
+      reviewNotes: status === 'approved' ? 'Reviewed and approved by admin' : 'Rejected due to suspicious activity',
     })
-    if (error) {
-      toast.error('Failed to review event: ' + error.message)
+    if (!result.ok) {
+      toast.error('Failed to review event: ' + result.error)
       loadSuspiciousEvents(managedScopeId)
     } else {
       toast.success(`Event ${status} successfully`)

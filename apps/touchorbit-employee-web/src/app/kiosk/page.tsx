@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Search, Clock, X, ArrowLeft } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { CameraCapture } from '@/components/camera-capture'
 import { toast } from 'sonner'
 
@@ -91,28 +92,23 @@ export default function KioskPage() {
     const today = new Date().toISOString().split('T')[0]
     const employeeIds = emps.map(e => e.id)
 
-    const { data } = await supabase
-      .from('clock_events')
-      .select('employee_id, event_type, timestamp')
-      .in('employee_id', employeeIds)
-      .gte('timestamp', today)
-      .order('timestamp', { ascending: true })
+    const result = await api.get<any[]>(`/attendance?from=${encodeURIComponent(today + 'T00:00:00')}&to=${encodeURIComponent(today + 'T23:59:59')}&limit=500`)
+    const data = result.ok ? result.data || [] : []
 
     // Build status map
     const statusMap: Record<string, 'in' | 'out'> = {}
 
-    if (data) {
-      // Group events by employee and get latest
-      emps.forEach(emp => {
-        const empEvents = data.filter(e => e.employee_id === emp.id)
-        if (empEvents.length > 0) {
-          const latest = empEvents[empEvents.length - 1]
-          statusMap[emp.id] = latest.event_type === 'clock_in' ? 'in' : 'out'
-        } else {
-          statusMap[emp.id] = 'out'
-        }
-      })
-    }
+    // Group events by employee and get latest
+    emps.forEach(emp => {
+      const empEvents = data.filter((e: any) => e.employee_id === emp.id)
+        .sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+      if (empEvents.length > 0) {
+        const latest = empEvents[empEvents.length - 1]
+        statusMap[emp.id] = latest.event_type === 'clock_in' ? 'in' : 'out'
+      } else {
+        statusMap[emp.id] = 'out'
+      }
+    })
 
     setClockStatuses(statusMap)
   }
@@ -135,30 +131,21 @@ export default function KioskPage() {
     })
 
     try {
-      const { data, error } = await supabase
-        .from('clock_events')
-        .insert({
-          employee_id: selectedEmployee.id,
-          organization_id: selectedEmployee.organization_id,
-          event_type: eventType,
-          timestamp: new Date().toISOString(),
-          selfie_url: selfieUrl,
-          method: 'tablet_kiosk',
-          device_info: navigator.userAgent,
-          // Kiosk doesn't capture GPS (device is at office)
-          latitude: null,
-          longitude: null,
-          location_verified: true, // Assume verified since kiosk is at office
-          gps_accuracy: null,
-        })
-        .select()
+      const result = await api.post<any>('/attendance/clock-events', {
+        employeeId: selectedEmployee.id,
+        eventType,
+        timestamp: new Date().toISOString(),
+        selfieUrl,
+        deviceInfo: navigator.userAgent,
+        notes: JSON.stringify({ method: 'tablet_kiosk', location_verified: true }),
+      })
 
-      if (error) {
-        console.error('❌ Supabase error:', error)
-        throw error
+      if (!result.ok) {
+        console.error('❌ API error:', result.error)
+        throw new Error(result.error || 'Failed to record clock event')
       }
 
-      console.log('✅ Clock event created:', data)
+      console.log('✅ Clock event created:', result.data)
 
       toast.success(
         `${selectedEmployee.first_name} clocked ${eventType === 'clock_in' ? 'in' : 'out'}!`,

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { WidgetShell } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
@@ -17,13 +17,11 @@ export function PendingCorrectionsWidget({ organizationId, editMode, onRemove }:
     setLoading(true)
     setError(false)
     try {
-      const { count } = await supabase
-        .from('attendance_corrections')
-        .select('id', { count: 'exact', head: true })
-        .eq('organization_id', organizationId)
-        .eq('status', 'pending')
+      const result = await api.get<any[]>('/attendance/corrections')
+      if (!result.ok) throw new Error(result.error || 'Failed to load corrections')
 
-      setData({ count: count ?? 0 })
+      const count = (result.data || []).filter((c: any) => c.status === 'pending').length
+      setData({ count })
     } catch (e) {
       console.error('Error loading corrections widget data:', e)
       setError(true)

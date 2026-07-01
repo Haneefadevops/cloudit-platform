@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { toast } from 'sonner'
 
@@ -48,22 +49,17 @@ export function useClockStatus() {
     queryFn: async () => {
       if (!employeeData?.id) return []
 
-      // Get today's events
       const today = new Date().toISOString().split('T')[0]
+      const result = await api.get<any[]>(`/attendance?employee_id=${employeeData.id}&from=${encodeURIComponent(today + 'T00:00:00')}&to=${encodeURIComponent(today + 'T23:59:59')}&limit=500`)
 
-      const { data, error } = await supabase
-        .from('clock_events')
-        .select('*')
-        .eq('employee_id', employeeData.id)
-        .gte('timestamp', today)
-        .order('timestamp', { ascending: true })
-
-      if (error) {
-        console.error('Error fetching clock events:', error)
+      if (!result.ok) {
+        console.error('Error fetching clock events:', result.error)
         return []
       }
 
-      return data as ClockEvent[]
+      return (result.data || []).sort((a: any, b: any) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      ) as ClockEvent[]
     },
     enabled: !!employeeData?.id,
   })
@@ -87,26 +83,20 @@ export function useClockStatus() {
 
       if (!employee) throw new Error('Employee not found')
 
-      // Insert clock event
-      const { data: event, error } = await supabase
-        .from('clock_events')
-        .insert({
-          organization_id: employee.organization_id,
-          employee_id: employee.id,
-          event_type: data.event_type,
-          timestamp: new Date().toISOString(),
-          latitude: data.latitude,
-          longitude: data.longitude,
-          location_verified: data.location_verified,
-          selfie_url: data.selfie_url || null,
-          method: 'mobile_app',
-        })
-        .select()
-        .single()
+      // Create clock event via backend API
+      const result = await api.post<any>('/attendance/clock-events', {
+        employeeId: employee.id,
+        eventType: data.event_type,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        selfieUrl: data.selfie_url || null,
+        deviceInfo: navigator.userAgent,
+        notes: JSON.stringify({ location_verified: data.location_verified, method: 'mobile_app' }),
+      })
 
-      if (error) throw error
+      if (!result.ok) throw new Error(result.error || 'Failed to record clock event')
 
-      return event as ClockEvent
+      return result.data as ClockEvent
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['clock-events'] })
@@ -153,18 +143,14 @@ export function useGeofences() {
     queryFn: async () => {
       if (!organizationId) return []
 
-      const { data, error } = await supabase
-        .from('geofences')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .eq('status', 'active')
+      const result = await api.get<any[]>('/attendance/geofences')
 
-      if (error) {
-        console.error('Error fetching geofences:', error)
+      if (!result.ok) {
+        console.error('Error fetching geofences:', result.error)
         return []
       }
 
-      return data
+      return (result.data || []).filter((g: any) => g.status === 'active')
     },
     enabled: isLoaded && !!organizationId,
   })

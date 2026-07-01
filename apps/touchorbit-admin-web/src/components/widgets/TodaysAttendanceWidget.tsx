@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { WidgetShell, useWidgetSize } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
@@ -25,20 +26,19 @@ export function TodaysAttendanceWidget({ organizationId, editMode, onRemove }: W
     try {
       const today = new Date().toISOString().split('T')[0]
       const todayStart = today + 'T00:00:00'
+      const todayEnd = today + 'T23:59:59'
 
-      const [{ data: empData }, { data: clockData }] = await Promise.all([
+      const [{ data: empData }, eventsResult] = await Promise.all([
         supabase
           .from('employees')
           .select('id')
           .eq('organization_id', organizationId)
           .eq('employment_status', 'active'),
-        supabase
-          .from('clock_events')
-          .select('employee_id, timestamp')
-          .eq('organization_id', organizationId)
-          .eq('event_type', 'clock_in')
-          .gte('timestamp', todayStart),
+        api.get<any[]>(`/attendance?event_type=clock_in&from=${encodeURIComponent(todayStart)}&to=${encodeURIComponent(todayEnd)}&limit=500`),
       ])
+
+      if (!eventsResult.ok) throw new Error(eventsResult.error || 'Failed to load clock events')
+      const clockData = eventsResult.data || []
 
       const total = empData?.length || 0
       

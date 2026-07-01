@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { WidgetShell } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
@@ -38,27 +38,23 @@ export function SpoofingReviewWidget({ organizationId, editMode, onRemove }: Wid
     setError(false)
     try {
       const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-      const { data: rows, count: total } = await supabase
-        .from('clock_events')
-        .select('suspicious_flags', { count: 'exact' })
-        .eq('organization_id', organizationId)
-        .eq('admin_review_status', 'flagged')
-        .gte('timestamp', cutoff)
+      const result = await api.get<any[]>(`/attendance?from=${encodeURIComponent(cutoff)}&limit=500`)
+      if (!result.ok) throw new Error(result.error || 'Failed to load flagged events')
 
-      if (rows) {
-        const flagCounts = new Map<string, number>()
-        for (const r of rows as { suspicious_flags: string[] | null }[]) {
-          for (const f of r.suspicious_flags ?? []) {
-            flagCounts.set(f, (flagCounts.get(f) ?? 0) + 1)
-          }
+      const rows = (result.data || []).filter((r: any) => r.admin_review_status === 'flagged')
+
+      const flagCounts = new Map<string, number>()
+      for (const r of rows) {
+        for (const f of r.suspicious_flags ?? []) {
+          flagCounts.set(f, (flagCounts.get(f) ?? 0) + 1)
         }
-        const top = Array.from(flagCounts.entries())
-          .map(([flag, c]) => ({ flag, count: c }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 3)
-        setTopFlags(top)
       }
-      setCount(total ?? 0)
+      const top = Array.from(flagCounts.entries())
+        .map(([flag, c]) => ({ flag, count: c }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3)
+      setTopFlags(top)
+      setCount(rows.length)
     } catch (e) {
       console.error('Error loading spoofing review widget:', e)
       setError(true)

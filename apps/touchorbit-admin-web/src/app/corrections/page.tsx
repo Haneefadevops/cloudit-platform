@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
+import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { AlertCircle, CheckCircle, XCircle, RefreshCw, Clock, ShieldAlert, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -20,7 +21,8 @@ interface AttendanceCorrection {
   status: 'pending' | 'approved' | 'rejected'
   rejection_reason: string | null
   created_at: string
-  employees: {
+  employee_name?: string
+  employees?: {
     first_name: string
     last_name: string
     employee_number: string
@@ -32,6 +34,14 @@ const correctionTypeLabels = {
   forgot_out: 'Forgot to Clock Out',
   wrong_time: 'Wrong Time Entry',
   other: 'Miscellaneous',
+}
+
+function normalizeCorrection(row: any): AttendanceCorrection {
+  return {
+    ...row,
+    employee_name: row.employee_name || '',
+    employees: row.employees || undefined,
+  }
 }
 
 export default function CorrectionsPage() {
@@ -50,20 +60,11 @@ export default function CorrectionsPage() {
     if (!organizationId) return
     setLoading(true)
     try {
-      const { data, error } = await supabase.from('attendance_corrections').select('id, employee_id, correction_type, requested_time, reason, status, rejection_reason, created_at').eq('organization_id', organizationId).order('created_at', { ascending: false })
-      if (error) throw error
-      if (data && data.length > 0) {
-        const employeeIds = [...new Set(data.map(c => c.employee_id))]
-        const { data: employeesData } = await supabase.from('employees').select('id, first_name, last_name, employee_number').in('id', employeeIds)
-        const correctionsWithEmployees = data.map(correction => ({
-          ...correction,
-          employees: employeesData?.find(e => e.id === correction.employee_id) || { first_name: 'Unknown', last_name: '', employee_number: '' }
-        }))
-        setCorrections(correctionsWithEmployees as any)
-      } else {
-        setCorrections([])
-      }
+      const result = await api.get<any[]>('/attendance/corrections')
+      if (!result.ok) throw new Error(result.error || 'Failed to load corrections')
+      setCorrections((result.data || []).map(normalizeCorrection))
     } catch (error) {
+      console.error('Error loading corrections:', error)
       toast.error('Failed to load corrections')
     } finally {
       setLoading(false)
@@ -72,6 +73,7 @@ export default function CorrectionsPage() {
 
   const handleApprove = async (id: string) => {
     try {
+      // TODO: backend attendance corrections review endpoint not implemented yet
       await supabase.from('attendance_corrections').update({ status: 'approved', approved_at: new Date().toISOString() }).eq('id', id)
       toast.success('Correction approved')
       await loadCorrections()
@@ -81,6 +83,7 @@ export default function CorrectionsPage() {
   const handleReject = async (id: string) => {
     const reason = prompt('Rejection reason (optional):')
     try {
+      // TODO: backend attendance corrections review endpoint not implemented yet
       await supabase.from('attendance_corrections').update({ status: 'rejected', rejection_reason: reason || null }).eq('id', id)
       toast.success('Correction rejected')
       await loadCorrections()
@@ -93,6 +96,14 @@ export default function CorrectionsPage() {
     approved: corrections.filter((c) => c.status === 'approved').length,
     rejected: corrections.filter((c) => c.status === 'rejected').length,
   }
+
+  const employeeDisplayName = (c: AttendanceCorrection) => {
+    if (c.employees) return `${c.employees.first_name} ${c.employees.last_name}`
+    if (c.employee_name) return c.employee_name
+    return 'Unknown'
+  }
+
+  const employeeNumber = (c: AttendanceCorrection) => c.employees?.employee_number || ''
 
   return (
     <DashboardLayout>
@@ -179,10 +190,10 @@ export default function CorrectionsPage() {
                     <tr key={item.id} className="hover:bg-[#F8F7F9] transition-all group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <ToAvatar initials={`${item.employees.first_name[0]}`} size={32} />
+                          <ToAvatar initials={`${employeeDisplayName(item)[0]}`} size={32} />
                           <div>
-                            <div className="text-[13px] font-black text-[#1A1727]">{item.employees.first_name} {item.employees.last_name}</div>
-                            <div className="text-[10px] text-[#9CA3AF] font-bold uppercase tracking-tighter">#{item.employees.employee_number}</div>
+                            <div className="text-[13px] font-black text-[#1A1727]">{employeeDisplayName(item)}</div>
+                            <div className="text-[10px] text-[#9CA3AF] font-bold uppercase tracking-tighter">#{employeeNumber(item)}</div>
                           </div>
                         </div>
                       </td>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { offlineDB, getPendingEvents, markEventAsSynced, incrementSyncAttempts } from '@/lib/offline-db'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 
 export function useOfflineSync() {
   const [isOnline, setIsOnline] = useState(true)
@@ -88,32 +89,29 @@ export function useOfflineSync() {
             selfieUrl = urlData.publicUrl
           }
 
-          // Insert clock event with anti-spoofing data
-          // Note: Server-side trigger will re-verify geofence and detect anomalies
-          const { error: insertError } = await supabase
-            .from('clock_events')
-            .insert({
-              organization_id: event.organization_id,
-              employee_id: event.employee_id,
-              event_type: event.event_type,
-              timestamp: event.timestamp,
-              latitude: event.latitude,
-              longitude: event.longitude,
-              gps_accuracy: event.gps_accuracy,
+          // Sync clock event to the NestJS backend
+          // Note: Server-side verification runs during creation
+          const result = await api.post<any>('/attendance/clock-events', {
+            employeeId: event.employee_id,
+            eventType: event.event_type,
+            latitude: event.latitude,
+            longitude: event.longitude,
+            selfieUrl,
+            deviceInfo: event.device_info,
+            notes: JSON.stringify({
               location_verified: event.location_verified,
-              selfie_url: selfieUrl,
-              device_info: event.device_info,
-              method: 'mobile_app',
-              synced_at: new Date().toISOString(),
-              // Anti-spoofing data (will be re-validated by server trigger)
+              gps_accuracy: event.gps_accuracy,
               location_samples: event.location_samples || null,
               location_variance: event.location_variance || null,
               device_fingerprint: event.device_fingerprint || null,
               timezone_offset: event.timezone_offset || null,
               suspicious_flags: event.suspicious_flags || [],
-            })
+              method: 'mobile_app',
+              synced_at: new Date().toISOString(),
+            }),
+          })
 
-          if (insertError) throw insertError
+          if (!result.ok) throw new Error(result.error || 'Failed to sync clock event')
 
           // Mark as synced
           if (event.id) {

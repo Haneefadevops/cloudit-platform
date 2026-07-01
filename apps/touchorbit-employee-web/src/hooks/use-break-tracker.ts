@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 
 // duration_minutes is a DB-generated column; fall back to client calculation if null
@@ -103,16 +104,18 @@ export function useBreakTracker(currentClockEventId: string | null): UseBreakTra
         tomorrow.setDate(tomorrow.getDate() + 1)
         const todayEnd = tomorrow.toISOString()
 
-        // Fetch ALL today's breaks (for the current clock session and any others)
-        const { data: todayBreaks, error: todayError } = await supabase
-          .from('break_events')
-          .select('*')
-          .eq('employee_id', employeeId)
-          .gte('break_start', todayStart)
-          .lt('break_start', todayEnd)
-          .order('break_start', { ascending: true })
+        // Fetch today's breaks from the backend and filter client-side
+        const result = await api.get<any[]>('/attendance/break-events')
+        if (!result.ok) throw new Error(result.error || 'Failed to fetch break events')
 
-        if (todayError) throw todayError
+        const todayBreaks = (result.data || []).filter(
+          (b: any) =>
+            b.employee_id === employeeId &&
+            b.break_start >= todayStart &&
+            b.break_start < todayEnd
+        ).sort((a: any, b: any) =>
+          new Date(a.break_start).getTime() - new Date(b.break_start).getTime()
+        )
 
         setTodayBreakEvents(todayBreaks || [])
 
@@ -169,23 +172,19 @@ export function useBreakTracker(currentClockEventId: string | null): UseBreakTra
     setError(null)
 
     try {
-      const { data, error: insertError } = await supabase
-        .from('break_events')
-        .insert({
-          organization_id: organizationId,
-          employee_id: employeeId,
-          clock_event_id: currentClockEventId,
-          break_start: new Date().toISOString(),
-          break_type: type,
-        })
-        .select()
-        .single()
+      const result = await api.post<any>('/attendance/break-events', {
+        employeeId,
+        clockEventId: currentClockEventId,
+        breakStart: new Date().toISOString(),
+        breakType: type,
+      })
 
-      if (insertError) {
-        console.error('❌ Break insert error:', insertError)
-        throw insertError
+      if (!result.ok) {
+        console.error('❌ Break insert error:', result.error)
+        throw new Error(result.error || 'Failed to start break')
       }
 
+      const data = result.data
       setIsOnBreak(true)
       setCurrentBreak(data)
       setTodayBreakEvents((prev) => [...prev, data])
@@ -208,6 +207,7 @@ export function useBreakTracker(currentClockEventId: string | null): UseBreakTra
     setError(null)
 
     try {
+      // TODO: backend break-events update endpoint not implemented yet
       const { data, error: updateError } = await supabase
         .from('break_events')
         .update({ break_end: new Date().toISOString() })

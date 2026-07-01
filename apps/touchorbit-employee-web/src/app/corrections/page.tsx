@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { EmployeeLayout } from '@/components/employee-layout'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { AlertCircle, Plus, X, Clock, CheckCircle, XCircle, Calendar, RefreshCw, ChevronRight, Fingerprint } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -48,8 +49,10 @@ export default function CorrectionsPage() {
     try {
       const { data: employee } = await supabase.from('employees').select('id').eq('user_id', userId).single()
       if (!employee) { setLoading(false); return }
-      const { data, error } = await supabase.from('attendance_corrections').select('*').eq('employee_id', employee.id).order('created_at', { ascending: false })
-      if (!error) setCorrections(data || [])
+      const result = await api.get<any[]>('/attendance/corrections')
+      if (result.ok) {
+        setCorrections((result.data || []).filter((c: any) => c.employee_id === employee.id))
+      }
     } finally {
       setLoading(false)
     }
@@ -63,14 +66,14 @@ export default function CorrectionsPage() {
       if (!employee) throw new Error('Employee not found')
 
       const requestedTime = new Date(`${formData.date}T${formData.time}`)
-      await supabase.from('attendance_corrections').insert({
-        organization_id: employee.organization_id,
-        employee_id: employee.id,
-        correction_type: formData.type,
-        requested_time: requestedTime.toISOString(),
+      const result = await api.post<any>('/attendance/corrections', {
+        employeeId: employee.id,
+        correctionType: formData.type,
+        requestedTime: requestedTime.toISOString(),
         reason: formData.reason,
-        status: 'pending',
       })
+
+      if (!result.ok) throw new Error(result.error || 'Failed to submit correction')
 
       toast.success('Correction request submitted!')
       setFormData({ type: 'forgot_in', date: new Date().toISOString().split('T')[0], time: '09:00', reason: '' })

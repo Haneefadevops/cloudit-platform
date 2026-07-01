@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { 
   Check, 
   X, 
@@ -14,6 +15,7 @@ import {
   Clock,
   Square
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAutoLinkEmployee } from '@/hooks/use-auto-link-employee'
 import { EmployeeLayout } from '@/components/employee-layout'
 import { useClockStatus } from '@/hooks/use-clock-status'
@@ -87,25 +89,31 @@ export default function AttendancePage() {
     endOfMonth.setDate(0)
     const endDate = endOfMonth.toISOString().split('T')[0]
 
-    const [{ data, error }, { data: breaksData, error: breaksError }] = await Promise.all([
-      supabase
-        .from('clock_events')
-        .select('*')
-        .eq('employee_id', employee.id)
-        .gte('timestamp', startOfMonth)
-        .lte('timestamp', endDate)
-        .order('timestamp', { ascending: false }),
-      supabase
-        .from('break_events')
-        .select('*')
-        .eq('employee_id', employee.id)
-        .gte('break_start', startOfMonth)
-        .lte('break_start', endDate + 'T23:59:59')
-        .order('break_start', { ascending: true }),
+    const [eventsResult, breaksResult] = await Promise.all([
+      api.get<any[]>(`/attendance?employee_id=${employee.id}&from=${encodeURIComponent(startOfMonth)}&to=${encodeURIComponent(endDate + 'T23:59:59')}&limit=500`),
+      api.get<any[]>('/attendance/break-events'),
     ])
 
-    if (!error) setEvents(data || [])
-    if (!breaksError) setBreakEvents(breaksData || [])
+    const data = eventsResult.ok ? eventsResult.data || [] : []
+    const breaksData = breaksResult.ok
+      ? (breaksResult.data || []).filter((b: any) =>
+          b.employee_id === employee.id &&
+          b.break_start >= startOfMonth &&
+          b.break_start <= endDate + 'T23:59:59'
+        )
+      : []
+
+    if (!eventsResult.ok) {
+      console.error('Error loading clock events:', eventsResult.error)
+      toast.error('Failed to load attendance')
+    } else {
+      setEvents(data)
+    }
+    if (!breaksResult.ok) {
+      console.error('Error loading break events:', breaksResult.error)
+    } else {
+      setBreakEvents(breaksData)
+    }
 
     // Calculate month stats
     const eventsByDate = new Map<string, ClockEvent[]>()

@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { AlertTriangle, X } from 'lucide-react'
 
 export function FlaggedPunchBanner() {
@@ -17,12 +17,8 @@ export function FlaggedPunchBanner() {
         return
       }
       // Check if still pending review
-      const { data } = await supabase
-        .from('clock_events')
-        .select('admin_review_status')
-        .eq('id', id)
-        .single()
-      if (!data || data.admin_review_status !== 'flagged') {
+      const result = await api.get<any>(`/attendance/clock-events/${id}`)
+      if (!result.ok || !result.data || result.data.admin_review_status !== 'flagged') {
         localStorage.removeItem('to_flagged_punch')
         return
       }

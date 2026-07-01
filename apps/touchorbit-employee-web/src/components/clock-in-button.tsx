@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth'
 import { CameraCapture } from './camera-capture'
 import { queueClockEvent } from '@/lib/offline-db'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
 const HOLD_DURATION = 1200 // ms
@@ -212,21 +213,33 @@ export function ClockInButton() {
       }
 
       if (isOnline) {
-        const { data: inserted, error } = await supabase
-          .from('clock_events')
-          .insert({
-            ...eventData,
+        const result = await api.post<any>('/attendance/clock-events', {
+          employeeId,
+          eventType: isClockedIn ? 'clock_out' : 'clock_in',
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          selfieUrl,
+          deviceInfo: navigator.userAgent,
+          notes: JSON.stringify({
+            branch_id: workType === 'office' ? selectedBranchId : null,
+            work_type: workType,
+            location_verified: locationData.verified,
+            gps_accuracy: locationData.accuracy,
+            location_samples: locationData.samples,
+            location_variance: locationData.variance,
+            device_fingerprint: locationData.deviceFingerprint,
+            timezone_offset: locationData.timezoneOffset,
+            suspicious_flags: locationData.suspiciousFlags,
             method: 'mobile_app',
-          })
-          .select('id')
-          .single()
+          }),
+        })
 
-        if (error) {
-          console.error('❌ Supabase insert error:', error)
-          throw error
+        if (!result.ok) {
+          console.error('❌ API insert error:', result.error)
+          throw new Error(result.error || 'Failed to record clock event')
         }
 
-        const insertedEventId = inserted?.id
+        const insertedEventId = result.data?.id
         if (insertedEventId) {
           const channel = supabase
             .channel(`punch-flag-${insertedEventId}`)
@@ -254,8 +267,9 @@ export function ClockInButton() {
             }))
           }
 
-          supabase.functions.invoke('check-ip-location', {
-            body: { event_id: insertedEventId, claimed_lat: locationData.latitude, claimed_lng: locationData.longitude }
+          api.post(`/attendance/clock-events/${insertedEventId}/verify-ip`, {
+            claimedLat: locationData.latitude,
+            claimedLng: locationData.longitude,
           }).catch(err => console.error('IP check failed (non-blocking):', err))
         }
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { 
   ShieldAlert, 
   Search, 
@@ -23,6 +23,15 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { exportSpoofingToCSV } from '@/lib/spoofing/csv-export'
+
+interface Employee {
+  id: string
+  first_name: string
+  last_name: string
+  job_title: string | null
+  department: string | null
+  photo_url: string | null
+}
 
 interface FlaggedEvent {
   id: string
@@ -45,6 +54,7 @@ interface FlaggedEvent {
   timezone_offset: number
   device_fingerprint: any
   work_type: string
+  employee_name?: string
   employee?: {
     first_name: string
     last_name: string
@@ -81,8 +91,9 @@ const FLAG_COLORS: Record<string, { bg: string; text: string }> = {
 }
 
 export default function SpoofingReviewPage() {
-  const { organizationId, userId, isLoaded } = useAuth()
+  const { organizationId, isLoaded } = useAuth()
   const [events, setEvents] = useState<FlaggedEvent[]>([])
+  const [employees, setEmployees] = useState<Record<string, Employee>>({})
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState<string>('flagged')
   const [filterFlag, setFilterFlag] = useState<string>('all')
@@ -105,17 +116,40 @@ export default function SpoofingReviewPage() {
     }
   }, [selected])
 
+  async function loadEmployees() {
+    const result = await api.get<any[]>(`/employees?limit=500`)
+    if (!result.ok) {
+      console.error('Error loading employees:', result.error)
+      return
+    }
+    const map: Record<string, Employee> = {}
+    for (const e of result.data || []) {
+      map[e.id] = e
+    }
+    setEmployees(map)
+  }
+
   async function loadData() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('clock_events')
-        .select('*, employee:employees(*)')
-        .eq('organization_id', organizationId)
-        .order('timestamp', { ascending: false })
-      
-      if (error) throw error
-      setEvents(data as any)
+      const [eventsResult, employeesResult] = await Promise.all([
+        api.get<any[]>('/attendance?limit=500'),
+        api.get<any[]>(`/employees?limit=500`),
+      ])
+
+      if (!eventsResult.ok) throw new Error(eventsResult.error || 'Failed to load events')
+      if (!employeesResult.ok) throw new Error(employeesResult.error || 'Failed to load employees')
+
+      const empMap: Record<string, Employee> = {}
+      for (const e of employeesResult.data || []) {
+        empMap[e.id] = e
+      }
+      setEmployees(empMap)
+
+      setEvents((eventsResult.data || []).map((e: any) => ({
+        ...e,
+        employee: e.employee_id ? empMap[e.employee_id] : undefined,
+      })))
     } catch (e) {
       console.error('Error loading spoofing data:', e)
       toast.error('Failed to load suspicious punches')
@@ -125,27 +159,25 @@ export default function SpoofingReviewPage() {
   }
 
   async function loadRecentPunches(employeeId: string) {
-    const { data } = await supabase
-      .from('clock_events')
-      .select('timestamp, work_type, admin_review_status')
-      .eq('employee_id', employeeId)
-      .order('timestamp', { ascending: false })
-      .limit(5)
-    setRecentPunches(data || [])
+    const result = await api.get<any[]>(`/attendance?employee_id=${employeeId}&limit=5`)
+    if (!result.ok) {
+      console.error('Error loading recent punches:', result.error)
+      setRecentPunches([])
+      return
+    }
+    setRecentPunches(result.data || [])
   }
 
   async function handleReview(status: 'approved' | 'rejected') {
     if (!selected) return
     setProcessingId(selected.id)
     try {
-      const { error } = await supabase.rpc('review_clock_event', {
-        p_event_id: selected.id,
-        p_status: status,
-        p_reviewed_by: userId ?? '',
-        p_notes: reviewNote || null,
+      const result = await api.post<any>(`/attendance/clock-events/${selected.id}/review`, {
+        status,
+        reviewNotes: reviewNote || undefined,
       })
 
-      if (error) throw error
+      if (!result.ok) throw new Error(result.error || 'Review failed')
       
       toast.success(`Punch ${status} successfully`)
       setSelected(null)
@@ -161,7 +193,7 @@ export default function SpoofingReviewPage() {
   function handleExport() {
     const exportData = filtered.map(e => ({
       timestamp: e.timestamp,
-      employee_name: `${e.employee?.first_name} ${e.employee?.last_name}`,
+      employee_name: e.employee ? `${e.employee.first_name} ${e.employee.last_name}` : (e.employee_name || 'Unknown'),
       latitude: e.latitude,
       longitude: e.longitude,
       gps_accuracy: e.gps_accuracy,
@@ -181,8 +213,9 @@ export default function SpoofingReviewPage() {
   const filtered = events.filter(e => {
     const matchesStatus = filterStatus === 'all' ? true : e.admin_review_status === filterStatus
     const matchesFlag = filterFlag === 'all' ? true : e.suspicious_flags?.includes(filterFlag)
+    const employeeName = e.employee ? `${e.employee.first_name} ${e.employee.last_name}` : (e.employee_name || '')
     const matchesSearch = searchQuery === '' ? true : 
-      `${e.employee?.first_name} ${e.employee?.last_name}`.toLowerCase().includes(searchQuery.toLowerCase())
+      employeeName.toLowerCase().includes(searchQuery.toLowerCase())
     
     // Only show events that are actually flagged or have been reviewed (don't show verified ones unless 'all' status)
     const hasFlags = (e.suspicious_flags?.length ?? 0) > 0
@@ -309,10 +342,12 @@ export default function SpoofingReviewPage() {
                         <div className="w-9 h-9 rounded-xl bg-[#F1F0F4] overflow-hidden flex items-center justify-center font-black text-[#9CA3AF] shrink-0 border border-white shadow-sm">
                           {e.employee?.photo_url ? (
                             <img src={e.employee.photo_url} className="w-full h-full object-cover" />
-                          ) : e.employee?.first_name[0]}
+                          ) : e.employee?.first_name ? e.employee.first_name[0] : (e.employee_name ? e.employee_name[0] : <User size={14} />)}
                         </div>
                         <div className="min-w-0">
-                          <div className="font-extrabold text-[#1A1727] truncate leading-tight">{e.employee?.first_name} {e.employee?.last_name}</div>
+                          <div className="font-extrabold text-[#1A1727] truncate leading-tight">
+                            {e.employee ? `${e.employee.first_name} ${e.employee.last_name}` : (e.employee_name || 'Unknown')}
+                          </div>
                           <div className="text-[11px] font-bold text-[#9CA3AF] truncate leading-tight">{e.employee?.department}</div>
                         </div>
                       </div>
@@ -434,7 +469,7 @@ export default function SpoofingReviewPage() {
                     </div>
                     <div>
                       <div className="text-[10px] font-black text-[#9CA3AF] uppercase tracking-widest">Geolocation</div>
-                      <div className="text-[13px] font-extrabold text-[#1A1727]">{selected.work_type.toUpperCase()} WORK</div>
+                      <div className="text-[13px] font-extrabold text-[#1A1727]">{selected.work_type ? selected.work_type.toUpperCase() : 'OFFICE'} WORK</div>
                     </div>
                   </div>
 
@@ -472,7 +507,7 @@ export default function SpoofingReviewPage() {
                     </div>
                     <div>
                       <div className="text-[10px] font-black text-[#9CA3AF] uppercase tracking-widest">Device Fingerprint</div>
-                      <div className="text-[13px] font-extrabold text-[#1A1727] truncate w-[280px]">{selected.device_info.split(')')[0] + ')'}</div>
+                      <div className="text-[13px] font-extrabold text-[#1A1727] truncate w-[280px]">{selected.device_info ? selected.device_info.split(')')[0] + ')' : 'Unknown'}</div>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-[13px]">

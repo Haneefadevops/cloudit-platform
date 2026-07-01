@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { WidgetShell } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
@@ -38,25 +39,29 @@ export function WeeklyTrendWidget({ organizationId, editMode, onRemove }: Widget
       const total = totalActive || 0
 
       const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-      const queries = Array.from({ length: 7 }, (_, i) => {
+      const dayDates = Array.from({ length: 7 }, (_, i) => {
         const d = new Date()
         d.setDate(d.getDate() - (6 - i))
         return d.toISOString().split('T')[0]
       })
 
-      // Fetch unique absolute counts for sparkline and daily data
-      const results = await Promise.all(queries.map(async (day) => {
-        const { data } = await supabase
-          .from('clock_events')
-          .select('employee_id')
-          .eq('organization_id', organizationId)
-          .eq('event_type', 'clock_in')
-          .gte('timestamp', day + 'T00:00:00')
-          .lte('timestamp', day + 'T23:59:59')
+      const startDay = dayDates[0] + 'T00:00:00'
+      const endDay = dayDates[6] + 'T23:59:59'
 
-        const uniqueCount = new Set(data?.map(r => r.employee_id) ?? []).size
+      const result = await api.get<any[]>(`/attendance?event_type=clock_in&from=${encodeURIComponent(startDay)}&to=${encodeURIComponent(endDay)}&limit=500`)
+      if (!result.ok) throw new Error(result.error || 'Failed to load weekly trend')
+
+      const events = result.data || []
+
+      // Fetch unique absolute counts for sparkline and daily data
+      const results = dayDates.map((day) => {
+        const dayEvents = events.filter((e: any) => {
+          const ts = e.timestamp as string
+          return ts >= day + 'T00:00:00' && ts <= day + 'T23:59:59'
+        })
+        const uniqueCount = new Set(dayEvents.map((r: any) => r.employee_id)).size
         return { date: day, count: uniqueCount }
-      }))
+      })
 
       const sparkline = results.map(r => r.count)
       const days = results.map(r => {

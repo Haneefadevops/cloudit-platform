@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { usePermissions } from '@/hooks/use-permissions'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import {
   MapPin, Plus, Search, X, Layers,
   Radio, CheckCircle2, Trash2, Pencil, Crosshair,
@@ -76,16 +76,13 @@ export default function GeofencesPage() {
   const loadGeofences = useCallback(async () => {
     if (!organizationId) return
     setLoading(true)
-    const { data, error } = await supabase
-      .from('geofences')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .order('created_at', { ascending: false })
-    if (error) {
+    const result = await api.get<any[]>('/attendance/geofences')
+    if (!result.ok) {
       toast.error('Failed to load geofences')
     } else {
-      setGeofences(data || [])
-      if (data && data.length > 0 && !selected) {
+      const data = result.data || []
+      setGeofences(data)
+      if (data.length > 0 && !selected) {
         setSelected(data[0])
         setMapCenter([data[0].latitude, data[0].longitude])
         setMapZoom(14)
@@ -171,12 +168,24 @@ export default function GeofencesPage() {
 
     try {
       if (editingId) {
-        const { error } = await supabase.from('geofences').update({ name: form.name, latitude: lat, longitude: lng, radius_meters: radius, status: form.status }).eq('id', editingId)
-        if (error) throw error
+        const result = await api.patch<any>(`/attendance/geofences/${editingId}`, {
+          name: form.name,
+          latitude: lat,
+          longitude: lng,
+          radiusMeters: radius,
+          status: form.status,
+        })
+        if (!result.ok) throw new Error(result.error || 'Update failed')
         toast.success('Zone updated')
       } else {
-        const { error } = await supabase.from('geofences').insert({ organization_id: organizationId, name: form.name, latitude: lat, longitude: lng, radius_meters: radius, status: form.status })
-        if (error) throw error
+        const result = await api.post<any>('/attendance/geofences', {
+          name: form.name,
+          latitude: lat,
+          longitude: lng,
+          radiusMeters: radius,
+          status: form.status,
+        })
+        if (!result.ok) throw new Error(result.error || 'Create failed')
         toast.success('Zone created')
       }
       setShowPanel(false)
@@ -189,8 +198,8 @@ export default function GeofencesPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this geofence?')) return
-    const { error } = await supabase.from('geofences').delete().eq('id', id)
-    if (error) toast.error('Delete failed')
+    const result = await api.del<any>(`/attendance/geofences/${id}`)
+    if (!result.ok) toast.error('Delete failed')
     else { toast.success('Deleted'); if (selected?.id === id) setSelected(null); loadGeofences() }
   }
 
@@ -218,14 +227,14 @@ export default function GeofencesPage() {
     if (isNaN(lat) || isNaN(lng) || isNaN(radius)) { toast.error('Invalid coordinates or radius'); return }
 
     try {
-      const { error } = await supabase.from('geofences').update({
+      const result = await api.patch<any>(`/attendance/geofences/${selected.id}`, {
         name: inlineForm.name,
         latitude: lat,
         longitude: lng,
-        radius_meters: radius,
+        radiusMeters: radius,
         status: inlineForm.status,
-      }).eq('id', selected.id)
-      if (error) throw error
+      })
+      if (!result.ok) throw new Error(result.error || 'Update failed')
       toast.success('Zone updated')
       setInlineEditing(false)
       setSelected(prev => prev ? { ...prev, name: inlineForm.name, latitude: lat, longitude: lng, radius_meters: radius, status: inlineForm.status } : null)
@@ -425,8 +434,8 @@ export default function GeofencesPage() {
                           key={s}
                           onClick={async () => {
                             if (selected.status === s) return
-                            const { error } = await supabase.from('geofences').update({ status: s }).eq('id', selected.id)
-                            if (error) { toast.error('Failed to update status'); return }
+                            const result = await api.patch<any>(`/attendance/geofences/${selected.id}`, { status: s })
+                            if (!result.ok) { toast.error('Failed to update status'); return }
                             toast.success(`Zone ${s}`)
                             setSelected(prev => prev ? { ...prev, status: s } : null)
                             loadGeofences()
