@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { 
   Monitor, 
   Plus, 
@@ -65,7 +66,7 @@ interface Assignment {
 }
 
 export default function AssetsAdminPage() {
-  const { organizationId, userId, isLoaded } = useAuth()
+  const { isLoaded } = useAuth()
   const [activeTab, setActiveTab] = useState<'registry' | 'assignments' | 'categories'>('registry')
   const [assets, setAssets] = useState<Asset[]>([])
   const [categories, setCategories] = useState<AssetCategory[]>([])
@@ -106,25 +107,24 @@ export default function AssetsAdminPage() {
   })
 
   useEffect(() => {
-    if (isLoaded && organizationId) {
+    if (isLoaded) {
       loadData()
     }
-  }, [isLoaded, organizationId])
+  }, [isLoaded])
 
   async function loadData() {
     setLoading(true)
     try {
-      const { data: catData } = await supabase.from('asset_categories').select('*').eq('organization_id', organizationId).order('name')
-      setCategories(catData || [])
-
-      const { data: assetData } = await supabase.from('assets').select('*, category:asset_categories(name)').eq('organization_id', organizationId).order('created_at', { ascending: false })
-      setAssets(assetData || [])
-
-      const { data: assignData } = await supabase.from('asset_assignments').select('*, asset:assets(name, serial_number), employee:employees(first_name, last_name)').eq('organization_id', organizationId).order('assigned_at', { ascending: false })
-      setAssignments(assignData || [])
-
-      const { data: empData } = await supabase.from('employees').select('id, first_name, last_name').eq('organization_id', organizationId).eq('employment_status', 'active')
-      setEmployees(empData || [])
+      const [catRes, assetRes, assignRes, empRes] = await Promise.all([
+        api.get<AssetCategory[]>('/asset-categories'),
+        api.get<Asset[]>('/assets'),
+        api.get<Assignment[]>('/asset-assignments'),
+        api.get<any[]>('/employees?status=active&limit=500'),
+      ])
+      setCategories(catRes.data || [])
+      setAssets((assetRes.data || []).map(a => ({ ...a, category: { name: (a as any).category_name || 'Misc' } })))
+      setAssignments(assignRes.data || [])
+      setEmployees(empRes.data || [])
     } finally {
       setLoading(false)
     }
@@ -133,25 +133,24 @@ export default function AssetsAdminPage() {
   const handleSaveAsset = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const data = {
-        ...assetForm,
-        organization_id: organizationId,
+      const payload = {
+        name: assetForm.name,
+        category_id: assetForm.category_id || null,
+        serial_number: assetForm.serial_number,
+        model_number: assetForm.model_number || null,
         purchase_date: assetForm.purchase_date || null,
         purchase_cost: assetForm.purchase_cost ? parseFloat(assetForm.purchase_cost) : null,
-        category_id: assetForm.category_id || null
+        condition: assetForm.condition,
+        status: assetForm.status,
       }
-      if (editingAsset) {
-        const { error } = await supabase.from('assets').update(data).eq('id', editingAsset.id)
-        if (error) throw error
-        toast.success('Asset updated')
-      } else {
-        const { error } = await supabase.from('assets').insert(data)
-        if (error) throw error
-        toast.success('Asset created')
-        setActiveTab('registry')
-      }
+      const res = editingAsset
+        ? await api.patch<Asset>(`/assets/${editingAsset.id}`, payload)
+        : await api.post<Asset>('/assets', payload)
+      if (!res.ok) throw new Error(res.error || 'Failed to save asset')
+      toast.success(editingAsset ? 'Asset updated' : 'Asset created')
       setShowAssetDialog(false)
       await loadData()
+      if (!editingAsset) setActiveTab('registry')
     } catch (error: any) {
       console.error('Failed to save asset:', error)
       toast.error('Failed to save asset: ' + (error?.message || 'Unknown error'))
@@ -161,24 +160,26 @@ export default function AssetsAdminPage() {
   const handleDeleteAsset = async (id: string) => {
     if (!confirm('Are you sure? This will also remove assignment history.')) return
     try {
-      await supabase.from('assets').delete().eq('id', id)
+      const res = await api.del<{ id: string }>(`/assets/${id}`)
+      if (!res.ok) throw new Error(res.error || 'Failed')
       toast.success('Asset deleted')
       loadData()
-    } catch (error) {
-      toast.error('Failed to delete asset')
+    } catch (error: any) {
+      toast.error('Failed to delete asset: ' + (error?.message || 'Unknown error'))
     }
   }
 
   const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await supabase.from('asset_categories').insert({ organization_id: organizationId, name: categoryName })
+      const res = await api.post<AssetCategory>('/asset-categories', { name: categoryName })
+      if (!res.ok) throw new Error(res.error || 'Failed')
       toast.success('Category created')
       setShowCategoryDialog(false)
       setCategoryName('')
       loadData()
-    } catch (error) {
-      toast.error('Failed to create category')
+    } catch (error: any) {
+      toast.error('Failed to create category: ' + (error?.message || 'Unknown error'))
     }
   }
 
@@ -186,18 +187,16 @@ export default function AssetsAdminPage() {
     e.preventDefault()
     if (!selectedAsset) return
     try {
-      await supabase.from('asset_assignments').insert({
-        organization_id: organizationId,
+      const res = await api.post<Assignment>('/asset-assignments', {
         asset_id: selectedAsset.id,
         employee_id: selectedEmployeeId,
-        status: 'active'
       })
-      await supabase.from('assets').update({ status: 'assigned' }).eq('id', selectedAsset.id)
+      if (!res.ok) throw new Error(res.error || 'Failed to assign asset')
       setShowAssignDialog(false)
       loadData()
       toast.success('Asset assigned')
-    } catch (error) {
-      toast.error('Failed to assign asset')
+    } catch (error: any) {
+      toast.error('Failed to assign asset: ' + (error?.message || 'Unknown error'))
     }
   }
 
@@ -211,6 +210,7 @@ export default function AssetsAdminPage() {
     e.preventDefault()
     if (!returningAssignment) return
     try {
+      // NOTE: backend return endpoint is not available yet; keep Supabase fallback for return
       const { error: assignError } = await supabase.from('asset_assignments').update({
         status: 'returned',
         returned_at: new Date(returnForm.return_date).toISOString(),
