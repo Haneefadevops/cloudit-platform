@@ -480,6 +480,88 @@ export class PayrollService {
     }
   }
 
+  async findSalaryRevisions(organizationId: string, employeeId: string) {
+    const result = await this.databaseService.query(
+      `SELECT sr.*,
+              sr.old_basic_salary AS previous_salary,
+              sr.new_basic_salary AS new_salary,
+              concat_ws(' ', approver.first_name, approver.last_name) AS approved_by_name
+       FROM salary_revisions sr
+       LEFT JOIN users approver
+         ON approver.id = sr.approved_by
+        AND approver.organization_id = sr.organization_id
+       WHERE sr.organization_id = $1::uuid
+         AND sr.employee_id = $2::uuid
+       ORDER BY sr.effective_date DESC, sr.created_at DESC`,
+      [organizationId, employeeId],
+    );
+    return result.rows;
+  }
+
+  async createSalaryRevision(
+    organizationId: string,
+    employeeId: string,
+    input: {
+      newBasicSalary: number;
+      effectiveDate: string;
+      reason?: string;
+      approvedBy?: string;
+    },
+  ) {
+    const client = await this.databaseService.connect();
+    try {
+      await client.query("BEGIN");
+
+      const employeeResult = await client.query(
+        `SELECT id, basic_salary
+         FROM employees
+         WHERE id = $1::uuid AND organization_id = $2::uuid
+         FOR UPDATE`,
+        [employeeId, organizationId],
+      );
+      if (employeeResult.rows.length === 0) {
+        throw new NotFoundException("Employee not found");
+      }
+
+      const oldBasicSalary = employeeResult.rows[0].basic_salary;
+      const revisionResult = await client.query(
+        `INSERT INTO salary_revisions (
+           organization_id, employee_id, old_basic_salary, new_basic_salary,
+           effective_date, reason, approved_by, approved_at
+         )
+         VALUES ($1::uuid, $2::uuid, $3, $4, $5::date, $6, $7::uuid, now())
+         RETURNING *,
+                   old_basic_salary AS previous_salary,
+                   new_basic_salary AS new_salary`,
+        [
+          organizationId,
+          employeeId,
+          oldBasicSalary ?? null,
+          input.newBasicSalary,
+          input.effectiveDate,
+          input.reason ?? null,
+          input.approvedBy ?? null,
+        ],
+      );
+
+      await client.query(
+        `UPDATE employees
+         SET basic_salary = $3,
+             updated_at = now()
+         WHERE id = $1::uuid AND organization_id = $2::uuid`,
+        [employeeId, organizationId, input.newBasicSalary],
+      );
+
+      await client.query("COMMIT");
+      return revisionResult.rows[0];
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   sendPayslips(
     _organizationId: string,
     input: { run_id?: string; employee_ids?: string[] },

@@ -70,6 +70,21 @@ const structureRowSchema = z.object({
 
 const upsertStructureSchema = z.array(structureRowSchema).min(1);
 
+const salaryRevisionSchema = z.object({
+  new_basic_salary: z.coerce.number().nonnegative().optional(),
+  new_salary: z.coerce.number().nonnegative().optional(),
+  newBasicSalary: z.coerce.number().nonnegative().optional(),
+  effective_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  effectiveDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  reason: z.string().optional(),
+});
+
 const sendPayslipsSchema = z.object({
   run_id: z.string().uuid().optional(),
   employee_ids: z.array(z.string().uuid()).optional(),
@@ -248,6 +263,57 @@ export class PayrollController {
       parsed.data,
     );
     return { ok: true, data: rows };
+  }
+
+  @Get("salary-revisions/:employeeId")
+  @RequireModule("touchorbit", "payroll")
+  @ApiOperation({ summary: "List salary revisions for an employee" })
+  async findSalaryRevisions(
+    @CurrentOrganization() organizationId: string,
+    @Param("employeeId") employeeId: string,
+  ) {
+    const rows = await this.payrollService.findSalaryRevisions(
+      organizationId,
+      employeeId,
+    );
+    return { ok: true, data: rows };
+  }
+
+  @Post("salary-revisions/:employeeId")
+  @RequireModule("touchorbit", "payroll")
+  @ApiOperation({ summary: "Create a salary revision for an employee" })
+  async createSalaryRevision(
+    @CurrentOrganization() organizationId: string,
+    @CurrentUser("id") userId: string,
+    @Param("employeeId") employeeId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = salaryRevisionSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid salary revision payload");
+    }
+    const newBasicSalary =
+      parsed.data.new_basic_salary ??
+      parsed.data.new_salary ??
+      parsed.data.newBasicSalary;
+    if (newBasicSalary === undefined) {
+      throw new BadRequestException("new_basic_salary is required");
+    }
+
+    const row = await this.payrollService.createSalaryRevision(
+      organizationId,
+      employeeId,
+      {
+        newBasicSalary,
+        effectiveDate:
+          parsed.data.effective_date ??
+          parsed.data.effectiveDate ??
+          new Date().toISOString().split("T")[0],
+        reason: parsed.data.reason,
+        approvedBy: userId,
+      },
+    );
+    return { ok: true, data: row };
   }
 
   @Post("payslips/send")
