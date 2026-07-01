@@ -34,6 +34,7 @@ export class ShiftSwapsService {
       requestingEmployeeId: string;
       requestedEmployeeId?: string;
       rosterAssignmentId: string;
+      targetDate?: string;
       reason?: string;
     },
   ) {
@@ -85,7 +86,7 @@ export class ShiftSwapsService {
           input.requestingEmployeeId,
           input.requestedEmployeeId ?? null,
           date,
-          input.requestedEmployeeId ? date : null,
+          input.targetDate ?? (input.requestedEmployeeId ? date : null),
           input.reason ?? null,
         ],
       );

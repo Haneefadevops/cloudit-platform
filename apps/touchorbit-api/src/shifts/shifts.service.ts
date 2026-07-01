@@ -158,13 +158,16 @@ export class ShiftsService {
       startTime: string;
       endTime: string;
       breakDuration?: number;
+      departmentId?: string;
+      branchId?: string;
     },
   ) {
     const result = await this.databaseService.query(
       `INSERT INTO shift_templates (
-         organization_id, name, start_time, end_time, break_minutes
+         organization_id, name, start_time, end_time, break_minutes,
+         department_id, branch_id
        )
-       VALUES ($1::uuid, $2, $3::time, $4::time, $5)
+       VALUES ($1::uuid, $2, $3::time, $4::time, $5, $6::uuid, $7::uuid)
        RETURNING *`,
       [
         organizationId,
@@ -172,6 +175,8 @@ export class ShiftsService {
         input.startTime,
         input.endTime,
         input.breakDuration ?? 0,
+        input.departmentId ?? null,
+        input.branchId ?? null,
       ],
     );
     return result.rows[0];

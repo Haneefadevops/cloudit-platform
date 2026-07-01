@@ -41,6 +41,10 @@ const createTemplateSchema = z.object({
   start_time: timeSchema,
   end_time: timeSchema,
   break_duration: z.number().int().min(0).optional(),
+  department_id: z.string().uuid().optional(),
+  departmentId: z.string().uuid().optional(),
+  branch_id: z.string().uuid().optional(),
+  branchId: z.string().uuid().optional(),
 });
 
 @ApiTags("shifts")
@@ -148,6 +152,8 @@ export class ShiftsController {
       startTime: parsed.data.start_time,
       endTime: parsed.data.end_time,
       breakDuration: parsed.data.break_duration,
+      departmentId: parsed.data.department_id ?? parsed.data.departmentId,
+      branchId: parsed.data.branch_id ?? parsed.data.branchId,
     });
     return { ok: true, data: row };
   }

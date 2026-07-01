@@ -21,6 +21,8 @@ const createSwapSchema = z.object({
   requesting_employee_id: z.string().uuid(),
   requested_employee_id: z.string().uuid().optional(),
   roster_assignment_id: z.string().uuid(),
+  target_date: dateSchema.optional(),
+  targetDate: dateSchema.optional(),
   reason: z.string().optional(),
 });
 
@@ -62,6 +64,7 @@ export class ShiftSwapsController {
       requestingEmployeeId: parsed.data.requesting_employee_id,
       requestedEmployeeId: parsed.data.requested_employee_id,
       rosterAssignmentId: parsed.data.roster_assignment_id,
+      targetDate: parsed.data.target_date ?? parsed.data.targetDate,
       reason: parsed.data.reason,
     });
     return { ok: true, data: row };
