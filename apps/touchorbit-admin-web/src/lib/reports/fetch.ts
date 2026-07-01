@@ -2,6 +2,11 @@
 // Each function returns { data, meta, error }.
 // Call buildExportUrl(...) to get a direct CSV download link.
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL
+
+// Modules that have been migrated to the NestJS backend.
+const BACKEND_REPORT_MODULES = ['attendance', 'leave', 'payroll', 'roster']
+
 export interface ReportFilters {
   startDate:    string
   endDate:      string
@@ -98,13 +103,24 @@ async function fetchModule<T>(
   filters: ReportFilters,
 ): Promise<ReportResponse<T>> {
   try {
-    const res = await fetch(`/api/reports/${module}?${buildParams(filters)}`)
+    const params = buildParams(filters)
+    const useBackend = BACKEND_REPORT_MODULES.includes(module) && API_URL
+    const url = useBackend
+      ? `${API_URL}/api/reports/${module}?${params}`
+      : `/api/reports/${module}?${params}`
+
+    const res = await fetch(url, {
+      credentials: useBackend ? 'include' : 'same-origin',
+    })
+
     if (!res.ok) {
       const json = await res.json().catch(() => ({}))
-      return { data: [], meta: {}, error: json.error ?? `HTTP ${res.status}` }
+      return { data: [], meta: {}, error: json.error ?? json.message ?? `HTTP ${res.status}` }
     }
-    const { data, meta } = await res.json()
-    return { data: data ?? [], meta: meta ?? {}, error: null }
+
+    const payload = await res.json()
+    // Backend reports return { data, meta, error } directly; internal routes do too.
+    return { data: payload.data ?? [], meta: payload.meta ?? {}, error: null }
   } catch (err: any) {
     return { data: [], meta: {}, error: err.message ?? 'Network error' }
   }
@@ -121,6 +137,7 @@ export const reportFetch = {
   overtime:   (f: ReportFilters) => fetchModule<OvertimeRow>('overtime', f),
   payroll:    (f: ReportFilters) => fetchModule<PayrollRow>('payroll', f),
   expense:    (f: ReportFilters) => fetchModule<ExpenseRow>('expense', f),
+  roster:     (f: ReportFilters) => fetchModule<AdherenceRow>('roster', f),
 }
 
 // ── Export URL builder (triggers browser download via <a> click) ─────────────
