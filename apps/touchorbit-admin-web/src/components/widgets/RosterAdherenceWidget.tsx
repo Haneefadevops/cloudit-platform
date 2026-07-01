@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { WidgetShell } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
@@ -15,26 +15,32 @@ export function RosterAdherenceWidget({ organizationId, editMode, onRemove }: Wi
   const [error, setError] = useState(false)
   const [data, setData] = useState({ onTime: 0, late: 0, absent: 0 })
 
+  function getWeekStart(date: Date) {
+    const d = new Date(date)
+    const day = d.getDay()
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+    d.setDate(diff)
+    d.setHours(0, 0, 0, 0)
+    return d.toISOString().split('T')[0]
+  }
+
   async function loadData() {
     setLoading(true)
     setError(false)
     try {
       const today = new Date().toISOString().split('T')[0]
-      const { data: rows } = await supabase
-        .from('shift_adherence')
-        .select('status')
-        .eq('organization_id', organizationId)
-        .eq('date', today)
+      const weekStart = getWeekStart(new Date())
+      const res = await api.get<{ date: string; status: string }[]>(`/roster/adherence?week_start=${weekStart}`)
+      if (!res.ok) throw new Error(res.error)
 
-      if (rows) {
-        let onTime = 0, late = 0, absent = 0
-        for (const r of rows) {
-          if (r.status === 'on_time') onTime++
-          else if (r.status === 'late' || r.status === 'late_early') late++
-          else if (r.status === 'absent') absent++
-        }
-        setData({ onTime, late, absent })
+      const rows = (res.data || []).filter(r => r.date === today)
+      let onTime = 0, late = 0, absent = 0
+      for (const r of rows) {
+        if (r.status === 'on_time') onTime++
+        else if (r.status === 'late' || r.status === 'late_early') late++
+        else if (r.status === 'absent') absent++
       }
+      setData({ onTime, late, absent })
     } catch (e) {
       console.error('Error loading roster adherence widget data:', e)
       setError(true)

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { Plus, Edit2, Trash2, Clock, Users, RefreshCw, X, ChevronRight, Check } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -15,6 +16,7 @@ interface Shift {
   grace_period_minutes: number
   color: string
   status: 'active' | 'inactive'
+  break_minutes?: number
 }
 
 interface ShiftFormData {
@@ -56,8 +58,12 @@ export default function ShiftsPage() {
 
   async function loadShifts() {
     setLoading(true)
-    const { data, error } = await supabase.from('shifts').select('*').eq('organization_id', organizationId).order('start_time')
-    if (!error) setShifts(data || [])
+    const res = await api.get<Shift[]>('/shifts')
+    if (res.ok) {
+      setShifts(res.data || [])
+    } else {
+      toast.error(res.error || 'Failed to load shifts')
+    }
     setLoading(false)
   }
 
@@ -67,17 +73,31 @@ export default function ShiftsPage() {
 
     try {
       if (editingShift) {
-        await supabase.from('shifts').update(formData).eq('id', editingShift.id)
+        const res = await api.patch<Shift>(`/shifts/${editingShift.id}`, {
+          name: formData.name,
+          start_time: formData.start_time,
+          end_time: formData.end_time,
+          color: formData.color,
+        })
+        if (!res.ok) throw new Error(res.error)
         toast.success('Shift updated')
       } else {
-        await supabase.from('shifts').insert({ ...formData, organization_id: organizationId, status: 'active' })
+        const res = await api.post<Shift>('/shifts', {
+          name: formData.name,
+          start_time: formData.start_time,
+          end_time: formData.end_time,
+          break_duration: 0,
+          color: formData.color,
+        })
+        if (!res.ok) throw new Error(res.error)
         toast.success('Shift created')
       }
       setShowForm(false); setEditingShift(null); loadShifts()
-    } catch (error) { toast.error('Failed to save shift') }
+    } catch (error: any) { toast.error(error.message || 'Failed to save shift') }
   }
 
   async function toggleStatus(shiftId: string, currentStatus: string) {
+    // TODO: backend PATCH /shifts/:id does not yet support status
     const { error } = await supabase.from('shifts').update({ status: currentStatus === 'active' ? 'inactive' : 'active' }).eq('id', shiftId)
     if (!error) { toast.success('Status updated'); loadShifts() }
   }
@@ -96,8 +116,9 @@ export default function ShiftsPage() {
 
   async function handleDelete(shiftId: string) {
     if (!confirm('Delete this shift?')) return
-    const { error } = await supabase.from('shifts').delete().eq('id', shiftId)
-    if (!error) { toast.success('Shift deleted'); loadShifts() }
+    const res = await api.del<{ deleted: boolean; id: string }>(`/shifts/${shiftId}`)
+    if (res.ok) { toast.success('Shift deleted'); loadShifts() }
+    else { toast.error(res.error || 'Failed to delete shift') }
   }
 
   function formatTime(time: string): string {

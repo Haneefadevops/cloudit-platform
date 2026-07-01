@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { EmployeeLayout } from '@/components/employee-layout'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { 
   CalendarDays, 
   ChevronLeft, 
@@ -29,6 +30,7 @@ import { AvailabilitySetter } from '@/components/roster/AvailabilitySetter'
 import { ShiftMarketplace } from '@/components/roster/ShiftMarketplace'
 
 interface RosterEntry {
+  id?: string
   employee_id: string
   date: string | null
   shift_name: string | null
@@ -45,6 +47,7 @@ interface ClockEvent {
 
 interface SwapRequest {
   id: string
+  requester_employee_id: string
   target_employee_id: string | null
   requester_date: string
   target_date: string
@@ -72,6 +75,7 @@ export default function EmployeeRosterPage() {
   const [weekStatus, setWeekStatus] = useState<'draft' | 'published' | 'locked'>('draft')
   const [mySwaps, setMySwaps] = useState<SwapRequest[]>([])
   const [allEmployees, setAllEmployees] = useState<{id: string, first_name: string, last_name: string}[]>([])
+  const [employeeId, setEmployeeId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   
   const [showSwapModal, setShowSwapModal] = useState(false)
@@ -97,43 +101,57 @@ export default function EmployeeRosterPage() {
     }
   }, [isLoaded, isSignedIn, currentWeekStart])
 
+  function splitName(fullName?: string | null) {
+    if (!fullName) return { first_name: '', last_name: '' }
+    const parts = fullName.trim().split(/\s+/)
+    return { first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '' }
+  }
+
   async function loadMyRoster() {
     setLoading(true)
     try {
       const { data: employee } = await supabase.from('employees').select('id, organization_id').eq('user_id', userId).single()
       if (!employee) { setLoading(false); return }
+      setEmployeeId(employee.id)
 
       const weekStartStr = currentWeekStart.toISOString().split('T')[0]
       const nextWeekStartStr = new Date(currentWeekStart.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-      const { data: roster, error: rosterError } = await supabase.rpc('get_roster_week', { p_week_start: weekStartStr })
-      if (rosterError) throw rosterError
-      setMyRoster((roster || []).filter((r: any) => r.employee_id === employee.id))
+      const rosterRes = await api.get<(RosterEntry & { id?: string; shift_id?: string | null; employee_id: string })[]>(`/roster/week?week_start=${weekStartStr}`)
+      if (!rosterRes.ok) throw new Error(rosterRes.error)
+      setMyRoster((rosterRes.data || []).filter(r => r.employee_id === employee.id))
 
       const { data: events, error: eventsError } = await supabase.from('clock_events').select('event_type, timestamp').eq('employee_id', employee.id).gte('timestamp', weekStartStr).lt('timestamp', nextWeekStartStr).order('timestamp', { ascending: true })
       if (eventsError) throw eventsError
       setClockEvents(events || [])
 
-      const { data: status } = await supabase.rpc('get_roster_week_status', { p_week_start: weekStartStr })
-      setWeekStatus(status || 'draft')
+      const statusRes = await api.get<{ status: string }>(`/roster/week-status?week_start=${weekStartStr}`)
+      if (!statusRes.ok) throw new Error(statusRes.error)
+      setWeekStatus((statusRes.data?.status as 'draft' | 'published' | 'locked') || 'draft')
+
+      const swapsRes = await api.get<(SwapRequest & { requester_name?: string; target_name?: string; claimed_name?: string })[]>('/shift-swaps')
+      if (!swapsRes.ok) throw new Error(swapsRes.error)
+      const allSwaps = (swapsRes.data || []).map(s => ({
+        ...s,
+        requester: splitName(s.requester_name),
+        target: splitName(s.target_name),
+        claimer: splitName(s.claimed_name),
+      }))
 
       const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-      const { data: swapData } = await supabase.from('shift_swap_requests').select('*, requester:employees!requester_employee_id(first_name, last_name), target:employees!target_employee_id(first_name, last_name)').or(`requester_employee_id.eq.${employee.id},target_employee_id.eq.${employee.id}`).gte('created_at', thirtyDaysAgo.toISOString()).order('created_at', { ascending: false })
-      setMySwaps(swapData || [])
+      setMySwaps(allSwaps.filter(s =>
+        (s.requester_employee_id === employee.id || s.target_employee_id === employee.id) &&
+        new Date(s.created_at) >= thirtyDaysAgo
+      ))
+
+      setOpenSwaps(allSwaps.filter(s =>
+        s.target_employee_id === null &&
+        s.status === 'pending' &&
+        s.requester_employee_id !== employee.id
+      ))
 
       const { data: colleagues } = await supabase.from('employees').select('id, first_name, last_name').eq('organization_id', organizationId).neq('id', employee.id).is('termination_date', null).order('first_name')
       setAllEmployees(colleagues || [])
-
-      // Load open marketplace swaps (target_employee_id is null = open)
-      const { data: openSwapData } = await supabase
-        .from('shift_swap_requests')
-        .select('*, requester:employees!requester_employee_id(first_name, last_name)')
-        .eq('organization_id', organizationId)
-        .is('target_employee_id', null)
-        .eq('status', 'pending')
-        .neq('requester_employee_id', employee.id)
-        .order('created_at', { ascending: false })
-      setOpenSwaps(openSwapData || [])
     } catch (error) { toast.error('Failed to load schedule') } finally { setLoading(false) }
   }
 
@@ -170,9 +188,10 @@ export default function EmployeeRosterPage() {
   }
 
   const handleClaimSwap = async (swapId: string) => {
+    if (!employeeId) return
     try {
-      const res = await fetch(`/api/shift-swaps/${swapId}/claim`, { method: 'POST' })
-      if (!res.ok) throw new Error('Failed')
+      const res = await api.post(`/shift-swaps/${swapId}/claim`, { claimer_employee_id: employeeId })
+      if (!res.ok) throw new Error(res.error)
       toast.success('Swap claimed!')
       loadMyRoster()
     } catch {
@@ -183,21 +202,27 @@ export default function EmployeeRosterPage() {
   const handleSubmitSwap = async (e: React.FormEvent) => {
     e.preventDefault(); setSubmittingSwap(true)
     try {
-      const res = await fetch('/api/shift-swaps', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requester_date: swapForm.requester_date,
-          target_date: swapForm.target_date,
-          target_employee_id: swapForm.is_open ? null : swapForm.target_employee_id,
-        }),
-      })
-      if (!res.ok) throw new Error('Failed')
+      if (!employeeId) throw new Error('Employee not loaded')
+      const assignment = myRoster.find(r => r.date === swapForm.requester_date)
+      if (!assignment?.id) throw new Error('No roster assignment found for selected date')
+
+      const body: Record<string, unknown> = {
+        requesting_employee_id: employeeId,
+        roster_assignment_id: assignment.id,
+        requested_employee_id: swapForm.is_open ? undefined : swapForm.target_employee_id,
+      }
+      if (swapForm.target_date) {
+        // TODO: backend shift-swap create does not yet accept a custom target_date
+        body.target_date = swapForm.target_date
+      }
+
+      const res = await api.post('/shift-swaps', body)
+      if (!res.ok) throw new Error(res.error)
       toast.success('Swap request sent')
       setShowSwapModal(false)
       loadMyRoster()
-    } catch {
-      toast.error('Request failed')
+    } catch (error: any) {
+      toast.error(error.message || 'Request failed')
     } finally {
       setSubmittingSwap(false)
     }

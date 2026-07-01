@@ -5,6 +5,7 @@ import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { usePermissions } from '@/hooks/use-permissions'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import {
   CalendarDays,
   Plus,
@@ -42,6 +43,7 @@ interface ShiftTemplate {
 }
 
 interface RosterEntry {
+  id?: string
   employee_id: string
   employee_name: string
   department_id: string | null
@@ -204,6 +206,12 @@ export default function RosterPage() {
     return () => { supabase.removeChannel(channel) }
   }, [organizationId, currentWeekStart, managedScopeId])
 
+  function splitName(fullName?: string | null) {
+    if (!fullName) return { first_name: '', last_name: '' }
+    const parts = fullName.trim().split(/\s+/)
+    return { first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '' }
+  }
+
   async function loadInitialData(scopeId?: string | null, scopeType?: 'dept' | 'branch') {
     setLoading(true)
     try {
@@ -227,26 +235,20 @@ export default function RosterPage() {
       setEmployees(empData || [])
 
       // 2. Load Week Status
-      const { data: status } = await supabase.rpc('get_roster_week_status', {
-        p_week_start: weekStartStr
-      })
-      setWeekStatus(status || 'draft')
+      const statusRes = await api.get<{ status: string }>(`/roster/week-status?week_start=${weekStartStr}`)
+      if (!statusRes.ok) throw new Error(statusRes.error)
+      setWeekStatus((statusRes.data?.status as 'draft' | 'published' | 'locked') || 'draft')
 
       if (view === 'roster') {
-        // 3. Load Templates from unified shifts table
-        const { data: tempData } = await supabase
-          .from('shifts')
-          .select('*')
-          .eq('organization_id', organizationId)
-          .eq('status', 'active')
-          .order('name')
-        setTemplates(tempData || [])
+        // 3. Load Templates from backend shifts endpoint
+        const templatesRes = await api.get<ShiftTemplate[]>('/shifts')
+        if (!templatesRes.ok) throw new Error(templatesRes.error)
+        setTemplates((templatesRes.data || []).filter(t => t.status === 'active'))
 
         // 4. Load Roster assignments
-        const { data: roster } = await supabase.rpc('get_roster_week', {
-          p_week_start: weekStartStr
-        })
-        setRosterData(roster || [])
+        const rosterRes = await api.get<(RosterEntry & { shift_id?: string | null })[]>(`/roster/week?week_start=${weekStartStr}`)
+        if (!rosterRes.ok) throw new Error(rosterRes.error)
+        setRosterData((rosterRes.data || []).map(r => ({ ...r, shift_template_id: r.shift_id ?? null })))
 
         // 5. Load Overtime records (pending/awaiting)
         const { data: otData } = await supabase
@@ -260,18 +262,22 @@ export default function RosterPage() {
         setOvertimeRecords(otData || [])
 
         // 6. Load No-Shows
-        const { data: nsData } = await supabase.rpc('get_todays_no_shows')
-        setNoShows(nsData || [])
-        if ((nsData?.length || 0) > 3) { /* auto-collapse handled by component */ }
+        const noShowsRes = await api.get<NoShow[]>('/roster/no-shows')
+        if (!noShowsRes.ok) throw new Error(noShowsRes.error)
+        setNoShows(noShowsRes.data || [])
 
         // 7. Load Pending & Claimed Swaps
-        const { data: swapData } = await supabase
-          .from('shift_swap_requests')
-          .select('*, requester:employees!requester_employee_id(first_name, last_name), target:employees!target_employee_id(first_name, last_name), claimer:employees!claimed_by(first_name, last_name)')
-          .eq('organization_id', organizationId)
-          .in('status', ['pending', 'claimed'])
-          .order('created_at')
-        setPendingSwaps(swapData || [])
+        const swapsRes = await api.get<(SwapRequest & { requester_name?: string; target_name?: string; claimed_name?: string })[]>('/shift-swaps')
+        if (!swapsRes.ok) throw new Error(swapsRes.error)
+        const mappedSwaps = (swapsRes.data || [])
+          .filter(s => s.status === 'pending' || s.status === 'claimed')
+          .map(s => ({
+            ...s,
+            requester: splitName(s.requester_name),
+            target: splitName(s.target_name),
+            claimer: splitName(s.claimed_name),
+          }))
+        setPendingSwaps(mappedSwaps)
 
         // 8. Load employee availability for this week
         const { data: avData } = await supabase
@@ -284,11 +290,9 @@ export default function RosterPage() {
 
       } else {
         // Load Adherence data
-        const { data: adherence, error } = await supabase.rpc('get_shift_adherence', {
-          p_week_start: weekStartStr
-        })
-        if (error) throw error
-        setAdherenceData(adherence || [])
+        const adherenceRes = await api.get<AdherenceEntry[]>(`/roster/adherence?week_start=${weekStartStr}`)
+        if (!adherenceRes.ok) throw new Error(adherenceRes.error)
+        setAdherenceData(adherenceRes.data || [])
       }
 
     } catch (error) {
@@ -315,26 +319,40 @@ export default function RosterPage() {
     setSavingId(key)
 
     try {
-      const { error } = await supabase.rpc('upsert_roster_assignment', {
-        p_employee_id: employeeId,
-        p_date: date,
-        p_shift_template_id: shiftTemplateId,
-        p_notes: null
+      const existing = rosterData.find(r => r.employee_id === employeeId && r.date === date)
+
+      if (!shiftTemplateId) {
+        // Clearing a shift → delete the assignment if one exists
+        if (existing?.id) {
+          const delRes = await api.del(`/roster/assignments/${existing.id}`)
+          if (!delRes.ok) throw new Error(delRes.error)
+          setRosterData(prev => prev.filter(r => !(r.employee_id === employeeId && r.date === date)))
+        }
+        setSavingId(null)
+        return
+      }
+
+      const res = await api.post<RosterEntry>('/roster/assignments', {
+        employee_id: employeeId,
+        shift_id: shiftTemplateId,
+        assignment_date: date,
       })
 
-      if (error) throw error
+      if (!res.ok) throw new Error(res.error)
 
       // Update local state
       setRosterData(prev => {
-        const existing = prev.findIndex(r => r.employee_id === employeeId && r.date === date)
+        const idx = prev.findIndex(r => r.employee_id === employeeId && r.date === date)
         const template = templates.find(t => t.id === shiftTemplateId)
 
         const newEntry: RosterEntry = {
+          ...(res.data || {}),
+          id: res.data?.id || existing?.id,
           employee_id: employeeId,
-          employee_name: '', // not strictly needed for grid mapping
-          department_id: null,
-          department_name: null,
-          branch_id: null,
+          employee_name: existing?.employee_name || '',
+          department_id: existing?.department_id || null,
+          department_name: existing?.department_name || null,
+          branch_id: existing?.branch_id || null,
           date,
           shift_template_id: shiftTemplateId,
           shift_name: template?.name || null,
@@ -344,9 +362,9 @@ export default function RosterPage() {
           notes: null
         }
 
-        if (existing > -1) {
+        if (idx > -1) {
           const updated = [...prev]
-          updated[existing] = { ...updated[existing], ...newEntry }
+          updated[idx] = { ...updated[idx], ...newEntry }
           return updated
         } else {
           return [...prev, newEntry]
@@ -371,14 +389,14 @@ export default function RosterPage() {
     prevWeek.setDate(prevWeek.getDate() - 7)
 
     try {
-      const { data: count, error } = await supabase.rpc('copy_roster_week', {
-        p_source_week_start: prevWeek.toISOString().split('T')[0],
-        p_target_week_start: currentWeekStart.toISOString().split('T')[0]
+      const res = await api.post<{ copied: number }>('/roster/copy-week', {
+        source_week_start: prevWeek.toISOString().split('T')[0],
+        target_week_start: currentWeekStart.toISOString().split('T')[0]
       })
 
-      if (error) throw error
+      if (!res.ok) throw new Error(res.error)
 
-      toast.success(`${count} assignments copied from last week`)
+      toast.success(`${res.data?.copied ?? 0} assignments copied from last week`)
       // Refresh data
       loadInitialData(managedScopeId, isDeptManager ? 'dept' : isBranchManager ? 'branch' : undefined)
     } catch (error) {
@@ -391,6 +409,7 @@ export default function RosterPage() {
     e.preventDefault()
     setAddingTemplate(true)
     try {
+      // TODO: backend /shifts does not yet support department_id/branch_id/status
       const { data, error } = await supabase
         .from('shifts')
         .insert({
@@ -408,7 +427,7 @@ export default function RosterPage() {
 
       if (error) throw error
 
-      setTemplates(prev => [...prev, data])
+      setTemplates(prev => [...prev, data as ShiftTemplate])
       setNewTemplate({
         name: '',
         start_time: '08:00',
@@ -429,6 +448,7 @@ export default function RosterPage() {
   const toggleTemplateActive = async (id: string, currentStatus: 'active' | 'inactive') => {
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
     try {
+      // TODO: backend PATCH /shifts/:id does not yet support status
       const { error } = await supabase
         .from('shifts')
         .update({ status: newStatus })
@@ -479,14 +499,27 @@ export default function RosterPage() {
       return
     }
 
+    const weekStartStr = currentWeekStart.toISOString().split('T')[0]
+
     try {
-      await supabase.rpc('set_roster_week_status', {
-        p_week_start: currentWeekStart.toISOString().split('T')[0],
-        p_status: status
-      })
+      if (status === 'published') {
+        const res = await api.post('/roster/publish', { week_start: weekStartStr })
+        if (!res.ok) throw new Error(res.error)
+      } else if (status === 'locked') {
+        const res = await api.post('/roster/lock', { week_start: weekStartStr })
+        if (!res.ok) throw new Error(res.error)
+      } else {
+        // TODO: backend has no unlock/set-draft endpoint yet
+        const { error } = await supabase.rpc('set_roster_week_status', {
+          p_week_start: weekStartStr,
+          p_status: status
+        })
+        if (error) throw error
+      }
       setWeekStatus(status)
       toast.success(`Roster ${status === 'published' ? 'published — employees can see their schedule' : status === 'locked' ? 'locked — no further edits allowed' : 'unlocked'}`)
     } catch (error) {
+      console.error('Error updating roster status:', error)
       toast.error('Failed to update roster status')
     }
   }
@@ -496,8 +529,8 @@ export default function RosterPage() {
   }
 
   const refreshNoShows = async () => {
-    const { data } = await supabase.rpc('get_todays_no_shows')
-    setNoShows(data || [])
+    const res = await api.get<NoShow[]>('/roster/no-shows')
+    if (res.ok) setNoShows(res.data || [])
   }
 
   const adherenceStats = {

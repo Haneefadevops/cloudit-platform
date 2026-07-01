@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Check, X, Loader2, ArrowRight, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
+import { api } from '@/lib/api'
 
 interface SwapRequest {
   id: string
@@ -29,8 +30,8 @@ export function SwapApprovalQueue({ swaps, onAction }: SwapApprovalQueueProps) {
   const handleApprove = async (swapId: string) => {
     setActingId(swapId)
     try {
-      const res = await fetch(`/api/shift-swaps/${swapId}/approve`, { method: 'POST' })
-      if (!res.ok) throw new Error('Failed')
+      const res = await api.post(`/shift-swaps/${swapId}/approve`, {})
+      if (!res.ok) throw new Error(res.error)
       toast.success('Swap approved')
       onAction()
     } catch {
@@ -43,8 +44,8 @@ export function SwapApprovalQueue({ swaps, onAction }: SwapApprovalQueueProps) {
   const handleReject = async (swapId: string) => {
     setActingId(swapId)
     try {
-      const res = await fetch(`/api/shift-swaps/${swapId}/reject`, { method: 'POST' })
-      if (!res.ok) throw new Error('Failed')
+      const res = await api.post(`/shift-swaps/${swapId}/reject`, {})
+      if (!res.ok) throw new Error(res.error)
       toast.success('Swap rejected')
       onAction()
     } catch {

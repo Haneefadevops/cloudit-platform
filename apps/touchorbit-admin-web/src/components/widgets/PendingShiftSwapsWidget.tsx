@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { WidgetShell } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
@@ -17,13 +17,11 @@ export function PendingShiftSwapsWidget({ organizationId, editMode, onRemove }: 
     setLoading(true)
     setError(false)
     try {
-      const { count } = await supabase
-        .from('shift_swap_requests')
-        .select('id', { count: 'exact', head: true })
-        .eq('organization_id', organizationId)
-        .eq('status', 'pending')
+      const res = await api.get<{ status: string }[]>('/shift-swaps')
+      if (!res.ok) throw new Error(res.error)
 
-      setData({ count: count ?? 0 })
+      const count = (res.data || []).filter(s => s.status === 'pending').length
+      setData({ count })
     } catch (e) {
       console.error('Error loading shift swaps widget data:', e)
       setError(true)
