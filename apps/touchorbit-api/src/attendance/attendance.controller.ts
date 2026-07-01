@@ -65,6 +65,11 @@ const correctionSchema = z.object({
   reason: z.string().min(1),
 });
 
+const rejectCorrectionSchema = z.object({
+  rejectionReason: z.string().optional(),
+  reason: z.string().optional(),
+});
+
 const geofenceSchema = z.object({
   name: z.string().min(1),
   latitude: z.number(),
@@ -243,6 +248,45 @@ export class AttendanceController {
     const row = await this.attendanceService.createCorrection(
       organizationId,
       parsed.data,
+    );
+    return { ok: true, data: row };
+  }
+
+  @Patch("corrections/:id/approve")
+  @RequireModule("touchorbit", "attendance")
+  @ApiOperation({ summary: "Approve an attendance correction request" })
+  async approveCorrection(
+    @CurrentOrganization() organizationId: string,
+    @AuthUser("id") userId: string,
+    @Param("id") id: string,
+  ) {
+    const row = await this.attendanceService.approveCorrection(
+      organizationId,
+      id,
+      userId,
+    );
+    return { ok: true, data: row };
+  }
+
+  @Patch("corrections/:id/reject")
+  @RequireModule("touchorbit", "attendance")
+  @ApiOperation({ summary: "Reject an attendance correction request" })
+  async rejectCorrection(
+    @CurrentOrganization() organizationId: string,
+    @AuthUser("id") userId: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = rejectCorrectionSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid rejection payload");
+    }
+
+    const row = await this.attendanceService.rejectCorrection(
+      organizationId,
+      id,
+      userId,
+      parsed.data.rejectionReason ?? parsed.data.reason,
     );
     return { ok: true, data: row };
   }

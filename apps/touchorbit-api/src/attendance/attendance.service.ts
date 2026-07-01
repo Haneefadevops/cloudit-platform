@@ -282,6 +282,72 @@ export class AttendanceService {
     return result.rows[0];
   }
 
+  async approveCorrection(
+    organizationId: string,
+    id: string,
+    userId: string,
+  ) {
+    return this.updateCorrectionStatus(organizationId, id, userId, "approved");
+  }
+
+  async rejectCorrection(
+    organizationId: string,
+    id: string,
+    userId: string,
+    rejectionReason?: string,
+  ) {
+    return this.updateCorrectionStatus(
+      organizationId,
+      id,
+      userId,
+      "rejected",
+      rejectionReason,
+    );
+  }
+
+  private async updateCorrectionStatus(
+    organizationId: string,
+    id: string,
+    userId: string,
+    status: "approved" | "rejected",
+    rejectionReason?: string,
+  ) {
+    const approverId = await this.findEmployeeIdForUser(organizationId, userId);
+    const result = await this.databaseService.query(
+      `UPDATE attendance_corrections
+       SET status = $3,
+           approver_id = $4::uuid,
+           approved_at = CASE WHEN $3 = 'approved' THEN now() ELSE approved_at END,
+           rejection_reason = CASE WHEN $3 = 'rejected' THEN COALESCE($5, rejection_reason) ELSE NULL END,
+           updated_at = now()
+       WHERE id = $1::uuid AND organization_id = $2::uuid
+       RETURNING *`,
+      [id, organizationId, status, approverId, rejectionReason ?? null],
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException("Attendance correction not found");
+    }
+
+    return result.rows[0];
+  }
+
+  private async findEmployeeIdForUser(organizationId: string, userId: string) {
+    const result = await this.databaseService.query(
+      `SELECT id
+       FROM employees
+       WHERE organization_id = $1::uuid AND user_id = $2::uuid
+       LIMIT 1`,
+      [organizationId, userId],
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException("Approver employee not found");
+    }
+
+    return result.rows[0].id as string;
+  }
+
   async findGeofences(organizationId: string) {
     const result = await this.databaseService.query(
       `SELECT * FROM geofences
