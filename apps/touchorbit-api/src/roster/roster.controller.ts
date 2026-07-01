@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -37,6 +38,10 @@ const copyWeekSchema = z.object({
 
 const weekActionSchema = z.object({
   week_start: dateSchema,
+});
+
+const toggleShiftStatusSchema = z.object({
+  status: z.enum(["active", "inactive"]).optional(),
 });
 
 const noShowQuerySchema = z.object({
@@ -174,6 +179,46 @@ export class RosterController {
       organizationId,
       parsed.data.week_start,
       userId,
+    );
+    return { ok: true, data: row };
+  }
+
+  @Post("week/unlock")
+  @RequireModule("touchorbit", "attendance")
+  @ApiOperation({ summary: "Unlock roster week" })
+  async unlockWeek(
+    @CurrentOrganization() organizationId: string,
+    @CurrentUser("id") userId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = weekActionSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid week_start");
+    }
+    const row = await this.rosterService.unlockWeek(
+      organizationId,
+      parsed.data.week_start,
+      userId,
+    );
+    return { ok: true, data: row };
+  }
+
+  @Patch("shifts/:id/toggle-status")
+  @RequireModule("touchorbit", "attendance")
+  @ApiOperation({ summary: "Toggle shift active status" })
+  async toggleShiftStatus(
+    @CurrentOrganization() organizationId: string,
+    @Param("id") shiftId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = toggleShiftStatusSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid shift status payload");
+    }
+    const row = await this.rosterService.toggleShiftStatus(
+      organizationId,
+      shiftId,
+      parsed.data.status,
     );
     return { ok: true, data: row };
   }

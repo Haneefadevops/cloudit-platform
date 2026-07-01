@@ -252,6 +252,45 @@ export class RosterService {
     return result.rows[0];
   }
 
+  async unlockWeek(organizationId: string, weekStart: string, userId?: string) {
+    const result = await this.databaseService.query(
+      `INSERT INTO roster_week_status (
+         organization_id, week_start, status, published_at, published_by, updated_by
+       )
+       VALUES ($1::uuid, $2::date, 'published', now(), $3::uuid, $3::uuid)
+       ON CONFLICT (organization_id, week_start) DO UPDATE
+       SET status = 'published',
+           locked_at = NULL,
+           locked_by = NULL,
+           published_at = COALESCE(roster_week_status.published_at, now()),
+           published_by = COALESCE(roster_week_status.published_by, EXCLUDED.published_by),
+           updated_by = EXCLUDED.updated_by,
+           updated_at = now()
+       RETURNING *`,
+      [organizationId, weekStart, userId ?? null],
+    );
+    return result.rows[0];
+  }
+
+  async toggleShiftStatus(
+    organizationId: string,
+    shiftId: string,
+    status?: "active" | "inactive",
+  ) {
+    const result = await this.databaseService.query(
+      `UPDATE shifts
+       SET status = COALESCE($3, CASE WHEN COALESCE(status, 'active') = 'active' THEN 'inactive' ELSE 'active' END),
+           updated_at = now()
+       WHERE id = $1::uuid AND organization_id = $2::uuid
+       RETURNING *`,
+      [shiftId, organizationId, status ?? null],
+    );
+    if (result.rows.length === 0) {
+      throw new NotFoundException("Shift not found");
+    }
+    return result.rows[0];
+  }
+
   async getNoShows(organizationId: string, date?: string) {
     const targetDate = date ?? new Date().toISOString().split("T")[0];
     const result = await this.databaseService.query(
