@@ -17,19 +17,33 @@ import {
 } from "@cloudit/ui";
 import { PlugZap, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { StatsCard } from "@/components/stats-card";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import type {
   IntegrationConnection,
   IntegrationProvider,
+  IntegrationSummary,
   IntegrationStatus,
   Property,
   PaginatedResponse,
 } from "@/lib/types";
 
 const providerOptions = [
-  { value: "channel_manager", label: "Channel Manager" },
-  { value: "pos", label: "POS" },
+  { value: "channel_manager", label: "Booking.com / Agoda" },
+  { value: "pos", label: "Restaurant POS" },
+];
+
+const channelOptions = [
+  { value: "booking_com", label: "Booking.com" },
+  { value: "agoda", label: "Agoda" },
+  { value: "multi_channel", label: "Booking.com + Agoda" },
+];
+
+const posOptions = [
+  { value: "restaurant_pos", label: "Restaurant POS" },
+  { value: "bar_pos", label: "Bar POS" },
+  { value: "spa_pos", label: "Spa POS" },
 ];
 
 const statusOptions = [
@@ -45,16 +59,18 @@ const statusBadgeVariant: Record<IntegrationStatus, string> = {
 };
 
 const providerLabels: Record<IntegrationProvider, string> = {
-  channel_manager: "Channel Manager",
-  pos: "POS",
+  channel_manager: "Booking.com / Agoda",
+  pos: "Restaurant POS",
 };
 
 export default function IntegrationsPage() {
   const [connections, setConnections] = useState<IntegrationConnection[]>([]);
+  const [summary, setSummary] = useState<IntegrationSummary | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [formData, setFormData] = useState<Partial<IntegrationConnection>>({
     provider: "channel_manager",
     status: "active",
+    config: { channel: "multi_channel" },
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -66,11 +82,13 @@ export default function IntegrationsPage() {
   async function loadData() {
     try {
       setIsLoading(true);
-      const [integrationRes, propertyRes] = await Promise.all([
+      const [integrationRes, summaryRes, propertyRes] = await Promise.all([
         api.get<IntegrationConnection[] | { data: IntegrationConnection[] }>("/integrations"),
+        api.get<IntegrationSummary>("/integrations/summary"),
         api.get<PaginatedResponse<Property>>("/properties?limit=100"),
       ]);
       setConnections(Array.isArray(integrationRes) ? integrationRes : integrationRes.data);
+      setSummary(summaryRes);
       setProperties(propertyRes.data);
     } catch (loadError) {
       console.error(loadError);
@@ -93,9 +111,19 @@ export default function IntegrationsPage() {
         status: formData.status || "active",
         endpointUrl: formData.endpointUrl || undefined,
         propertyId: formData.propertyId || undefined,
-        config: formData.config || {},
+        config: {
+          ...(formData.config || {}),
+          capability:
+            formData.provider === "pos"
+              ? "room_charge_posting"
+              : "rates_inventory_reservations",
+        },
       });
-      setFormData({ provider: "channel_manager", status: "active" });
+      setFormData({
+        provider: "channel_manager",
+        status: "active",
+        config: { channel: "multi_channel" },
+      });
       loadData();
     } catch (createError: any) {
       setError(createError?.message || "Unable to create integration");
@@ -126,9 +154,26 @@ export default function IntegrationsPage() {
     ...properties.map((property) => ({ value: property.id, label: property.name })),
   ];
 
+  function updateConfig(key: string, value: string) {
+    setFormData({
+      ...formData,
+      config: {
+        ...(formData.config || {}),
+        [key]: value,
+      },
+    });
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Integrations" description="Manage channel manager and POS connections" />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatsCard title="Connections" value={summary?.summary.totalConnections ?? 0} />
+        <StatsCard title="Active" value={summary?.summary.activeConnections ?? 0} />
+        <StatsCard title="Channels" value={summary?.summary.channelManagers ?? 0} />
+        <StatsCard title="POS Systems" value={summary?.summary.posSystems ?? 0} />
+      </div>
 
       <Card>
         <CardContent className="space-y-4 p-4">
@@ -137,7 +182,14 @@ export default function IntegrationsPage() {
               options={providerOptions}
               value={formData.provider || "channel_manager"}
               onChange={(event) =>
-                setFormData({ ...formData, provider: event.target.value as IntegrationProvider })
+                setFormData({
+                  ...formData,
+                  provider: event.target.value as IntegrationProvider,
+                  config:
+                    event.target.value === "pos"
+                      ? { system: "restaurant_pos" }
+                      : { channel: "multi_channel" },
+                })
               }
             />
             <Input
@@ -169,6 +221,40 @@ export default function IntegrationsPage() {
               onChange={(event) =>
                 setFormData({ ...formData, status: event.target.value as IntegrationStatus })
               }
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {formData.provider === "pos" ? (
+              <>
+                <Select
+                  options={posOptions}
+                  value={String(formData.config?.system || "restaurant_pos")}
+                  onChange={(event) => updateConfig("system", event.target.value)}
+                />
+                <Input
+                  placeholder="Outlet ID"
+                  value={String(formData.config?.outletId || "")}
+                  onChange={(event) => updateConfig("outletId", event.target.value)}
+                />
+              </>
+            ) : (
+              <>
+                <Select
+                  options={channelOptions}
+                  value={String(formData.config?.channel || "multi_channel")}
+                  onChange={(event) => updateConfig("channel", event.target.value)}
+                />
+                <Input
+                  placeholder="Rate plan code"
+                  value={String(formData.config?.ratePlanCode || "")}
+                  onChange={(event) => updateConfig("ratePlanCode", event.target.value)}
+                />
+              </>
+            )}
+            <Input
+              placeholder="API key reference"
+              value={String(formData.config?.apiKeyRef || "")}
+              onChange={(event) => updateConfig("apiKeyRef", event.target.value)}
             />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
@@ -245,6 +331,37 @@ export default function IntegrationsPage() {
               </TableBody>
             </Table>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-3 p-4">
+          <h2 className="text-sm font-medium">Recent Sync Activity</h2>
+          {!summary || summary.recentLogs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No sync activity yet</p>
+          ) : (
+            <div className="space-y-2">
+              {summary.recentLogs.slice(0, 5).map((log) => (
+                <div
+                  key={log.id}
+                  className="flex flex-col gap-1 rounded-md border p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-medium">{log.connectionName}</p>
+                    <p className="text-muted-foreground">{log.summary}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={log.status === "success" ? "default" : "destructive"}>
+                      {log.status}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDate(log.createdAt)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

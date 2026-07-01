@@ -188,6 +188,154 @@ export class ReportsService {
     };
   }
 
+  async revenueManagement(
+    organizationId: string,
+    propertyId: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    await this.validateProperty(organizationId, propertyId);
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const days = Math.max(
+      1,
+      Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1,
+    );
+    const previousStart = new Date(start);
+    previousStart.setDate(previousStart.getDate() - days);
+    const previousEnd = new Date(start);
+    previousEnd.setDate(previousEnd.getDate() - 1);
+
+    const [rooms, roomTypes, reservations, previousReservations, invoices] =
+      await Promise.all([
+        this.prisma.room.findMany({
+          where: { propertyId },
+          select: { id: true, roomTypeId: true },
+        }),
+        this.prisma.roomType.findMany({
+          where: { propertyId },
+          include: {
+            seasonalRates: {
+              where: {
+                organizationId,
+                isActive: true,
+                startDate: { lte: end },
+                endDate: { gte: start },
+              },
+              orderBy: [{ startDate: "asc" }, { createdAt: "desc" }],
+            },
+          },
+          orderBy: { name: "asc" },
+        }),
+        this.prisma.reservation.findMany({
+          where: {
+            propertyId,
+            status: { notIn: [ReservationStatus.cancelled, ReservationStatus.no_show] },
+            checkInDate: { lte: end },
+            checkOutDate: { gte: start },
+          },
+          include: { room: { select: { roomTypeId: true } } },
+        }),
+        this.prisma.reservation.findMany({
+          where: {
+            propertyId,
+            status: { notIn: [ReservationStatus.cancelled, ReservationStatus.no_show] },
+            checkInDate: { lte: previousEnd },
+            checkOutDate: { gte: previousStart },
+          },
+          select: { id: true },
+        }),
+        this.prisma.invoice.aggregate({
+          where: {
+            propertyId,
+            status: { not: InvoiceStatus.cancelled },
+            issueDate: { gte: start, lte: end },
+          },
+          _sum: { totalAmount: true },
+        }),
+      ]);
+
+    const totalRooms = rooms.length;
+    const roomNightsAvailable = totalRooms * days;
+    const occupiedRoomNights = reservations.reduce(
+      (sum, reservation) =>
+        sum +
+        this.countNightsInRange(
+          reservation.checkInDate,
+          reservation.checkOutDate,
+          start,
+          end,
+        ),
+      0,
+    );
+    const revenue = Number(invoices._sum.totalAmount ?? 0);
+    const occupancyRate =
+      roomNightsAvailable > 0
+        ? Number(((occupiedRoomNights / roomNightsAvailable) * 100).toFixed(2))
+        : 0;
+    const adr =
+      occupiedRoomNights > 0
+        ? Number((revenue / occupiedRoomNights).toFixed(2))
+        : 0;
+    const revPar =
+      roomNightsAvailable > 0
+        ? Number((revenue / roomNightsAvailable).toFixed(2))
+        : 0;
+    const pickup = reservations.length - previousReservations.length;
+
+    const byRoomType = roomTypes.map((roomType) => {
+      const roomTypeRooms = rooms.filter((room) => room.roomTypeId === roomType.id);
+      const roomTypeReservations = reservations.filter(
+        (reservation) => reservation.room.roomTypeId === roomType.id,
+      );
+      const occupiedNights = roomTypeReservations.reduce(
+        (sum, reservation) =>
+          sum +
+          this.countNightsInRange(
+            reservation.checkInDate,
+            reservation.checkOutDate,
+            start,
+            end,
+          ),
+        0,
+      );
+      const availableNights = roomTypeRooms.length * days;
+      const roomTypeOccupancy =
+        availableNights > 0
+          ? Number(((occupiedNights / availableNights) * 100).toFixed(2))
+          : 0;
+      const activeRate = roomType.seasonalRates[0];
+      const currentRate = Number(activeRate?.price ?? roomType.basePrice);
+      const suggestedRate = this.suggestRate(currentRate, roomTypeOccupancy, pickup);
+
+      return {
+        roomTypeId: roomType.id,
+        name: roomType.name,
+        rooms: roomTypeRooms.length,
+        occupancyRate: roomTypeOccupancy,
+        currentRate,
+        suggestedRate,
+        rateChange: Number((suggestedRate - currentRate).toFixed(2)),
+        recommendation: this.recommendationText(roomTypeOccupancy, pickup),
+      };
+    });
+
+    return {
+      summary: {
+        totalRooms,
+        roomNightsAvailable,
+        occupiedRoomNights,
+        occupancyRate,
+        adr,
+        revPar,
+        pickup,
+        revenue: Number(revenue.toFixed(2)),
+      },
+      byRoomType,
+    };
+  }
+
   async dashboard(organizationId: string) {
     const now = new Date();
     const start = new Date(now);
@@ -549,5 +697,48 @@ export class ReportsService {
         count,
       })),
     };
+  }
+
+  private countNightsInRange(
+    checkInDate: Date,
+    checkOutDate: Date,
+    startDate: Date,
+    endDate: Date,
+  ) {
+    const start = new Date(Math.max(checkInDate.getTime(), startDate.getTime()));
+    const end = new Date(Math.min(checkOutDate.getTime(), endDate.getTime()));
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    if (end < start) return 0;
+    return Math.max(
+      1,
+      Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)),
+    );
+  }
+
+  private suggestRate(currentRate: number, occupancyRate: number, pickup: number) {
+    if (occupancyRate >= 85 || pickup >= 5) {
+      return Number((currentRate * 1.1).toFixed(2));
+    }
+    if (occupancyRate <= 40 && pickup <= 0) {
+      return Number((currentRate * 0.9).toFixed(2));
+    }
+    if (occupancyRate >= 70) {
+      return Number((currentRate * 1.05).toFixed(2));
+    }
+    return Number(currentRate.toFixed(2));
+  }
+
+  private recommendationText(occupancyRate: number, pickup: number) {
+    if (occupancyRate >= 85 || pickup >= 5) {
+      return "High demand: increase public rates and restrict discounts.";
+    }
+    if (occupancyRate <= 40 && pickup <= 0) {
+      return "Low demand: open promotions or reduce rates for this period.";
+    }
+    if (occupancyRate >= 70) {
+      return "Healthy demand: small rate lift is recommended.";
+    }
+    return "Stable demand: keep rates unchanged and monitor pickup.";
   }
 }

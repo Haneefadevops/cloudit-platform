@@ -48,6 +48,20 @@ export class ReportsController {
     );
   }
 
+  @Get("revenue-management")
+  @ApiOperation({ summary: "Advanced revenue management recommendations" })
+  async revenueManagement(
+    @CurrentOrganization() organizationId: string,
+    @Query() query: ReportQueryDto,
+  ) {
+    return this.reportsService.revenueManagement(
+      organizationId,
+      query.propertyId,
+      query.startDate,
+      query.endDate,
+    );
+  }
+
   @Get("tax-summary")
   @ApiOperation({ summary: "Tax summary report" })
   async taxSummary(

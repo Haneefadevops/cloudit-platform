@@ -259,6 +259,43 @@ export interface IntegrationConnection {
   updatedAt: string;
 }
 
+export interface IntegrationSummary {
+  summary: {
+    totalConnections: number;
+    activeConnections: number;
+    channelManagers: number;
+    posSystems: number;
+  };
+  connectedChannels: {
+    id: string;
+    name: string;
+    channel: string;
+    status: IntegrationStatus;
+    propertyName: string;
+    lastSyncAt?: string;
+  }[];
+  posConnections: {
+    id: string;
+    name: string;
+    system: string;
+    outletId?: string;
+    status: IntegrationStatus;
+    propertyName: string;
+    lastSyncAt?: string;
+  }[];
+  recentLogs: {
+    id: string;
+    provider: IntegrationProvider;
+    connectionName: string;
+    direction: 'pull' | 'push' | 'bidirectional';
+    status: IntegrationSyncStatus;
+    recordsPulled: number;
+    recordsPushed: number;
+    summary?: string;
+    createdAt: string;
+  }[];
+}
+
 export interface GuestCheckInLink {
   id: string;
   token: string;
@@ -501,6 +538,29 @@ export interface RevenueReport {
   byStatus: { status: string; amount: number }[];
 }
 
+export interface RevenueManagementReport {
+  summary: {
+    totalRooms: number;
+    roomNightsAvailable: number;
+    occupiedRoomNights: number;
+    occupancyRate: number;
+    adr: number;
+    revPar: number;
+    pickup: number;
+    revenue: number;
+  };
+  byRoomType: {
+    roomTypeId: string;
+    name: string;
+    rooms: number;
+    occupancyRate: number;
+    currentRate: number;
+    suggestedRate: number;
+    rateChange: number;
+    recommendation: string;
+  }[];
+}
+
 export interface GuestReport {
   summary: {
     totalGuests: number;
@@ -582,6 +642,7 @@ export interface TdlReport {
 export type ReportType =
   | 'occupancy'
   | 'revenue'
+  | 'revenue-management'
   | 'guests'
   | 'guest-sources'
   | 'reservations'

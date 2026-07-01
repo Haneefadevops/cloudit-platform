@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button, Card, CardContent, Input, Select, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Badge } from "@cloudit/ui";
-import { BarChart3, BedDouble, Users, ClipboardList, Wallet, Receipt } from "lucide-react";
+import { BarChart3, BedDouble, Users, ClipboardList, Wallet, Receipt, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatsCard } from "@/components/stats-card";
 import { api } from "@/lib/api";
@@ -12,6 +12,7 @@ import type {
   PaginatedResponse,
   OccupancyReport,
   RevenueReport,
+  RevenueManagementReport,
   GuestReport,
   GuestSourceReport,
   ReservationReport,
@@ -23,6 +24,7 @@ import type {
 const reportTabs: { value: ReportType; label: string; icon: React.ReactNode }[] = [
   { value: "occupancy", label: "Occupancy", icon: <BedDouble className="h-4 w-4" /> },
   { value: "revenue", label: "Revenue", icon: <Wallet className="h-4 w-4" /> },
+  { value: "revenue-management", label: "Revenue Mgmt", icon: <TrendingUp className="h-4 w-4" /> },
   { value: "guests", label: "Guests", icon: <Users className="h-4 w-4" /> },
   { value: "guest-sources", label: "Sources", icon: <Users className="h-4 w-4" /> },
   { value: "reservations", label: "Reservations", icon: <ClipboardList className="h-4 w-4" /> },
@@ -48,6 +50,7 @@ export default function ReportsPage() {
 
   const [occupancy, setOccupancy] = useState<OccupancyReport | null>(null);
   const [revenue, setRevenue] = useState<RevenueReport | null>(null);
+  const [revenueManagement, setRevenueManagement] = useState<RevenueManagementReport | null>(null);
   const [guests, setGuests] = useState<GuestReport | null>(null);
   const [guestSources, setGuestSources] = useState<GuestSourceReport | null>(null);
   const [reservations, setReservations] = useState<ReservationReport | null>(null);
@@ -84,6 +87,7 @@ export default function ReportsPage() {
       const data = await api.get<
         | OccupancyReport
         | RevenueReport
+        | RevenueManagementReport
         | GuestReport
         | GuestSourceReport
         | ReservationReport
@@ -96,6 +100,9 @@ export default function ReportsPage() {
           break;
         case "revenue":
           setRevenue(data as RevenueReport);
+          break;
+        case "revenue-management":
+          setRevenueManagement(data as RevenueManagementReport);
           break;
         case "guests":
           setGuests(data as GuestReport);
@@ -292,6 +299,68 @@ export default function ReportsPage() {
                         {item.status}: {formatLkr(item.amount)}
                       </Badge>
                     ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {activeTab === "revenue-management" && revenueManagement && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatsCard
+                  title="Occupancy"
+                  value={`${revenueManagement.summary.occupancyRate}%`}
+                />
+                <StatsCard title="ADR" value={formatLkr(revenueManagement.summary.adr)} />
+                <StatsCard title="RevPAR" value={formatLkr(revenueManagement.summary.revPar)} />
+                <StatsCard title="Pickup" value={revenueManagement.summary.pickup} />
+              </div>
+
+              <Card>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Room Type</TableHead>
+                          <TableHead>Rooms</TableHead>
+                          <TableHead>Occupancy</TableHead>
+                          <TableHead>Current Rate</TableHead>
+                          <TableHead>Suggested Rate</TableHead>
+                          <TableHead>Change</TableHead>
+                          <TableHead>Recommendation</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {revenueManagement.byRoomType.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center text-muted-foreground">
+                              No room type data for this period
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          revenueManagement.byRoomType.map((roomType) => (
+                            <TableRow key={roomType.roomTypeId}>
+                              <TableCell className="font-medium">{roomType.name}</TableCell>
+                              <TableCell>{roomType.rooms}</TableCell>
+                              <TableCell>{roomType.occupancyRate}%</TableCell>
+                              <TableCell>{formatLkr(roomType.currentRate)}</TableCell>
+                              <TableCell>{formatLkr(roomType.suggestedRate)}</TableCell>
+                              <TableCell>
+                                <Badge variant={roomType.rateChange > 0 ? "default" : roomType.rateChange < 0 ? "destructive" : "secondary"}>
+                                  {roomType.rateChange > 0 ? "+" : ""}
+                                  {formatLkr(roomType.rateChange)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="min-w-[16rem] text-sm text-muted-foreground">
+                                {roomType.recommendation}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
                   </div>
                 </CardContent>
               </Card>

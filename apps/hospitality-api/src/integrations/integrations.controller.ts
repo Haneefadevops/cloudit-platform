@@ -38,6 +38,12 @@ export class IntegrationsController {
     });
   }
 
+  @Get("summary")
+  @ApiOperation({ summary: "Growth integration summary" })
+  async summary(@CurrentOrganization() organizationId: string) {
+    return this.integrationsService.summary(organizationId);
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Get integration connection" })
   async findOne(
