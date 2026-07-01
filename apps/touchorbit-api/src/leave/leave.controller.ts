@@ -36,6 +36,8 @@ const updateRequestSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
   reason: z.string().optional(),
+  status: z.enum(["pending", "approved", "rejected", "cancelled"]).optional(),
+  cancellation_requested: z.boolean().optional(),
 });
 
 const decisionSchema = z.object({
@@ -44,15 +46,20 @@ const decisionSchema = z.object({
 
 const adjustBalanceSchema = z.object({
   leave_type: z.string().min(1),
-  days: z.number(),
+  days: z.number().optional(),
+  entitled_days: z.number().optional(),
   reason: z.string().optional(),
-});
+}).refine(
+  (data) => data.days !== undefined || data.entitled_days !== undefined,
+  { message: "Either days or entitled_days must be provided" },
+);
 
 const compOffSchema = z.object({
   employee_id: z.string().uuid(),
   worked_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   holiday_id: z.string().uuid().optional(),
   notes: z.string().optional(),
+  status: z.enum(["pending", "approved"]).optional(),
 });
 
 const encashmentSchema = z.object({
@@ -124,7 +131,7 @@ export class LeaveController {
 
   @Patch("requests/:id")
   @RequireModule("touchorbit", "leave")
-  @ApiOperation({ summary: "Update a pending leave request" })
+  @ApiOperation({ summary: "Update a leave request" })
   async updateRequest(
     @CurrentOrganization() organizationId: string,
     @Param("id") id: string,
@@ -134,15 +141,13 @@ export class LeaveController {
     if (!parsed.success) {
       throw new BadRequestException("Invalid leave update payload");
     }
-    const row = await this.leaveService.updatePendingRequest(
-      organizationId,
-      id,
-      {
-        startDate: parsed.data.start_date,
-        endDate: parsed.data.end_date,
-        reason: parsed.data.reason,
-      },
-    );
+    const row = await this.leaveService.updateRequest(organizationId, id, {
+      startDate: parsed.data.start_date,
+      endDate: parsed.data.end_date,
+      reason: parsed.data.reason,
+      status: parsed.data.status,
+      cancellationRequested: parsed.data.cancellation_requested,
+    });
     return { ok: true, data: row };
   }
 
@@ -237,6 +242,7 @@ export class LeaveController {
       {
         leaveType: parsed.data.leave_type,
         days: parsed.data.days,
+        entitledDays: parsed.data.entitled_days,
         reason: parsed.data.reason,
       },
       user.id,
@@ -275,7 +281,38 @@ export class LeaveController {
       workedDate: parsed.data.worked_date,
       holidayId: parsed.data.holiday_id,
       notes: parsed.data.notes,
+      status: parsed.data.status,
     });
+    return { ok: true, data: row };
+  }
+
+  @Post("comp-off/:id/approve")
+  @RequireModule("touchorbit", "leave")
+  @ApiOperation({ summary: "Approve a comp-off record" })
+  async approveCompOffRecord(
+    @CurrentOrganization() organizationId: string,
+    @Param("id") id: string,
+    @CurrentUser() user: AuthContext,
+  ) {
+    const row = await this.leaveService.approveCompOffRecord(
+      organizationId,
+      id,
+      user.id,
+    );
+    return { ok: true, data: row };
+  }
+
+  @Post("comp-off/:id/reject")
+  @RequireModule("touchorbit", "leave")
+  @ApiOperation({ summary: "Reject a comp-off record" })
+  async rejectCompOffRecord(
+    @CurrentOrganization() organizationId: string,
+    @Param("id") id: string,
+  ) {
+    const row = await this.leaveService.rejectCompOffRecord(
+      organizationId,
+      id,
+    );
     return { ok: true, data: row };
   }
 
@@ -313,6 +350,38 @@ export class LeaveController {
         amount: parsed.data.amount,
         reason: parsed.data.reason,
       },
+    );
+    return { ok: true, data: row };
+  }
+
+  @Post("encashment/:id/approve")
+  @RequireModule("touchorbit", "leave")
+  @ApiOperation({ summary: "Approve a leave encashment request" })
+  async approveEncashmentRequest(
+    @CurrentOrganization() organizationId: string,
+    @Param("id") id: string,
+    @CurrentUser() user: AuthContext,
+  ) {
+    const row = await this.leaveService.approveEncashmentRequest(
+      organizationId,
+      id,
+      user.id,
+    );
+    return { ok: true, data: row };
+  }
+
+  @Post("encashment/:id/reject")
+  @RequireModule("touchorbit", "leave")
+  @ApiOperation({ summary: "Reject a leave encashment request" })
+  async rejectEncashmentRequest(
+    @CurrentOrganization() organizationId: string,
+    @Param("id") id: string,
+    @CurrentUser() user: AuthContext,
+  ) {
+    const row = await this.leaveService.rejectEncashmentRequest(
+      organizationId,
+      id,
+      user.id,
     );
     return { ok: true, data: row };
   }

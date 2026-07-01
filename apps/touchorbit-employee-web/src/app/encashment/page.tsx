@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { 
   DollarSign, 
@@ -20,6 +21,8 @@ import { toast } from 'sonner'
 import { EmployeeLayout } from '@/components/employee-layout'
 
 interface LeaveBalance {
+  leave_type: string
+  year: number
   remaining_days: number
 }
 
@@ -60,13 +63,15 @@ export default function EmployeeEncashmentPage() {
       setEmployee(emp); setSettings(emp.organization)
 
       const year = new Date().getFullYear()
-      const { data: bal } = await supabase.from('leave_balances').select('remaining_days').eq('employee_id', emp.id).eq('leave_type', 'annual').eq('year', year).single()
-      setBalance(bal?.remaining_days || 0)
-
-      const { data: reqs } = await supabase.from('leave_encashment_requests').select('*').eq('employee_id', emp.id).order('created_at', { ascending: false })
-      setRequests(reqs || [])
-    } catch (error) {
-      toast.error('Failed to load encashment data')
+      const [balResult, reqResult] = await Promise.all([
+        api.get<LeaveBalance[]>(`/leave/balances/${emp.id}`),
+        api.get<EncashmentRequest[]>(`/leave/encashment?employee_id=${emp.id}`),
+      ])
+      const annualBalance = (balResult.data || []).find((b) => b.leave_type === 'annual' && b.year === year)
+      setBalance(annualBalance?.remaining_days || 0)
+      setRequests(reqResult.data || [])
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load encashment data')
     } finally {
       setLoading(false)
     }
@@ -79,15 +84,19 @@ export default function EmployeeEncashmentPage() {
     e.preventDefault()
     const days = parseFloat(daysToEncash)
     if (!days || days <= 0) { toast.error('Enter valid days'); return }
+    if (!employee) { toast.error('Employee not found'); return }
 
     setSaving(true)
     try {
       const year = new Date().getFullYear()
-      const { data: validation, error: vError } = await supabase.rpc('validate_encashment_request', { p_employee_id: employee.id, p_year: year, p_days: days })
-      if (vError) throw vError
-      if (!validation.valid) { toast.error(validation.message); return }
-
-      await supabase.from('leave_encashment_requests').insert({ organization_id: organizationId, employee_id: employee.id, year, days_requested: days, amount: estimatedAmount, reason })
+      const result = await api.post<EncashmentRequest>('/leave/encashment', {
+        employee_id: employee.id,
+        year,
+        days_requested: days,
+        amount: estimatedAmount,
+        reason,
+      })
+      if (!result.ok) throw new Error(result.error || 'Failed to submit')
       toast.success('Request submitted!'); setDaysToEncash(''); setReason(''); loadData()
     } catch (error: any) {
       toast.error(error.message || 'Failed to submit')

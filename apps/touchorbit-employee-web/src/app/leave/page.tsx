@@ -2,16 +2,22 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { Umbrella, Plus, X, ChevronRight, Calendar, ShieldCheck, Clock, Coffee, HeartPulse, Wallet } from 'lucide-react'
 import { useAutoLinkEmployee } from '@/hooks/use-auto-link-employee'
 import { EmployeeLayout } from '@/components/employee-layout'
 import { toast } from 'sonner'
 import { PullToRefresh } from '@/components/ui-touchorbit'
 
+interface Employee {
+  id: string
+  organization_id: string
+}
+
 interface LeaveBalance {
   id: string
   leave_type: string
+  year: number
   entitled_days: number
   used_days: number
   remaining_days: number
@@ -47,9 +53,10 @@ const leaveTypeLabels: Record<string, string> = {
 }
 
 export default function LeavePage() {
-  const { userId, isLoaded, isSignedIn, organizationId } = useAuth()
+  const { isLoaded, isSignedIn } = useAuth()
   const { isLinked } = useAutoLinkEmployee()
   
+  const [employee, setEmployee] = useState<Employee | null>(null)
   const [balances, setBalances] = useState<LeaveBalance[]>([])
   const [requests, setRequests] = useState<LeaveRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,16 +78,21 @@ export default function LeavePage() {
   async function loadLeaveData() {
     setLoading(true)
     try {
-      const { data: employee } = await supabase.from('employees').select('id').eq('user_id', userId).single()
-      if (employee) {
-        const { data: balancesData } = await supabase.from('leave_balances').select('*').eq('employee_id', employee.id).eq('year', new Date().getFullYear())
-        const { data: requestsData } = await supabase.from('leave_records').select('*').eq('employee_id', employee.id).order('created_at', { ascending: false })
-        setBalances(balancesData || [])
-        setRequests(requestsData || [])
-      }
-    } catch (error) {
+      const empResult = await api.get<Employee>('/employees/me')
+      if (!empResult.ok || !empResult.data) throw new Error(empResult.error || 'Employee not found')
+      const emp = empResult.data
+      setEmployee(emp)
+
+      const year = new Date().getFullYear()
+      const [balResult, reqResult] = await Promise.all([
+        api.get<LeaveBalance[]>(`/leave/balances/${emp.id}`),
+        api.get<LeaveRequest[]>(`/leave/requests?employee_id=${emp.id}`),
+      ])
+      setBalances((balResult.data || []).filter((b) => b.year === year))
+      setRequests(reqResult.data || [])
+    } catch (error: any) {
       console.error(error)
-      toast.error('Failed to load leave data')
+      toast.error(error.message || 'Failed to load leave data')
     } finally {
       setLoading(false)
     }
@@ -108,31 +120,26 @@ export default function LeavePage() {
     if (!startDate || !endDate) { toast.error('Please select start and end dates'); return }
     if (new Date(endDate) < new Date(startDate)) { toast.error('End date cannot be before start date'); return }
     if (durationDays === 0) { toast.error('Selected range contains no working days'); return }
+    if (!employee) { toast.error('Employee not found'); return }
     setSubmitting(true)
     try {
-      const { data: employee } = await supabase.from('employees').select('id, organization_id').eq('user_id', userId).single()
-      if (!employee) throw new Error('Employee not found')
-
-      const { error } = await supabase.from('leave_records').insert({
+      const result = await api.post<LeaveRequest>('/leave/requests', {
         employee_id: employee.id,
-        organization_id: employee.organization_id,
         leave_type: leaveType,
         start_date: startDate,
         end_date: endDate,
         reason: reason,
-        status: 'pending',
-        days_count: durationDays,
       })
 
-      if (error) throw error
+      if (!result.ok) throw new Error(result.error || 'Failed to submit application')
       toast.success('Leave application submitted')
       setShowApplyForm(false)
       setStartDate('')
       setEndDate('')
       setReason('')
       loadLeaveData()
-    } catch (error) {
-      toast.error('Failed to submit application')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit application')
     } finally {
       setSubmitting(false)
     }

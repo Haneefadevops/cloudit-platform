@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { X, Gift } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { useAuth } from '@/lib/auth'
 
@@ -26,7 +26,7 @@ interface Holiday {
 }
 
 export function GrantCompOffDialog({ isOpen, onClose, onSuccess }: GrantCompOffDialogProps) {
-  const { organizationId, userId } = useAuth()
+  const { organizationId } = useAuth()
   const [loading, setLoading] = useState(false)
   const [employees, setEmployees] = useState<Employee[]>([])
   const [holidays, setHolidays] = useState<Holiday[]>([])
@@ -46,15 +46,9 @@ export function GrantCompOffDialog({ isOpen, onClose, onSuccess }: GrantCompOffD
 
   const loadEmployees = async () => {
     try {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('id, first_name, last_name, employee_number')
-        .eq('organization_id', organizationId)
-        .eq('employment_status', 'active')
-        .order('first_name')
-
-      if (error) throw error
-      setEmployees(data || [])
+      const result = await api.get<Employee[]>(`/employees?status=active&limit=500`)
+      if (!result.ok) throw new Error(result.error || 'Failed to load employees')
+      setEmployees(result.data || [])
     } catch (error) {
       console.error('Error loading employees:', error)
       toast.error('Failed to load employees')
@@ -63,15 +57,9 @@ export function GrantCompOffDialog({ isOpen, onClose, onSuccess }: GrantCompOffD
 
   const loadHolidays = async () => {
     try {
-      const { data, error } = await supabase
-        .from('holidays')
-        .select('id, name, date')
-        .eq('organization_id', organizationId)
-        .order('date', { ascending: false })
-        .limit(50)
-
-      if (error) throw error
-      setHolidays(data || [])
+      const result = await api.get<Holiday[]>(`/organizations/holidays`)
+      if (!result.ok) throw new Error(result.error || 'Failed to load holidays')
+      setHolidays(result.data || [])
     } catch (error) {
       console.error('Error loading holidays:', error)
       toast.error('Failed to load holidays')
@@ -88,37 +76,15 @@ export function GrantCompOffDialog({ isOpen, onClose, onSuccess }: GrantCompOffD
 
     setLoading(true)
     try {
-      // 1. Fetch organization settings for expiry period
-      const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .select('comp_off_expiry_months')
-        .eq('id', organizationId)
-        .single()
+      const result = await api.post('/leave/comp-off', {
+        employee_id: formData.employee_id,
+        worked_date: formData.worked_date,
+        holiday_id: formData.holiday_id || undefined,
+        notes: formData.notes || undefined,
+        status: 'approved',
+      })
 
-      if (orgError) throw orgError
-
-      const expiryMonths = org?.comp_off_expiry_months || 3
-
-      // 2. Calculate expiry date (based on setting from worked date)
-      const workedDate = new Date(formData.worked_date)
-      const expiryDate = new Date(workedDate)
-      expiryDate.setMonth(expiryDate.getMonth() + expiryMonths)
-
-      const { error } = await supabase
-        .from('comp_off_records')
-        .insert({
-          organization_id: organizationId,
-          employee_id: formData.employee_id,
-          worked_date: formData.worked_date,
-          holiday_id: formData.holiday_id || null,
-          status: 'approved',
-          approved_by: userId,
-          approved_at: new Date().toISOString(),
-          expiry_date: expiryDate.toISOString().split('T')[0],
-          notes: formData.notes || null,
-        })
-
-      if (error) throw error
+      if (!result.ok) throw new Error(result.error || 'Failed to grant comp-off')
 
       toast.success('Comp-off granted successfully!')
       setFormData({
@@ -224,7 +190,7 @@ export function GrantCompOffDialog({ isOpen, onClose, onSuccess }: GrantCompOffD
 
           <div className="bg-blue-50 border-l-4 border-blue-400 p-3 mt-4">
             <p className="text-sm text-blue-700">
-              <strong>Note:</strong> This comp-off will be granted with status "Approved" and will expire based on your organization's settings.
+              <strong>Note:</strong> This comp-off will be granted with status &quot;Approved&quot; and will expire based on your organization&apos;s settings.
             </p>
           </div>
 

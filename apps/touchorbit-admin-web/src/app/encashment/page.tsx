@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { 
   DollarSign, 
   CheckCircle, 
@@ -35,7 +35,7 @@ interface EncashmentRequest {
 }
 
 export default function AdminEncashmentPage() {
-  const { organizationId, userId, isLoaded } = useAuth()
+  const { organizationId, isLoaded } = useAuth()
   const [requests, setRequests] = useState<EncashmentRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState<string>('all')
@@ -50,9 +50,9 @@ export default function AdminEncashmentPage() {
   async function loadRequests() {
     setLoading(true)
     try {
-      const { data, error } = await supabase.from('leave_encashment_requests').select('*, employee:employees(first_name, last_name, employee_number)').eq('organization_id', organizationId).order('created_at', { ascending: false })
-      if (error) throw error
-      setRequests(data as any || [])
+      const result = await api.get<EncashmentRequest[]>('/leave/encashment')
+      if (!result.ok) throw new Error(result.error || 'Failed to load requests')
+      setRequests(result.data || [])
     } catch (error) {
       toast.error('Failed to load requests')
     } finally {
@@ -62,7 +62,8 @@ export default function AdminEncashmentPage() {
 
   async function handleAction(requestId: string, status: 'approved' | 'rejected') {
     try {
-      await supabase.from('leave_encashment_requests').update({ status, reviewed_at: new Date().toISOString(), reviewed_by: userId }).eq('id', requestId)
+      const result = await api.post<EncashmentRequest>(`/leave/encashment/${requestId}/${status}`, {})
+      if (!result.ok) throw new Error(result.error || 'Failed to update request')
       toast.success(`Request ${status} successfully`)
       loadRequests()
     } catch (error) { toast.error('Failed to update request') }

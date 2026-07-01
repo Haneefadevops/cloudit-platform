@@ -347,12 +347,12 @@ export default function EmployeeDetailPage() {
         const { data } = await supabase.from('clock_events').select('*').eq('employee_id', employeeId).gte('timestamp', thirtyDaysAgo.toISOString()).order('timestamp', { ascending: false })
         setAttendanceHistory(data || [])
       } else if (tab === 'leave') {
-        const [{ data: records }, { data: balances }] = await Promise.all([
-          supabase.from('leave_records').select('*').eq('employee_id', employeeId).order('created_at', { ascending: false }),
-          supabase.from('leave_balances').select('*').eq('employee_id', employeeId)
+        const [recordsResult, balancesResult] = await Promise.all([
+          api.get<any[]>(`/leave/requests?employee_id=${employeeId}`),
+          api.get<any[]>(`/leave/balances/${employeeId}`),
         ])
-        setLeaveHistory(records || [])
-        setLeaveBalances(balances || [])
+        setLeaveHistory(recordsResult.ok ? (recordsResult.data || []) : [])
+        setLeaveBalances(balancesResult.ok ? (balancesResult.data || []) : [])
       } else if (tab === 'documents') {
         const { data } = await supabase.from('employee_documents').select('*').eq('employee_id', employeeId).order('created_at', { ascending: false })
         setDocuments(data || [])
@@ -558,15 +558,12 @@ export default function EmployeeDetailPage() {
     setSavingLeaveAdjust(true)
     try {
       const delta = leaveAdjustForm.adjustment_type === 'add' ? days : -days
-      const existing = leaveBalances.find(b => b.leave_type === leaveAdjustForm.leave_type)
-      if (existing) {
-        const newRemaining = Math.max(0, (existing.remaining_days || 0) + delta)
-        const newTotal = Math.max(0, (existing.total_days || 0) + delta)
-        await supabase.from('leave_balances').update({ remaining_days: newRemaining, total_days: newTotal }).eq('id', existing.id)
-      } else {
-        const newDays = Math.max(0, delta)
-        await supabase.from('leave_balances').insert({ employee_id: employeeId, organization_id: employee?.organization_id, leave_type: leaveAdjustForm.leave_type, total_days: newDays, remaining_days: newDays, used_days: 0 })
-      }
+      const result = await api.post(`/leave/balances/${employeeId}/adjust`, {
+        leave_type: leaveAdjustForm.leave_type,
+        days: delta,
+        reason: leaveAdjustForm.reason,
+      })
+      if (!result.ok) throw new Error(result.error || 'Failed to adjust balance')
       toast.success(`Leave balance ${leaveAdjustForm.adjustment_type === 'add' ? 'increased' : 'decreased'} by ${days} day${days !== 1 ? 's' : ''}`)
       setShowLeaveAdjust(false)
       setLeaveAdjustForm({ leave_type: 'annual', adjustment_type: 'add', days: '', reason: '' })

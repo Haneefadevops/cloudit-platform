@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { usePermissions } from '@/hooks/use-permissions'
+import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
-import { Calendar, Clock, CheckCircle, XCircle, User, Filter, FileText, ExternalLink, ChevronRight, Search, Check, ShieldCheck, MoreVertical, Plus, X, Loader2 } from 'lucide-react'
+import { Calendar, Clock, CheckCircle, XCircle, FileText, ExternalLink, ShieldCheck, Plus, X } from 'lucide-react'
 import { ToBadge } from '@/components/ui/ToBadge'
 import { ToAvatar } from '@/components/ui/ToAvatar'
 import { ToEmptyState } from '@/components/ui/ToEmptyState'
@@ -28,11 +29,15 @@ interface LeaveRequest {
   cancellation_requested?: boolean
   cancellation_reason?: string
   employee?: {
+    id: string
     first_name: string
     last_name: string
     job_title: string
     department: string
+    department_id?: string | null
+    branch_id?: string | null
     photo_url?: string | null
+    employee_number?: string
   }
   approvals?: ApprovalRecord[]
 }
@@ -48,6 +53,13 @@ interface ApprovalRecord {
     first_name: string
     last_name: string
   }
+}
+
+interface ApiEmployee {
+  id: string
+  first_name: string
+  last_name: string
+  employee_number?: string
 }
 
 const leaveTypeLabels: Record<string, string> = {
@@ -71,13 +83,13 @@ export default function LeavePage() {
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [managedScopeId, setManagedScopeId] = useState<string | null>(null)
   const [showAdjustDialog, setShowAdjustDialog] = useState(false)
-  const [adjustEmployees, setAdjustEmployees] = useState<any[]>([])
+  const [adjustEmployees, setAdjustEmployees] = useState<ApiEmployee[]>([])
   const [adjustForm, setAdjustForm] = useState({ employee_id: '', leave_type: 'annual', adjustment_type: 'add', days: '', reason: '' })
   const [savingAdjust, setSavingAdjust] = useState(false)
 
   useEffect(() => {
     if (isLoaded && organizationId) {
-      if (isDeptManager || isBranchManager) setFilter('awaiting_level1')
+      if (isDeptManager) setFilter('awaiting_level1')
       else if (isHrAdmin) setFilter('awaiting_level2')
       else if (isOwner) setFilter('awaiting_level3')
       else setFilter('pending')
@@ -90,35 +102,38 @@ export default function LeavePage() {
 
   async function loadLeaveData(scopeId?: string | null, scopeType?: 'dept' | 'branch') {
     setLoading(true)
-    // Corrected query to use approver_user_id as defined in schema 00094
-    let query = supabase.from('leave_records').select(`
-      *, 
-      employee:employees(*), 
-      approvals:leave_request_approvals(
-        *, 
-        approver:users!leave_request_approvals_approver_user_id_fkey(*)
-      )
-    `).eq('organization_id', organizationId)
-    
-    if (scopeType === 'dept' && scopeId) query = query.eq('employee.department_id', scopeId)
-    else if (scopeType === 'branch' && scopeId) query = query.eq('employee.branch_id', scopeId)
-    
-    const { data } = await query.order('created_at', { ascending: false })
-    if (data) setRequests(data as any)
-    setLoading(false)
+    try {
+      const result = await api.get<LeaveRequest[]>('/leave/requests')
+      if (!result.ok) {
+        toast.error(result.error || 'Failed to load leave requests')
+        setRequests([])
+        setLoading(false)
+        return
+      }
+      let data = result.data || []
+      if (scopeType === 'dept' && scopeId) {
+        data = data.filter((r) => r.employee?.department_id === scopeId)
+      } else if (scopeType === 'branch' && scopeId) {
+        data = data.filter((r) => r.employee?.branch_id === scopeId)
+      }
+      setRequests(data)
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load leave requests')
+      setRequests([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleApproveCancellation(requestId: string) {
     if (!confirm('Approve this cancellation? The leave will be marked cancelled and the balance restored.')) return
     setProcessingId(requestId)
-    const { error } = await supabase.from('leave_records').update({
+    const result = await api.patch<LeaveRequest>(`/leave/requests/${requestId}`, {
       status: 'cancelled',
       cancellation_requested: false,
-      approver_id: userId,
-      approved_at: new Date().toISOString(),
-    }).eq('id', requestId)
+    })
     setProcessingId(null)
-    if (error) { toast.error('Failed to approve cancellation: ' + error.message) }
+    if (!result.ok) { toast.error('Failed to approve cancellation: ' + result.error) }
     else {
       toast.success('Cancellation approved — leave balance restored')
       setSelected(null)
@@ -129,11 +144,11 @@ export default function LeavePage() {
   async function handleRejectCancellation(requestId: string) {
     if (!confirm('Reject this cancellation request? The leave will remain approved.')) return
     setProcessingId(requestId)
-    const { error } = await supabase.from('leave_records').update({
+    const result = await api.patch<LeaveRequest>(`/leave/requests/${requestId}`, {
       cancellation_requested: false,
-    }).eq('id', requestId)
+    })
     setProcessingId(null)
-    if (error) { toast.error('Failed to reject cancellation') }
+    if (!result.ok) { toast.error('Failed to reject cancellation') }
     else {
       toast.success('Cancellation request rejected')
       setSelected(null)
@@ -143,8 +158,9 @@ export default function LeavePage() {
 
   async function openAdjustDialog() {
     if (adjustEmployees.length === 0) {
-      const { data } = await supabase.from('employees').select('id, first_name, last_name').eq('organization_id', organizationId).eq('employment_status', 'active').order('first_name')
-      setAdjustEmployees(data || [])
+      const result = await api.get<ApiEmployee[]>('/employees?status=active&limit=500')
+      setAdjustEmployees(result.ok ? (result.data || []) : [])
+      if (!result.ok) toast.error(result.error || 'Failed to load employees')
     }
     setAdjustForm({ employee_id: '', leave_type: 'annual', adjustment_type: 'add', days: '', reason: '' })
     setShowAdjustDialog(true)
@@ -157,21 +173,12 @@ export default function LeavePage() {
     setSavingAdjust(true)
     try {
       const delta = adjustForm.adjustment_type === 'add' ? days : -days
-      // Fetch existing balance
-      const { data: existing } = await supabase.from('leave_balances')
-        .select('id, remaining_days, total_days')
-        .eq('employee_id', adjustForm.employee_id)
-        .eq('leave_type', adjustForm.leave_type)
-        .eq('organization_id', organizationId)
-        .maybeSingle()
-      if (existing) {
-        const newRemaining = Math.max(0, (existing.remaining_days || 0) + delta)
-        const newTotal = Math.max(0, (existing.total_days || 0) + delta)
-        await supabase.from('leave_balances').update({ remaining_days: newRemaining, total_days: newTotal }).eq('id', existing.id)
-      } else {
-        const newDays = Math.max(0, delta)
-        await supabase.from('leave_balances').insert({ employee_id: adjustForm.employee_id, organization_id: organizationId, leave_type: adjustForm.leave_type, total_days: newDays, remaining_days: newDays, used_days: 0 })
-      }
+      const result = await api.post<LeaveRequest>(`/leave/balances/${adjustForm.employee_id}/adjust`, {
+        leave_type: adjustForm.leave_type,
+        days: delta,
+        reason: adjustForm.reason,
+      })
+      if (!result.ok) throw new Error(result.error || 'Failed to adjust balance')
       toast.success(`Leave balance ${adjustForm.adjustment_type === 'add' ? 'increased' : 'decreased'} by ${days} day${days !== 1 ? 's' : ''}`)
       setShowAdjustDialog(false)
     } catch (e: any) { toast.error(e.message || 'Failed to adjust balance') } finally { setSavingAdjust(false) }
@@ -180,15 +187,13 @@ export default function LeavePage() {
   async function handleAction(status: 'approved' | 'rejected') {
     if (!selected) return
     if (status === 'rejected' && !rejectionNote) { toast.error('Please enter a reason'); return }
-    
+
     setProcessingId(selected.id)
-    const level = selected.status === 'awaiting_level1' ? 1 : selected.status === 'awaiting_level2' ? 2 : selected.status === 'awaiting_level3' ? 3 : 1
-    
-    const { error } = await supabase.rpc('advance_leave_request', {
-      p_request_id: selected.id, p_level: level, p_status: status, p_notes: rejectionNote || null
+    const result = await api.post<{ id: string; status: string }>(`/leave/requests/${selected.id}/${status}`, {
+      notes: rejectionNote || undefined,
     })
 
-    if (error) { toast.error(error.message) } else {
+    if (!result.ok) { toast.error(result.error || 'Failed to process request') } else {
       toast.success(`Request ${status} successfully`)
       setSelected(null); setRejectionNote('')
       loadLeaveData(managedScopeId, isDeptManager ? 'dept' : isBranchManager ? 'branch' : undefined)

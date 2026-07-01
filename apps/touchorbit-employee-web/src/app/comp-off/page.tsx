@@ -3,9 +3,14 @@
 import { useEffect, useState } from 'react'
 import { EmployeeLayout } from '@/components/employee-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { Gift, Calendar, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
+
+interface Employee {
+  id: string
+  organization_id: string
+}
 
 interface CompOffRecord {
   id: string
@@ -23,8 +28,8 @@ interface CompOffRecord {
 }
 
 export default function EmployeeCompOffPage() {
-  const { userId, isLoaded } = useAuth()
-  const [employeeId, setEmployeeId] = useState<string | null>(null)
+  const { isLoaded } = useAuth()
+  const [employee, setEmployee] = useState<Employee | null>(null)
   const [records, setRecords] = useState<CompOffRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [showRequestForm, setShowRequestForm] = useState(false)
@@ -36,60 +41,35 @@ export default function EmployeeCompOffPage() {
   const [holidays, setHolidays] = useState<Array<{ id: string; name: string; date: string }>>([])
 
   useEffect(() => {
-    if (isLoaded && userId) {
+    if (isLoaded) {
       loadEmployeeAndRecords()
     }
-  }, [isLoaded, userId])
+  }, [isLoaded])
 
   const loadEmployeeAndRecords = async () => {
-    if (!userId) return
-
     setLoading(true)
     try {
-      // Get employee ID
-      const { data: empData, error: empError } = await supabase
-        .from('employees')
-        .select('id, organization_id')
-        .eq('user_id', userId)
-        .single()
+      const empResult = await api.get<Employee>('/employees/me')
+      if (!empResult.ok || !empResult.data) throw new Error(empResult.error || 'Employee not found')
+      const emp = empResult.data
+      setEmployee(emp)
 
-      if (empError) throw empError
-      if (!empData) {
-        toast.error('Employee record not found')
-        return
-      }
+      const [recordsResult, holidaysResult] = await Promise.all([
+        api.get<CompOffRecord[]>(`/leave/comp-off?employee_id=${emp.id}`),
+        api.get<Array<{ id: string; name: string; date: string }>>('/organizations/holidays'),
+      ])
 
-      setEmployeeId(empData.id)
+      if (!recordsResult.ok) throw new Error(recordsResult.error || 'Failed to load comp-off records')
+      setRecords(recordsResult.data || [])
 
-      // Load comp-off records
-      const { data: recordsData, error: recordsError } = await supabase
-        .from('comp_off_records')
-        .select(`
-          *,
-          holidays (
-            name,
-            date
-          )
-        `)
-        .eq('employee_id', empData.id)
-        .order('worked_date', { ascending: false })
-
-      if (recordsError) throw recordsError
-      setRecords(recordsData || [])
-
-      // Load past holidays for request form
-      const { data: holidaysData } = await supabase
-        .from('holidays')
-        .select('id, name, date')
-        .eq('organization_id', empData.organization_id)
-        .lte('date', new Date().toISOString().split('T')[0])
-        .order('date', { ascending: false })
-        .limit(20)
-
-      setHolidays(holidaysData || [])
-    } catch (error) {
+      const pastHolidays = (holidaysResult.data || [])
+        .filter((h) => h.date <= new Date().toISOString().split('T')[0])
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 20)
+      setHolidays(pastHolidays)
+    } catch (error: any) {
       console.error('Error loading comp-off data:', error)
-      toast.error('Failed to load comp-off data')
+      toast.error(error.message || 'Failed to load comp-off data')
     } finally {
       setLoading(false)
     }
@@ -97,35 +77,25 @@ export default function EmployeeCompOffPage() {
 
   const handleRequestCompOff = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!employeeId) return
+    if (!employee) return
 
     try {
-      const { data: empData } = await supabase
-        .from('employees')
-        .select('organization_id')
-        .eq('id', employeeId)
-        .single()
-
-      if (!empData) throw new Error('Organization not found')
-
-      const { error } = await supabase.from('comp_off_records').insert({
-        organization_id: empData.organization_id,
-        employee_id: employeeId,
+      const result = await api.post<CompOffRecord>('/leave/comp-off', {
+        employee_id: employee.id,
         worked_date: formData.worked_date,
-        holiday_id: formData.holiday_id || null,
-        status: 'pending',
-        notes: formData.notes || null,
+        holiday_id: formData.holiday_id || undefined,
+        notes: formData.notes || undefined,
       })
 
-      if (error) throw error
+      if (!result.ok) throw new Error(result.error || 'Failed to submit comp-off request')
 
       toast.success('Comp-off request submitted!')
       setShowRequestForm(false)
       setFormData({ worked_date: '', holiday_id: '', notes: '' })
       await loadEmployeeAndRecords()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error requesting comp-off:', error)
-      toast.error('Failed to submit comp-off request')
+      toast.error(error.message || 'Failed to submit comp-off request')
     }
   }
 

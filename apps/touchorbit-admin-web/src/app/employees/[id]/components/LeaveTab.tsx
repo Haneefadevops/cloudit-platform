@@ -2,14 +2,14 @@
 
 import { useState } from 'react'
 import { Plus, X, Calendar, Check } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { LeaveRing } from './LeaveRing'
 
 interface LeaveBalance {
   id: string
   leave_type: string
-  total_days: number
+  entitled_days: number
   remaining_days: number
 }
 
@@ -37,7 +37,7 @@ const STATUS_STYLES: Record<string, string> = {
   pending: 'bg-amber-50 text-amber-600 border-amber-100',
 }
 
-export function LeaveTab({ employeeId, organizationId, balances, history, isLoading, onUpdate }: LeaveTabProps) {
+export function LeaveTab({ employeeId, balances, history, isLoading, onUpdate }: LeaveTabProps) {
   const [showAdjust, setShowAdjust] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
@@ -54,22 +54,12 @@ export function LeaveTab({ employeeId, organizationId, balances, history, isLoad
     setSaving(true)
     try {
       const delta = form.adjustment_type === 'add' ? days : -days
-      const existing = balances.find((b) => b.leave_type === form.leave_type)
-      if (existing) {
-        const newRemaining = Math.max(0, (existing.remaining_days || 0) + delta)
-        const newTotal = Math.max(0, (existing.total_days || 0) + delta)
-        await supabase.from('leave_balances').update({ remaining_days: newRemaining, total_days: newTotal }).eq('id', existing.id)
-      } else {
-        const newDays = Math.max(0, delta)
-        await supabase.from('leave_balances').insert({
-          employee_id: employeeId,
-          organization_id: organizationId,
-          leave_type: form.leave_type,
-          total_days: newDays,
-          remaining_days: newDays,
-          used_days: 0,
-        })
-      }
+      const result = await api.post<LeaveBalance>(`/leave/balances/${employeeId}/adjust`, {
+        leave_type: form.leave_type,
+        days: delta,
+        reason: form.reason,
+      })
+      if (!result.ok) throw new Error(result.error || 'Failed to adjust balance')
       toast.success(`Leave balance ${form.adjustment_type === 'add' ? 'increased' : 'decreased'} by ${days} day${days !== 1 ? 's' : ''}`)
       setShowAdjust(false)
       setForm({ leave_type: 'annual', adjustment_type: 'add', days: '', reason: '' })
@@ -109,7 +99,7 @@ export function LeaveTab({ employeeId, organizationId, balances, history, isLoad
                 key={b.id}
                 label={b.leave_type.replace('_', ' ') + ' Leave'}
                 remaining={b.remaining_days ?? 0}
-                total={b.total_days ?? 0}
+                total={b.entitled_days ?? 0}
               />
             ))}
           </div>

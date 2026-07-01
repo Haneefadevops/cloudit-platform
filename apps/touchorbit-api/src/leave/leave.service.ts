@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from "@nestjs/common";
 import { DatabaseService } from "../database/database.service";
 
 @Injectable()
@@ -41,9 +45,39 @@ export class LeaveService {
 
     const result = await this.databaseService.query(
       `SELECT lr.*,
-              e.first_name || ' ' || e.last_name AS employee_name
+              jsonb_build_object(
+                'id', e.id,
+                'first_name', e.first_name,
+                'last_name', e.last_name,
+                'job_title', e.job_title,
+                'department', e.department,
+                'department_id', e.department_id,
+                'branch_id', e.branch_id,
+                'photo_url', e.photo_url,
+                'employee_number', e.employee_number
+              ) AS employee,
+              COALESCE(approvals.approvals, '[]'::jsonb) AS approvals
        FROM leave_records lr
        JOIN employees e ON e.id = lr.employee_id
+       LEFT JOIN LATERAL (
+         SELECT jsonb_agg(
+           jsonb_build_object(
+             'id', lra.id,
+             'level', lra.level,
+             'approver_role', lra.approver_role,
+             'status', lra.status,
+             'notes', lra.notes,
+             'decided_at', lra.decided_at,
+             'approver', jsonb_build_object(
+               'first_name', au.first_name,
+               'last_name', au.last_name
+             )
+           ) ORDER BY lra.level
+         ) AS approvals
+         FROM leave_request_approvals lra
+         LEFT JOIN users au ON au.id = lra.approver_user_id
+         WHERE lra.request_id = lr.id
+       ) approvals ON true
        WHERE ${conditions.join(" AND ")}
        ORDER BY lr.created_at DESC`,
       values,
@@ -54,9 +88,39 @@ export class LeaveService {
   async findRequestById(organizationId: string, id: string) {
     const result = await this.databaseService.query(
       `SELECT lr.*,
-              e.first_name || ' ' || e.last_name AS employee_name
+              jsonb_build_object(
+                'id', e.id,
+                'first_name', e.first_name,
+                'last_name', e.last_name,
+                'job_title', e.job_title,
+                'department', e.department,
+                'department_id', e.department_id,
+                'branch_id', e.branch_id,
+                'photo_url', e.photo_url,
+                'employee_number', e.employee_number
+              ) AS employee,
+              COALESCE(approvals.approvals, '[]'::jsonb) AS approvals
        FROM leave_records lr
        JOIN employees e ON e.id = lr.employee_id
+       LEFT JOIN LATERAL (
+         SELECT jsonb_agg(
+           jsonb_build_object(
+             'id', lra.id,
+             'level', lra.level,
+             'approver_role', lra.approver_role,
+             'status', lra.status,
+             'notes', lra.notes,
+             'decided_at', lra.decided_at,
+             'approver', jsonb_build_object(
+               'first_name', au.first_name,
+               'last_name', au.last_name
+             )
+           ) ORDER BY lra.level
+         ) AS approvals
+         FROM leave_request_approvals lra
+         LEFT JOIN users au ON au.id = lra.approver_user_id
+         WHERE lra.request_id = lr.id
+       ) approvals ON true
        WHERE lr.id = $2::uuid AND lr.organization_id = $1::uuid`,
       [organizationId, id],
     );
@@ -115,15 +179,39 @@ export class LeaveService {
     }
   }
 
-  async updatePendingRequest(
+  async updateRequest(
     organizationId: string,
     id: string,
     input: {
       startDate?: string;
       endDate?: string;
       reason?: string;
+      status?: string;
+      cancellationRequested?: boolean;
     },
   ) {
+    // Direct status/cancellation updates (e.g. cancellation approvals)
+    if (input.status || input.cancellationRequested !== undefined) {
+      const result = await this.databaseService.query(
+        `UPDATE leave_records
+         SET status = COALESCE($3, status),
+             cancellation_requested = COALESCE($4, cancellation_requested),
+             updated_at = now()
+         WHERE id = $2::uuid AND organization_id = $1::uuid
+         RETURNING *`,
+        [
+          organizationId,
+          id,
+          input.status ?? null,
+          input.cancellationRequested ?? null,
+        ],
+      );
+      if (result.rows.length === 0) {
+        throw new NotFoundException("Leave request not found");
+      }
+      return result.rows[0];
+    }
+
     const existing = await this.findRequestById(organizationId, id);
     if (existing.status !== "pending") {
       throw new NotFoundException("Only pending requests can be updated");
@@ -200,10 +288,10 @@ export class LeaveService {
   }
 
   async findBalances(organizationId: string, employeeId?: string) {
-    const conditions = ["organization_id = $1::uuid"];
+    const conditions = ["lb.organization_id = $1::uuid"];
     const values: unknown[] = [organizationId];
     if (employeeId) {
-      conditions.push("employee_id = $2::uuid");
+      conditions.push("lb.employee_id = $2::uuid");
       values.push(employeeId);
     }
     const result = await this.databaseService.query(
@@ -236,7 +324,8 @@ export class LeaveService {
     employeeId: string,
     input: {
       leaveType: string;
-      days: number;
+      days?: number;
+      entitledDays?: number;
       reason?: string;
     },
     changedByUserId: string,
@@ -246,16 +335,37 @@ export class LeaveService {
     try {
       await client.query("BEGIN");
       const year = new Date().getFullYear();
-      const balanceResult = await client.query(
-        `UPDATE leave_balances
-         SET remaining_days = GREATEST(remaining_days + $4, 0)
-         WHERE organization_id = $1::uuid
-           AND employee_id = $2::uuid
-           AND leave_type = $3
-           AND year = $5
-         RETURNING *`,
-        [organizationId, employeeId, input.leaveType, input.days, year],
-      );
+      let balanceResult;
+      if (input.entitledDays !== undefined) {
+        balanceResult = await client.query(
+          `UPDATE leave_balances
+           SET entitled_days = $4
+           WHERE organization_id = $1::uuid
+             AND employee_id = $2::uuid
+             AND leave_type = $3
+             AND year = $5
+           RETURNING *`,
+          [
+            organizationId,
+            employeeId,
+            input.leaveType,
+            input.entitledDays,
+            year,
+          ],
+        );
+      } else {
+        const days = input.days ?? 0;
+        balanceResult = await client.query(
+          `UPDATE leave_balances
+           SET remaining_days = GREATEST(remaining_days + $4, 0)
+           WHERE organization_id = $1::uuid
+             AND employee_id = $2::uuid
+             AND leave_type = $3
+             AND year = $5
+           RETURNING *`,
+          [organizationId, employeeId, input.leaveType, days, year],
+        );
+      }
       if (balanceResult.rows.length === 0) {
         throw new NotFoundException("Leave balance not found");
       }
@@ -272,7 +382,9 @@ export class LeaveService {
         [
           employeeId,
           organizationId,
-          `Adjusted ${input.leaveType} balance by ${input.days} days`,
+          input.entitledDays !== undefined
+            ? `Updated ${input.leaveType} entitlement to ${input.entitledDays} days`
+            : `Adjusted ${input.leaveType} balance by ${input.days ?? 0} days`,
           changedByUserId,
           changedByName,
           input.leaveType,
@@ -299,9 +411,20 @@ export class LeaveService {
     }
     const result = await this.databaseService.query(
       `SELECT c.*,
-              e.first_name || ' ' || e.last_name AS employee_name
+              jsonb_build_object(
+                'id', e.id,
+                'first_name', e.first_name,
+                'last_name', e.last_name,
+                'employee_number', e.employee_number
+              ) AS employees,
+              jsonb_build_object(
+                'id', h.id,
+                'name', h.name,
+                'date', h.date
+              ) AS holidays
        FROM comp_off_records c
        JOIN employees e ON e.id = c.employee_id
+       LEFT JOIN holidays h ON h.id = c.holiday_id
        WHERE ${conditions.join(" AND ")}
        ORDER BY c.worked_date DESC`,
       values,
@@ -316,13 +439,14 @@ export class LeaveService {
       workedDate: string;
       holidayId?: string;
       notes?: string;
+      status?: string;
     },
   ) {
     const result = await this.databaseService.query(
       `INSERT INTO comp_off_records (
          organization_id, employee_id, worked_date, holiday_id, notes, status
        )
-       VALUES ($1::uuid, $2::uuid, $3::date, $4::uuid, $5, 'pending')
+       VALUES ($1::uuid, $2::uuid, $3::date, $4::uuid, $5, $6)
        RETURNING *`,
       [
         organizationId,
@@ -330,8 +454,69 @@ export class LeaveService {
         input.workedDate,
         input.holidayId ?? null,
         input.notes ?? null,
+        input.status ?? "pending",
       ],
     );
+    return result.rows[0];
+  }
+
+  async approveCompOffRecord(
+    organizationId: string,
+    id: string,
+    userId: string,
+  ) {
+    const client = await this.databaseService.connect();
+    try {
+      await client.query("BEGIN");
+      const orgResult = await client.query(
+        `SELECT comp_off_expiry_months FROM organizations WHERE id = $1::uuid`,
+        [organizationId],
+      );
+      const expiryMonths = orgResult.rows[0]?.comp_off_expiry_months || 3;
+
+      const recordResult = await client.query(
+        `SELECT worked_date FROM comp_off_records WHERE id = $1::uuid AND organization_id = $2::uuid`,
+        [id, organizationId],
+      );
+      if (recordResult.rows.length === 0) {
+        throw new NotFoundException("Comp-off record not found");
+      }
+
+      const workedDate = new Date(recordResult.rows[0].worked_date);
+      const expiryDate = new Date(workedDate);
+      expiryDate.setMonth(expiryDate.getMonth() + expiryMonths);
+
+      const result = await client.query(
+        `UPDATE comp_off_records
+         SET status = 'approved',
+             approved_by = $3::uuid,
+             approved_at = now(),
+             expiry_date = $4::date,
+             updated_at = now()
+         WHERE id = $1::uuid AND organization_id = $2::uuid
+         RETURNING *`,
+        [id, organizationId, userId, expiryDate.toISOString().split("T")[0]],
+      );
+      await client.query("COMMIT");
+      return result.rows[0];
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async rejectCompOffRecord(organizationId: string, id: string) {
+    const result = await this.databaseService.query(
+      `DELETE FROM comp_off_records
+       WHERE id = $1::uuid AND organization_id = $2::uuid
+       RETURNING *`,
+      [id, organizationId],
+    );
+    if (result.rows.length === 0) {
+      throw new NotFoundException("Comp-off record not found");
+    }
     return result.rows[0];
   }
 
@@ -344,7 +529,12 @@ export class LeaveService {
     }
     const result = await this.databaseService.query(
       `SELECT er.*,
-              e.first_name || ' ' || e.last_name AS employee_name
+              jsonb_build_object(
+                'id', e.id,
+                'first_name', e.first_name,
+                'last_name', e.last_name,
+                'employee_number', e.employee_number
+              ) AS employee
        FROM leave_encashment_requests er
        JOIN employees e ON e.id = er.employee_id
        WHERE ${conditions.join(" AND ")}
@@ -364,6 +554,20 @@ export class LeaveService {
       reason?: string;
     },
   ) {
+    const balanceResult = await this.databaseService.query(
+      `SELECT remaining_days
+       FROM leave_balances
+       WHERE organization_id = $1::uuid
+         AND employee_id = $2::uuid
+         AND leave_type = 'annual'
+         AND year = $3`,
+      [organizationId, input.employeeId, input.year],
+    );
+    const remaining = Number(balanceResult.rows[0]?.remaining_days ?? 0);
+    if (remaining < input.daysRequested) {
+      throw new BadRequestException("Insufficient annual leave balance");
+    }
+
     const result = await this.databaseService.query(
       `INSERT INTO leave_encashment_requests (
          organization_id, employee_id, year, days_requested, amount, reason, status
@@ -379,6 +583,48 @@ export class LeaveService {
         input.reason ?? null,
       ],
     );
+    return result.rows[0];
+  }
+
+  async approveEncashmentRequest(
+    organizationId: string,
+    id: string,
+    userId: string,
+  ) {
+    const result = await this.databaseService.query(
+      `UPDATE leave_encashment_requests
+       SET status = 'approved',
+           reviewed_at = now(),
+           reviewed_by = $3::uuid,
+           updated_at = now()
+       WHERE id = $1::uuid AND organization_id = $2::uuid
+       RETURNING *`,
+      [id, organizationId, userId],
+    );
+    if (result.rows.length === 0) {
+      throw new NotFoundException("Encashment request not found");
+    }
+    return result.rows[0];
+  }
+
+  async rejectEncashmentRequest(
+    organizationId: string,
+    id: string,
+    userId: string,
+  ) {
+    const result = await this.databaseService.query(
+      `UPDATE leave_encashment_requests
+       SET status = 'rejected',
+           reviewed_at = now(),
+           reviewed_by = $3::uuid,
+           updated_at = now()
+       WHERE id = $1::uuid AND organization_id = $2::uuid
+       RETURNING *`,
+      [id, organizationId, userId],
+    );
+    if (result.rows.length === 0) {
+      throw new NotFoundException("Encashment request not found");
+    }
     return result.rows[0];
   }
 

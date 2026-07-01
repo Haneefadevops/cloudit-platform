@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { Calendar, CheckCircle, XCircle, Clock, Gift } from 'lucide-react'
 import { toast } from 'sonner'
 import { GrantCompOffDialog } from '@/components/grant-comp-off-dialog'
@@ -35,7 +35,7 @@ interface CompOffRecord {
 }
 
 export default function CompOffPage() {
-  const { organizationId, userId, isLoaded } = useAuth()
+  const { organizationId, isLoaded } = useAuth()
   const [records, setRecords] = useState<CompOffRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'used' | 'expired'>('all')
@@ -52,47 +52,11 @@ export default function CompOffPage() {
 
     setLoading(true)
     try {
-      let query = supabase
-        .from('comp_off_records')
-        .select(`
-          id,
-          employee_id,
-          worked_date,
-          holiday_id,
-          status,
-          approved_by,
-          approved_at,
-          used_date,
-          expiry_date,
-          notes,
-          employees!comp_off_records_employee_id_fkey (
-            first_name,
-            last_name,
-            employee_number
-          ),
-          holidays (
-            name,
-            date
-          )
-        `)
-        .eq('organization_id', organizationId)
-        .order('worked_date', { ascending: false })
-
-      if (filter !== 'all') {
-        query = query.eq('status', filter)
-      }
-
-      const { data, error } = await query
-
-      if (error) throw error
-
-      const transformedData = (data || []).map((record: any) => ({
-        ...record,
-        employees: Array.isArray(record.employees) ? record.employees[0] : record.employees,
-        holidays: Array.isArray(record.holidays) ? record.holidays[0] : record.holidays,
-      }))
-
-      setRecords(transformedData)
+      const params = new URLSearchParams()
+      if (filter !== 'all') params.set('status', filter)
+      const result = await api.get<CompOffRecord[]>(`/leave/comp-off?${params.toString()}`)
+      if (!result.ok) throw new Error(result.error || 'Failed to load comp-off records')
+      setRecords(result.data || [])
     } catch (error) {
       console.error('Error loading comp-off records:', error)
       toast.error('Failed to load comp-off records')
@@ -102,43 +66,9 @@ export default function CompOffPage() {
   }
 
   const handleApprove = async (recordId: string) => {
-    if (!userId || !organizationId) return
-
     try {
-      const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .select('comp_off_expiry_months')
-        .eq('id', organizationId)
-        .single()
-
-      if (orgError) throw orgError
-
-      const expiryMonths = org?.comp_off_expiry_months || 3
-
-      const { data: record, error: recordError } = await supabase
-        .from('comp_off_records')
-        .select('worked_date')
-        .eq('id', recordId)
-        .single()
-
-      if (recordError) throw recordError
-
-      const workedDate = new Date(record.worked_date)
-      const expiryDate = new Date(workedDate)
-      expiryDate.setMonth(expiryDate.getMonth() + expiryMonths)
-
-      const { error } = await supabase
-        .from('comp_off_records')
-        .update({
-          status: 'approved',
-          approved_by: userId,
-          approved_at: new Date().toISOString(),
-          expiry_date: expiryDate.toISOString().split('T')[0],
-        })
-        .eq('id', recordId)
-
-      if (error) throw error
-
+      const result = await api.post<CompOffRecord>(`/leave/comp-off/${recordId}/approve`, {})
+      if (!result.ok) throw new Error(result.error || 'Failed to approve comp-off')
       toast.success('Comp-off approved!')
       await loadRecords()
     } catch (error) {
@@ -151,13 +81,8 @@ export default function CompOffPage() {
     if (!confirm('Are you sure you want to reject this comp-off request?')) return
 
     try {
-      const { error } = await supabase
-        .from('comp_off_records')
-        .delete()
-        .eq('id', recordId)
-
-      if (error) throw error
-
+      const result = await api.post<CompOffRecord>(`/leave/comp-off/${recordId}/reject`, {})
+      if (!result.ok) throw new Error(result.error || 'Failed to reject comp-off')
       toast.success('Comp-off request rejected')
       await loadRecords()
     } catch (error) {

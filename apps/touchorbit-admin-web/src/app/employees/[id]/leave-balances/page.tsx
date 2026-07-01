@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard-layout'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { ArrowLeft, Save, Edit2, Check, X, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
@@ -15,6 +15,13 @@ interface LeaveBalance {
   used_days: number
   remaining_days: number
   year: number
+}
+
+interface ApiEmployee {
+  id: string
+  first_name: string
+  last_name: string
+  employee_number: string
 }
 
 const leaveTypeLabels: Record<string, string> = {
@@ -32,7 +39,7 @@ export default function ManualLeaveEditor() {
   const { organizationId } = useAuth()
   const router = useRouter()
   
-  const [employee, setEmployee] = useState<any>(null)
+  const [employee, setEmployee] = useState<ApiEmployee | null>(null)
   const [balances, setBalances] = useState<LeaveBalance[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -48,25 +55,16 @@ export default function ManualLeaveEditor() {
   async function loadData() {
     setLoading(true)
     try {
-      // 1. Load employee info
-      const { data: emp } = await supabase
-        .from('employees')
-        .select('first_name, last_name, employee_number')
-        .eq('id', employeeId)
-        .single()
-      setEmployee(emp)
+      const [empResult, balResult] = await Promise.all([
+        api.get<ApiEmployee>(`/employees/${employeeId}`),
+        api.get<LeaveBalance[]>(`/leave/balances/${employeeId}`),
+      ])
 
-      // 2. Load current year balances
+      if (!empResult.ok) throw new Error(empResult.error || 'Failed to load employee')
+      setEmployee(empResult.data || null)
+
       const year = new Date().getFullYear()
-      const { data: balData, error } = await supabase
-        .from('leave_balances')
-        .select('*')
-        .eq('employee_id', employeeId)
-        .eq('year', year)
-        .order('leave_type')
-      
-      if (error) throw error
-      setBalances(balData || [])
+      setBalances((balResult.data || []).filter((b) => b.year === year).sort((a, b) => a.leave_type.localeCompare(b.leave_type)))
     } catch (error) {
       console.error('Error loading balances:', error)
       toast.error('Failed to load leave balances')
@@ -82,18 +80,17 @@ export default function ManualLeaveEditor() {
       return
     }
 
+    const balance = balances.find((b) => b.id === balanceId)
+    if (!balance) return
+
     setSaving(true)
     try {
-      const { error } = await supabase
-        .from('leave_balances')
-        .update({ 
-          entitled_days: newVal,
-          // remaining_days will be updated by database trigger or we can calculate here
-          remaining_days: newVal - balances.find(b => b.id === balanceId)!.used_days
-        })
-        .eq('id', balanceId)
-
-      if (error) throw error
+      const result = await api.post<LeaveBalance>(`/leave/balances/${employeeId}/adjust`, {
+        leave_type: balance.leave_type,
+        entitled_days: newVal,
+        reason: 'Manual entitlement edit',
+      })
+      if (!result.ok) throw new Error(result.error || 'Failed to update entitlement')
       
       toast.success('Entitlement updated')
       setEditingId(null)
@@ -174,7 +171,8 @@ export default function ManualLeaveEditor() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleSaveEntitlement(bal.id)}
-                            className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all"
+                            disabled={saving}
+                            className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all disabled:opacity-50"
                             title="Save"
                           >
                             <Check className="w-4 h-4" />
@@ -215,7 +213,7 @@ export default function ManualLeaveEditor() {
               <p className="text-xs text-blue-700 mt-1 leading-relaxed">
                 Use this tool to manually override entitled days for individual employees. 
                 Common reasons include custom hiring terms or compensatory balance adjustments.
-                Changes are reflected immediately in the employee's app.
+                Changes are reflected immediately in the employee&apos;s app.
               </p>
             </div>
           </div>
