@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { EmptyState, PillBadge } from '@/components/ui-touchorbit'
 import { Check, Clock, Plus, Trash2, Edit3, AlertCircle, CalendarDays, Repeat, User } from 'lucide-react'
@@ -36,25 +36,14 @@ export function TaskSidebar({ onCreateTask, onEditTask, className }: TaskSidebar
     if (!organizationId || !isLoaded) return
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('employee_tasks')
-        .select(`
-          id, title, description, category, due_date, status, is_recurring,
-          employee:employees(id, first_name, last_name, department),
-          assigner:users!employee_tasks_assigned_by_fkey(id, first_name, last_name)
-        `)
-        .eq('organization_id', organizationId)
-        .neq('status', 'completed')
-        .order('due_date', { ascending: true, nullsFirst: false })
-        .limit(50)
-
-      if (error) {
-        console.error('TaskSidebar load error:', error)
+      const result = await api.get<Task[]>('/employee-tasks?limit=50')
+      if (!result.ok) {
+        console.error('TaskSidebar load error:', result.error)
         setTasks([])
         return
       }
 
-      const mapped = (data || []).map((t: any): Task => ({
+      const mapped = (result.data || []).map((t: any): Task => ({
         id: t.id,
         title: t.title,
         description: t.description,
@@ -62,8 +51,8 @@ export function TaskSidebar({ onCreateTask, onEditTask, className }: TaskSidebar
         due_date: t.due_date,
         status: t.status || 'pending',
         is_recurring: t.is_recurring || false,
-        employee: Array.isArray(t.employee) ? t.employee[0] : t.employee,
-        assigner: Array.isArray(t.assigner) ? t.assigner[0] : t.assigner,
+        employee: t.employee,
+        assigner: t.assigner,
       }))
 
       setTasks(mapped)
@@ -78,10 +67,8 @@ export function TaskSidebar({ onCreateTask, onEditTask, className }: TaskSidebar
 
   async function handleComplete(taskId: string) {
     try {
-      await supabase
-        .from('employee_tasks')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('id', taskId)
+      const result = await api.patch(`/employee-tasks/${taskId}/complete`, {})
+      if (!result.ok) throw new Error(result.error || 'Failed')
       toast.success('Task completed')
       loadTasks()
     } catch {
@@ -92,7 +79,8 @@ export function TaskSidebar({ onCreateTask, onEditTask, className }: TaskSidebar
   async function handleDelete(taskId: string) {
     if (!confirm('Delete this task?')) return
     try {
-      await supabase.from('employee_tasks').delete().eq('id', taskId)
+      const result = await api.del(`/employee-tasks/${taskId}`)
+      if (!result.ok) throw new Error(result.error || 'Failed')
       toast.success('Task deleted')
       loadTasks()
     } catch {

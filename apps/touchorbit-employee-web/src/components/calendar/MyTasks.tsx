@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { EmptyState, PillBadge } from '@/components/ui-touchorbit'
 import { Check, Clock, Plus, CalendarDays, Repeat, AlertCircle } from 'lucide-react'
@@ -25,46 +25,26 @@ interface MyTasksProps {
 }
 
 export function MyTasks({ onCreateTask, className }: MyTasksProps) {
-  const { userId, organizationId, isLoaded } = useAuth()
+  const { organizationId, isLoaded } = useAuth()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'overdue'>('all')
 
   const loadTasks = useCallback(async () => {
-    if (!organizationId || !isLoaded || !userId) return
+    if (!organizationId || !isLoaded) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
-      // Get employee ID first
-      const { data: emp } = await supabase
-        .from('employees')
-        .select('id')
-        .eq('user_id', userId)
-        .single()
-
-      if (!emp) {
-        setTasks([])
-        setLoading(false)
-        return
-      }
-
-      const { data, error } = await supabase
-        .from('employee_tasks')
-        .select(`
-          id, title, description, category, due_date, status, is_recurring,
-          assigner:users!employee_tasks_assigned_by_fkey(id, first_name, last_name)
-        `)
-        .eq('organization_id', organizationId)
-        .eq('employee_id', emp.id)
-        .order('due_date', { ascending: true, nullsFirst: false })
-        .limit(50)
-
-      if (error) {
-        console.error('MyTasks load error:', error)
+      const result = await api.get<Task[]>('/employee-tasks/my?limit=50')
+      if (!result.ok) {
+        console.error('MyTasks load error:', result.error)
         setTasks([])
         return
       }
 
-      const mapped = (data || []).map((t: any): Task => ({
+      const mapped = (result.data || []).map((t: any): Task => ({
         id: t.id,
         title: t.title,
         description: t.description,
@@ -72,14 +52,14 @@ export function MyTasks({ onCreateTask, className }: MyTasksProps) {
         due_date: t.due_date,
         status: t.status || 'pending',
         is_recurring: t.is_recurring || false,
-        assigner: Array.isArray(t.assigner) ? t.assigner[0] : t.assigner,
+        assigner: t.assigner,
       }))
 
       setTasks(mapped)
     } finally {
       setLoading(false)
     }
-  }, [organizationId, isLoaded, userId])
+  }, [organizationId, isLoaded])
 
   useEffect(() => {
     loadTasks()
@@ -87,10 +67,8 @@ export function MyTasks({ onCreateTask, className }: MyTasksProps) {
 
   async function handleComplete(taskId: string) {
     try {
-      await supabase
-        .from('employee_tasks')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('id', taskId)
+      const result = await api.patch(`/employee-tasks/${taskId}/complete`, {})
+      if (!result.ok) throw new Error(result.error || 'Failed')
       toast.success('Task completed!')
       loadTasks()
     } catch {

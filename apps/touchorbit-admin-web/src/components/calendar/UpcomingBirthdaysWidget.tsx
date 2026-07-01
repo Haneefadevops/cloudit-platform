@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { Cake, Loader2 } from 'lucide-react'
 import { BirthdayCard } from './BirthdayCard'
 
@@ -28,12 +28,9 @@ export function UpcomingBirthdaysWidget() {
   async function loadBirthdays() {
     setLoading(true)
     try {
-      const { data, error } = await supabase.rpc('get_upcoming_birthdays', {
-        p_org_id: organizationId,
-        p_limit: 5,
-      })
-      if (error) throw error
-      setBirthdays(data || [])
+      const result = await api.get<Birthday[]>('/calendar-events/birthdays/upcoming?limit=5')
+      if (!result.ok) throw new Error(result.error || 'Failed to load birthdays')
+      setBirthdays(result.data || [])
     } catch {
       setBirthdays([])
     } finally {

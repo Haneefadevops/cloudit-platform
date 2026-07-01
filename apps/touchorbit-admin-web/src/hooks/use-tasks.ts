@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { api } from "@/lib/api";
 
 export interface CalendarTask {
   id: string;
@@ -28,23 +28,15 @@ export function useTasks() {
     }
     setLoading(true);
     try {
-      // Try new employee_tasks table first (Phase 1 migration)
-      const { data, error } = await supabase
-        .from("employee_tasks")
-        .select("*")
-        .eq("organization_id", organizationId)
-        .order("due_date", { ascending: true })
-        .limit(50);
-
-      if (error) {
-        // Gracefully fall back if table doesn't exist yet
-        console.warn("employee_tasks not available yet:", error.message);
+      const result = await api.get<any[]>("/employee-tasks?limit=50");
+      if (!result.ok) {
+        console.warn("employee_tasks error:", result.error);
         setTasks([]);
         setLoading(false);
         return;
       }
 
-      const mapped = (data || []).map((t: any) => ({
+      const mapped = (result.data || []).map((t: any) => ({
         id: t.id,
         title: t.title,
         description: t.description,

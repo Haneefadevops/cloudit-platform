@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { EmployeeLayout } from '@/components/employee-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import {
   ChevronLeft, ChevronRight, Check, X, Clock, Coffee,
@@ -103,8 +103,8 @@ export default function EmployeeCalendarPage() {
 
   const loadEmployeeInfo = async () => {
     try {
-      const { data } = await supabase.from('employees').select('id').eq('user_id', userId).single()
-      if (data) setEmployeeId(data.id)
+      const result = await api.get<any>('/employees/me')
+      if (result.ok && result.data) setEmployeeId(result.data.id)
     } catch (e) { console.error(e) }
   }
 
@@ -116,16 +116,16 @@ export default function EmployeeCalendarPage() {
       const firstDayStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`
       const lastDayStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`
 
-      const [{ data: holidayData }, { data: leaveData }, { data: trainingData }, { data: calData }] = await Promise.all([
-        supabase.from('holidays').select('*').eq('organization_id', organizationId).gte('date', firstDayStr).lte('date', lastDayStr),
-        supabase.from('leave_records').select('*').eq('employee_id', employeeId).eq('status', 'approved').or(`start_date.lte.${lastDayStr},end_date.gte.${firstDayStr}`),
-        supabase.from('employee_training').select('*').eq('employee_id', employeeId).or(`start_date.lte.${lastDayStr},end_date.gte.${firstDayStr}`),
-        supabase.rpc('get_events_for_employee', { p_employee_id: employeeId, p_start_date: firstDayStr, p_end_date: lastDayStr }),
+      const [holidaysRes, leaveRes, trainingRes, calRes] = await Promise.all([
+        api.get<Holiday[]>(`/holidays?start=${firstDayStr}&end=${lastDayStr}`),
+        api.get<LeaveRecord[]>(`/leave/requests?employee_id=${employeeId}&status=approved&from=${firstDayStr}&to=${lastDayStr}`),
+        api.get<Training[]>(`/training/employee/${employeeId}?start=${firstDayStr}&end=${lastDayStr}`),
+        api.get<CalendarEvent[]>(`/calendar-events/employee/${employeeId}/events?start=${firstDayStr}&end=${lastDayStr}`),
       ])
-      setHolidays(holidayData || [])
-      setLeaveRecords(leaveData || [])
-      setTrainings(trainingData || [])
-      setCalendarEvents((calData || []) as CalendarEvent[])
+      setHolidays(holidaysRes.data || [])
+      setLeaveRecords(leaveRes.data || [])
+      setTrainings(trainingRes.data || [])
+      setCalendarEvents((calRes.data || []) as CalendarEvent[])
     } catch (e) {
       console.error(e)
       toast.error('Failed to load calendar data')
@@ -142,13 +142,13 @@ export default function EmployeeCalendarPage() {
       const lastDayStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`
       const todayStr = new Date().toISOString().split('T')[0]
 
-      const [{ data: clockData }, { data: leaveData }, { data: holidayData }] = await Promise.all([
-        supabase.from('clock_events').select('*').eq('employee_id', employeeId).gte('timestamp', firstDayStr).lte('timestamp', lastDayStr).order('timestamp', { ascending: true }),
-        supabase.from('leave_records').select('*').eq('employee_id', employeeId).eq('status', 'approved').or(`start_date.lte.${lastDayStr},end_date.gte.${firstDayStr}`),
-        supabase.from('holidays').select('*').eq('organization_id', organizationId).gte('date', firstDayStr).lte('date', lastDayStr),
+      const [clockRes, leaveRes, holidayRes] = await Promise.all([
+        api.get<ClockEvent[]>(`/attendance?employee_id=${employeeId}&from=${firstDayStr}&to=${lastDayStr}&limit=10000`),
+        api.get<LeaveRecord[]>(`/leave/requests?employee_id=${employeeId}&status=approved&from=${firstDayStr}&to=${lastDayStr}`),
+        api.get<Holiday[]>(`/holidays?start=${firstDayStr}&end=${lastDayStr}`),
       ])
 
-      const events = (clockData || []) as ClockEvent[]
+      const events = (clockRes.data || []) as ClockEvent[]
       const eventsByDate = new Map<string, ClockEvent[]>()
       events.forEach(ev => {
         const date = ev.timestamp.split('T')[0]
@@ -156,8 +156,8 @@ export default function EmployeeCalendarPage() {
         eventsByDate.get(date)!.push(ev)
       })
 
-      const leaveRecs = (leaveData || []) as LeaveRecord[]
-      const hols = (holidayData || []) as Holiday[]
+      const leaveRecs = (leaveRes.data || []) as LeaveRecord[]
+      const hols = (holidayRes.data || []) as Holiday[]
       const holidaySet = new Set(hols.map(h => h.date))
 
       let present = 0, absent = 0, late = 0, leaveCount = 0
@@ -193,8 +193,8 @@ export default function EmployeeCalendarPage() {
   const loadTodayLogs = async () => {
     if (!employeeId) return
     const today = new Date().toISOString().split('T')[0]
-    const { data } = await supabase.from('clock_events').select('*').eq('employee_id', employeeId).gte('timestamp', today).order('timestamp', { ascending: true })
-    setTodayLogs((data || []) as ClockEvent[])
+    const result = await api.get<ClockEvent[]>(`/attendance?employee_id=${employeeId}&from=${today}&to=${today}&limit=500`)
+    setTodayLogs((result.data || []) as ClockEvent[])
   }
 
   const isDateInLeave = useCallback((date: Date) => {
@@ -279,20 +279,9 @@ export default function EmployeeCalendarPage() {
   }
 
   const handleCreateTask = async (formData: TaskFormData) => {
-    if (!organizationId) return
+    if (!organizationId || !userId) return
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not found')
-
-      const { data: emp } = await supabase
-        .from('employees')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
-
-      await supabase.from('employee_tasks').insert({
-        organization_id: organizationId,
-        employee_id: emp?.id,
+      const result = await api.post('/employee-tasks', {
         title: formData.title,
         description: formData.description || null,
         category: formData.category,
@@ -300,9 +289,8 @@ export default function EmployeeCalendarPage() {
         reminder_minutes: formData.reminder_minutes,
         is_recurring: formData.is_recurring,
         recurrence_rule: formData.recurrence_rule || null,
-        status: 'pending',
-        created_by: user.id,
       })
+      if (!result.ok) throw new Error(result.error || 'Failed to create task')
       toast.success('Task created')
       setShowTaskDialog(false)
     } catch (error: any) { toast.error(error.message) }

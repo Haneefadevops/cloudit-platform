@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { WidgetShell } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
@@ -43,41 +43,9 @@ export function UpcomingEventsWidget({ organizationId, editMode, onRemove }: Wid
     setLoading(true)
     setError(false)
     try {
-      const today = new Date().toISOString().split('T')[0]
-      const future = new Date()
-      future.setDate(future.getDate() + 30)
-      const futureStr = future.toISOString().split('T')[0]
-
-      const [holidaysRes, eventsRes] = await Promise.all([
-        supabase
-          .from('holidays')
-          .select('id, name, date, type')
-          .eq('organization_id', organizationId)
-          .gte('date', today)
-          .lte('date', futureStr),
-        supabase
-          .from('calendar_events')
-          .select('id, title, event_date, event_type')
-          .eq('organization_id', organizationId)
-          .gte('event_date', today)
-          .lte('event_date', futureStr),
-      ])
-
-      const merged: EventItem[] = []
-
-      if (holidaysRes.data) {
-        for (const h of holidaysRes.data) {
-          merged.push({ id: `h-${h.id}`, title: h.name, date: h.date, type: h.type ?? 'public', source: 'holiday' })
-        }
-      }
-      if (eventsRes.data) {
-        for (const e of eventsRes.data) {
-          merged.push({ id: `e-${e.id}`, title: e.title, date: e.event_date, type: e.event_type ?? 'company', source: 'event' })
-        }
-      }
-
-      merged.sort((a, b) => a.date.localeCompare(b.date))
-      setEvents(merged.slice(0, 5))
+      const result = await api.get<EventItem[]>('/calendar-events/upcoming?days=30')
+      if (!result.ok) throw new Error(result.error || 'Failed')
+      setEvents(result.data || [])
     } catch (e) {
       console.error('Error loading upcoming events widget data:', e)
       setError(true)

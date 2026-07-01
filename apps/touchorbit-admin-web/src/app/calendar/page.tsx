@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import {
   ChevronLeft, ChevronRight, Plus, Sparkles, X, Trash2, Clock,
@@ -55,7 +55,7 @@ function toEventCardData(e: UnifiedCalendarEvent): EventCardData {
 }
 
 export default function CalendarPage() {
-  const { organizationId, isLoaded } = useAuth()
+  const { organizationId, userId, isLoaded } = useAuth()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<CalendarView>('month')
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all')
@@ -128,13 +128,10 @@ export default function CalendarPage() {
 
   async function loadEmployees() {
     if (!organizationId) return
-    const { data } = await supabase
-      .from('employees')
-      .select('id, first_name, last_name')
-      .eq('organization_id', organizationId)
-      .eq('employment_status', 'active')
-      .order('first_name')
-    setEmployees(data || [])
+    const result = await api.get<any[]>('/employees?status=active&limit=500')
+    if (result.ok) {
+      setEmployees((result.data || []).map((e: any) => ({ id: e.id, first_name: e.first_name, last_name: e.last_name })))
+    }
   }
 
   // Workload: count events per day for heatmap
@@ -180,12 +177,11 @@ export default function CalendarPage() {
         end = start
       }
 
-      let url = `/api/calendar/hub?startDate=${start}&endDate=${end}`
+      let url = `/calendar-events/hub?start=${start}&end=${end}`
       if (selectedDepartment !== 'all') url += `&departmentId=${encodeURIComponent(selectedDepartment)}`
-      const res = await fetch(url)
-      if (res.ok) {
-        const data = await res.json()
-        setHubData(data)
+      const result = await api.get<any>(url)
+      if (result.ok) {
+        setHubData(result.data)
       }
     } catch (e) { console.error('Hub fetch error:', e) }
     setHubLoading(false)
@@ -285,13 +281,9 @@ export default function CalendarPage() {
   async function loadDepartments() {
     if (!organizationId) return
     try {
-      const { data } = await supabase.from('employees')
-        .select('department')
-        .eq('organization_id', organizationId)
-        .not('department', 'is', null)
-      if (data) {
-        const unique = Array.from(new Set(data.map((e: any) => e.department).filter(Boolean)))
-        setDepartments(unique as string[])
+      const result = await api.get<any[]>('/organizations/departments')
+      if (result.ok && result.data) {
+        setDepartments(result.data.map((d: any) => d.name).filter(Boolean))
       }
     } catch (e) { console.error(e) }
   }
@@ -307,31 +299,14 @@ export default function CalendarPage() {
   }
 
   async function handleCreateEvent(formData: any) {
-    if (!organizationId) return
+    if (!organizationId || !userId) return
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not found')
-
-      const startAt = formData.all_day
-        ? `${formData.event_date}T00:00:00`
-        : formData.start_time
-        ? `${formData.event_date}T${formData.start_time}`
-        : `${formData.event_date}T00:00:00`
-      const endAt = formData.all_day
-        ? `${formData.event_date}T23:59:59`
-        : formData.end_time
-        ? `${formData.event_date}T${formData.end_time}`
-        : startAt
-
-      const { data: inserted, error: insertError } = await supabase.from('calendar_events').insert({
-        organization_id: organizationId,
+      const payload = {
         title: formData.title,
         description: formData.description,
         event_date: formData.event_date,
         start_time: formData.start_time || null,
         end_time: formData.end_time || null,
-        start_at: startAt,
-        end_at: endAt,
         all_day: formData.all_day,
         event_type: formData.event_type === 'company_event' ? 'announcement' : formData.event_type,
         event_scope: formData.event_scope,
@@ -339,40 +314,18 @@ export default function CalendarPage() {
         department_id: formData.department_id || null,
         secondary_branch_id: formData.secondary_branch_id || null,
         secondary_department_id: formData.secondary_department_id || null,
-        team_member_ids: formData.team_member_ids.length > 0 ? formData.team_member_ids : null,
+        team_member_ids: formData.team_member_ids?.length > 0 ? formData.team_member_ids : [],
         meeting_provider: formData.meeting_provider || null,
         meeting_url: formData.meeting_url || null,
         requires_rsvp: formData.requires_rsvp,
         reminder_minutes: formData.reminder_minutes,
         location: formData.location || null,
-        status: 'confirmed',
-        created_by: user.id,
-      }).select('id').single()
+      }
+      const result = await api.post<{ id: string }>('/calendar-events', payload)
+      if (!result.ok) throw new Error(result.error || 'Failed to create event')
 
-      if (insertError) throw insertError
-
-      // Auto-generate meeting link if provider selected and no manual URL
-      if (formData.meeting_provider && formData.meeting_provider !== 'manual' && !formData.meeting_url && inserted?.id) {
-        try {
-          const res = await fetch('/api/meetings/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event_id: inserted.id,
-              provider: formData.meeting_provider,
-              title: formData.title,
-              start_time: startAt,
-              end_time: endAt,
-              timezone: 'UTC',
-            }),
-          })
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}))
-            console.warn('Auto-meeting creation failed:', err.error || res.statusText)
-          }
-        } catch (e) {
-          console.warn('Auto-meeting creation error:', e)
-        }
+      if (formData.meeting_provider && formData.meeting_provider !== 'manual' && !formData.meeting_url) {
+        console.warn('Auto-meeting creation skipped: meeting provider integration not yet migrated')
       }
 
       toast.success('Event created')
@@ -382,27 +335,14 @@ export default function CalendarPage() {
   }
 
   async function handleEditEvent(eventId: string, formData: any) {
-    if (!organizationId) return
+    if (!organizationId || !userId) return
     try {
-      const startAt = formData.all_day
-        ? `${formData.event_date}T00:00:00`
-        : formData.start_time
-        ? `${formData.event_date}T${formData.start_time}`
-        : `${formData.event_date}T00:00:00`
-      const endAt = formData.all_day
-        ? `${formData.event_date}T23:59:59`
-        : formData.end_time
-        ? `${formData.event_date}T${formData.end_time}`
-        : startAt
-
-      await supabase.from('calendar_events').update({
+      const payload = {
         title: formData.title,
         description: formData.description,
         event_date: formData.event_date,
         start_time: formData.start_time || null,
         end_time: formData.end_time || null,
-        start_at: startAt,
-        end_at: endAt,
         all_day: formData.all_day,
         event_type: formData.event_type === 'company_event' ? 'announcement' : formData.event_type,
         event_scope: formData.event_scope,
@@ -410,37 +350,19 @@ export default function CalendarPage() {
         department_id: formData.department_id || null,
         secondary_branch_id: formData.secondary_branch_id || null,
         secondary_department_id: formData.secondary_department_id || null,
-        team_member_ids: formData.team_member_ids.length > 0 ? formData.team_member_ids : null,
+        team_member_ids: formData.team_member_ids?.length > 0 ? formData.team_member_ids : null,
         meeting_provider: formData.meeting_provider || null,
         meeting_url: formData.meeting_url || null,
         requires_rsvp: formData.requires_rsvp,
         reminder_minutes: formData.reminder_minutes,
         location: formData.location || null,
         status: formData.status,
-      }).eq('id', eventId)
+      }
+      const result = await api.patch<{ id: string }>(`/calendar-events/${eventId}`, payload)
+      if (!result.ok) throw new Error(result.error || 'Failed to update event')
 
-      // Auto-generate meeting link if provider selected and no manual URL
       if (formData.meeting_provider && formData.meeting_provider !== 'manual' && !formData.meeting_url) {
-        try {
-          const res = await fetch('/api/meetings/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event_id: eventId,
-              provider: formData.meeting_provider,
-              title: formData.title,
-              start_time: startAt,
-              end_time: endAt,
-              timezone: 'UTC',
-            }),
-          })
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}))
-            console.warn('Auto-meeting creation failed:', err.error || res.statusText)
-          }
-        } catch (e) {
-          console.warn('Auto-meeting creation error:', e)
-        }
+        console.warn('Auto-meeting creation skipped: meeting provider integration not yet migrated')
       }
 
       toast.success('Event updated')
@@ -452,23 +374,16 @@ export default function CalendarPage() {
 
   async function loadTaskEmployees() {
     if (!organizationId) return
-    const { data } = await supabase
-      .from('employees')
-      .select('id, first_name, last_name')
-      .eq('organization_id', organizationId)
-      .eq('employment_status', 'active')
-      .order('first_name')
-    setTaskEmployees(data || [])
+    const result = await api.get<any[]>('/employees?status=active&limit=500')
+    if (result.ok) {
+      setTaskEmployees((result.data || []).map((e: any) => ({ id: e.id, first_name: e.first_name, last_name: e.last_name })))
+    }
   }
 
   async function handleCreateTask(formData: TaskFormData) {
-    if (!organizationId) return
+    if (!organizationId || !userId) return
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not found')
-
       const payload: any = {
-        organization_id: organizationId,
         title: formData.title,
         description: formData.description || null,
         category: formData.category,
@@ -476,23 +391,18 @@ export default function CalendarPage() {
         reminder_minutes: formData.reminder_minutes,
         is_recurring: formData.is_recurring,
         recurrence_rule: formData.recurrence_rule || null,
-        status: 'pending',
-        created_by: user.id,
       }
+      if (formData.employee_id) payload.employee_id = formData.employee_id
 
-      if (formData.employee_id) {
-        payload.employee_id = formData.employee_id
-        payload.assigned_by = user.id
-      }
-
-      await supabase.from('employee_tasks').insert(payload)
+      const result = await api.post('/employee-tasks', payload)
+      if (!result.ok) throw new Error(result.error || 'Failed to create task')
       toast.success('Task created')
       setShowTaskDialog(false)
     } catch (error: any) { toast.error(error.message) }
   }
 
   async function handleEditTask(taskId: string, formData: TaskFormData) {
-    if (!organizationId) return
+    if (!organizationId || !userId) return
     try {
       const update: any = {
         title: formData.title,
@@ -505,7 +415,8 @@ export default function CalendarPage() {
       }
       if (formData.employee_id) update.employee_id = formData.employee_id
 
-      await supabase.from('employee_tasks').update(update).eq('id', taskId)
+      const result = await api.patch(`/employee-tasks/${taskId}`, update)
+      if (!result.ok) throw new Error(result.error || 'Failed to update task')
       toast.success('Task updated')
       setShowTaskDialog(false)
       setEditingTask(null)
@@ -513,37 +424,10 @@ export default function CalendarPage() {
   }
 
   async function handleDuplicateEvent(event: UnifiedCalendarEvent) {
-    if (!organizationId) return
+    if (!organizationId || !userId) return
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not found')
-
-      const tomorrow = new Date()
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      const newDate = tomorrow.toISOString().split('T')[0]
-
-      const { data: inserted, error: insertError } = await supabase.from('calendar_events').insert({
-        organization_id: organizationId,
-        title: `${event.title} (Copy)`,
-        description: event.description,
-        event_date: newDate,
-        start_time: event.startAt ? event.startAt.split('T')[1]?.slice(0, 5) : null,
-        end_time: event.endAt ? event.endAt.split('T')[1]?.slice(0, 5) : null,
-        start_at: event.startAt ? event.startAt.replace(event.startAt.split('T')[0], newDate) : `${newDate}T00:00:00`,
-        end_at: event.endAt ? event.endAt.replace(event.endAt.split('T')[0], newDate) : `${newDate}T00:00:00`,
-        all_day: event.allDay,
-        event_type: event.type,
-        event_scope: 'organization',
-        meeting_provider: event.raw?.meeting_provider || null,
-        meeting_url: event.meetingUrl || null,
-        requires_rsvp: false,
-        reminder_minutes: 30,
-        location: event.location || null,
-        status: 'confirmed',
-        created_by: user.id,
-      }).select('id').single()
-
-      if (insertError) throw insertError
+      const result = await api.post<{ id: string }>(`/calendar-events/${event.id}/duplicate`, {})
+      if (!result.ok) throw new Error(result.error || 'Failed to duplicate event')
       toast.success('Event duplicated for tomorrow')
       setSelectedEvent(null)
       refetch()
@@ -551,14 +435,10 @@ export default function CalendarPage() {
   }
 
   async function handleRescheduleEvent(eventId: string, data: any) {
-    if (!organizationId) return
+    if (!organizationId || !userId) return
     try {
-      // Mark event as rescheduled
-      await supabase.from('calendar_events').update({
-        status: 'rescheduled',
-        original_start_time: selectedEvent?.startAt,
-        reschedule_reason: data.reason,
-      }).eq('id', eventId)
+      const result = await api.patch(`/calendar-events/${eventId}/reschedule`, { reason: data.reason })
+      if (!result.ok) throw new Error(result.error || 'Failed to reschedule event')
       toast.success('Event rescheduled')
       setShowEditDialog(false)
       setSelectedEvent(null)
@@ -569,15 +449,11 @@ export default function CalendarPage() {
   async function handleDeleteEvent(eventId: string) {
     if (!confirm('Delete event?')) return
     try {
-      // Try calendar_events first
-      const { error } = await supabase.from('calendar_events').delete().eq('id', eventId)
-      if (!error) {
-        toast.success('Event deleted')
-        refetch()
-        setSelectedEvent(null)
-        return
-      }
-      toast.error('Failed to delete event')
+      const result = await api.del(`/calendar-events/${eventId}`)
+      if (!result.ok) throw new Error(result.error || 'Failed to delete event')
+      toast.success('Event deleted')
+      refetch()
+      setSelectedEvent(null)
     } catch { toast.error('Failed to delete event') }
   }
 
@@ -585,30 +461,33 @@ export default function CalendarPage() {
     e.preventDefault()
     if (!organizationId) return
     try {
-      await supabase.from('holidays').insert({ organization_id: organizationId, ...holidayFormData })
+      const result = await api.post('/holidays', { ...holidayFormData })
+      if (!result.ok) throw new Error(result.error || 'Failed to add holiday')
       toast.success('Holiday added successfully!')
       setHolidayFormData({ name: '', date: '', type: 'public', recurring: false, description: '' })
       setShowAddHolidayDialog(false)
       refetch()
-    } catch { toast.error('Failed to add holiday') }
+    } catch (error: any) { toast.error(error.message || 'Failed to add holiday') }
   }
 
   async function handleEditHoliday(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedHoliday) return
     try {
-      await supabase.from('holidays').update(holidayFormData).eq('id', selectedHoliday.id)
+      const result = await api.patch(`/holidays/${selectedHoliday.id}`, holidayFormData)
+      if (!result.ok) throw new Error(result.error || 'Failed to update holiday')
       toast.success('Holiday updated!')
       setShowEditHolidayDialog(false)
       setSelectedHoliday(null)
       refetch()
-    } catch { toast.error('Failed to update holiday') }
+    } catch (error: any) { toast.error(error.message || 'Failed to update holiday') }
   }
 
   async function handleDeleteHoliday(holidayId: string) {
     if (!confirm('Are you sure?')) return
     try {
-      await supabase.from('holidays').delete().eq('id', holidayId)
+      const result = await api.del(`/holidays/${holidayId}`)
+      if (!result.ok) throw new Error(result.error || 'Failed to delete holiday')
       toast.success('Holiday deleted')
       setShowEditHolidayDialog(false); setSelectedHoliday(null)
       refetch()
@@ -619,11 +498,11 @@ export default function CalendarPage() {
     if (!organizationId) return
     if (!confirm('Import Sri Lankan public holidays for 2026?')) return
     try {
-      const { data, error } = await supabase.rpc('insert_sri_lankan_holidays_2026', { p_organization_id: organizationId })
-      if (error) throw error
-      toast.success(data === 0 ? 'Holidays already exist' : `Added ${data} holidays!`)
+      const result = await api.post<{ count: number }>('/holidays/import-sri-lankan-2026', {})
+      if (!result.ok) throw new Error(result.error || 'Failed to import holidays')
+      toast.success(result.data?.count === 0 ? 'Holidays already exist' : `Added ${result.data?.count} holidays!`)
       refetch()
-    } catch { toast.error('Failed to import holidays') }
+    } catch (error: any) { toast.error(error.message || 'Failed to import holidays') }
   }
 
   const previousPeriod = () => {

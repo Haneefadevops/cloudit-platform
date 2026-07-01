@@ -10,7 +10,7 @@ import { ClockInButton } from '@/components/clock-in-button'
 import { useAuth } from '@/lib/auth'
 import { useClockStatus } from '@/hooks/use-clock-status'
 import { useBreakTracker } from '@/hooks/use-break-tracker'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { calculateHours } from '@/lib/utils'
 import { Umbrella, Receipt, Coffee, ChevronRight, MapPin, Calendar, Gift } from 'lucide-react'
 import Link from 'next/link'
@@ -81,30 +81,20 @@ export default function EmployeeDashboard() {
 
   const loadData = async () => {
     try {
-      const { data: emp } = await supabase
-        .from('employees')
-        .select('*')
-        .eq('user_id', userId)
-        .single()
+      const empResult = await api.get<any>('/employees/me')
+      const emp = empResult.ok ? empResult.data : null
       setEmployee(emp)
 
-      if (emp) {
-        const { data: compOff } = await supabase
-          .from('comp_off_records')
-          .select('id')
-          .eq('employee_id', emp.id)
-          .eq('status', 'approved')
-        setCompOffBalance(compOff?.length || 0)
+      if (emp?.id) {
+        const compOffResult = await api.get<any[]>(`/leave/comp-off?employee_id=${emp.id}&status=approved`)
+        setCompOffBalance(compOffResult.data?.length || 0)
       }
 
-      const { data: holidays } = await supabase
-        .from('holidays')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .gte('date', new Date().toISOString().split('T')[0])
-        .order('date', { ascending: true })
-        .limit(2)
-      setUpcomingHolidays(holidays || [])
+      const today = new Date().toISOString().split('T')[0]
+      const holidaysResult = await api.get<any[]>(`/holidays?start=${today}`)
+      const holidays = holidaysResult.data || []
+      holidays.sort((a: any, b: any) => a.date.localeCompare(b.date))
+      setUpcomingHolidays(holidays.slice(0, 2))
     } catch (error) {
       console.error('Error loading dashboard data:', error)
     }

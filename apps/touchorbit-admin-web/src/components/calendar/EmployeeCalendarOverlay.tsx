@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { X, CalendarDays, Clock, MapPin, Video, Users } from 'lucide-react'
 
 interface CalendarEvent {
@@ -42,10 +42,11 @@ export function EmployeeCalendarOverlay({ employeeId, employeeName, onClose }: E
       const startStr = start.toISOString().split('T')[0]
       const endStr = end.toISOString().split('T')[0]
 
-      const { data, error } = await supabase
-        .rpc('get_events_for_employee', { p_employee_id: employeeId, p_start_date: startStr, p_end_date: endStr })
-      if (error) throw error
-      setEvents((data || []) as CalendarEvent[])
+      const result = await api.get<CalendarEvent[]>(
+        `/calendar-events/employee/${employeeId}/events?start=${startStr}&end=${endStr}`,
+      )
+      if (!result.ok) throw new Error(result.error || 'Failed')
+      setEvents((result.data || []) as CalendarEvent[])
     } catch (e) { console.error(e) }
     setLoading(false)
   }
