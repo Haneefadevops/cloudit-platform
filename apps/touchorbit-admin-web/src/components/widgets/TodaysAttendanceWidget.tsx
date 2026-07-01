@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { api } from '@/lib/api'
+import { useMemo } from 'react'
+import { useDashboard } from '@/lib/dashboard/dashboard-context'
 import { WidgetShell, useWidgetSize } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
@@ -10,82 +9,19 @@ import { ArrowUp, CalendarCheck, Users } from 'lucide-react'
 import { WidgetError } from './_shared/WidgetPrimitives'
 
 export function TodaysAttendanceWidget({ organizationId, editMode, onRemove }: WidgetProps) {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-  const [data, setData] = useState({
-    total: 0,
-    present: 0,
-    late: 0,
-    absent: 0,
-    rate: 0
-  })
+  const { summary, loading, error, refresh } = useDashboard()
 
-  async function loadData() {
-    setLoading(true)
-    setError(false)
-    try {
-      const today = new Date().toISOString().split('T')[0]
-      const todayStart = today + 'T00:00:00'
-      const todayEnd = today + 'T23:59:59'
-
-      const [{ data: empData }, eventsResult] = await Promise.all([
-        supabase
-          .from('employees')
-          .select('id')
-          .eq('organization_id', organizationId)
-          .eq('employment_status', 'active'),
-        api.get<any[]>(`/attendance?event_type=clock_in&from=${encodeURIComponent(todayStart)}&to=${encodeURIComponent(todayEnd)}&limit=500`),
-      ])
-
-      if (!eventsResult.ok) throw new Error(eventsResult.error || 'Failed to load clock events')
-      const clockData = eventsResult.data || []
-
-      const total = empData?.length || 0
-      
-      // Deduplicate present employees
-      const presentIds = new Set(clockData?.map((e: any) => e.employee_id) || [])
-      const presentCount = presentIds.size
-
-      // Late calculation: clock-ins after 09:15
-      // We only count the FIRST clock-in of each employee for lateness
-      const firstClockIns = new Map<string, string>()
-      clockData?.forEach((e: any) => {
-        if (!firstClockIns.has(e.employee_id) || e.timestamp < firstClockIns.get(e.employee_id)!) {
-          firstClockIns.set(e.employee_id, e.timestamp)
-        }
-      })
-
-      let lateCount = 0
-      firstClockIns.forEach((timestamp) => {
-        const time = new Date(timestamp)
-        const hours = time.getHours()
-        const minutes = time.getMinutes()
-        if (hours > 9 || (hours === 9 && minutes > 15)) {
-          lateCount++
-        }
-      })
-
-      const absentCount = total - presentCount
-      const rate = total > 0 ? Math.round((presentCount / total) * 100) : 0
-
-      setData({
-        total,
-        present: presentCount,
-        late: lateCount,
-        absent: absentCount,
-        rate
-      })
-    } catch (error) {
-      console.error('Error loading attendance widget data:', error)
-      setError(true)
-    } finally {
-      setLoading(false)
+  const data = useMemo(() => {
+    const total = summary?.scheduledToday ?? 0
+    const present = summary?.clockedInToday ?? 0
+    return {
+      total,
+      present,
+      late: 0,
+      absent: Math.max(0, total - present),
+      rate: summary?.attendanceRateToday ?? 0,
     }
-  }
-
-  useEffect(() => {
-    if (organizationId) loadData()
-  }, [organizationId])
+  }, [summary])
 
   return (
     <WidgetShell
@@ -96,10 +32,10 @@ export function TodaysAttendanceWidget({ organizationId, editMode, onRemove }: W
       editMode={editMode}
       onRemove={onRemove}
       loading={loading}
-      onRefresh={loadData}
+      onRefresh={refresh}
     >
       {error ? (
-        <WidgetError onRetry={loadData} />
+        <WidgetError onRetry={refresh} />
       ) : (
       <AttendanceContent data={data} />
       )}

@@ -24,6 +24,8 @@ export type WidgetType =
   | 'performance-reviews'
   | 'assets-overview'
   | 'upcoming-events'
+  // backend-driven widgets
+  | 'recent-activity'
 
 export interface WidgetInstance {
   i: string      // unique instance id, e.g. 'widget-abc123'

@@ -8,6 +8,7 @@ import { useAutoLinkAdmin } from '@/hooks/use-auto-link-admin'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { LayoutDashboard, Loader2 } from 'lucide-react'
+import { DashboardProvider } from '@/lib/dashboard/dashboard-context'
 
 const ConfigurableDashboard = dynamic(
   () => import('@/components/configurable-dashboard').then(m => m.ConfigurableDashboard),
@@ -80,7 +81,9 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col h-full bg-gray-50">
-        <ConfigurableDashboard />
+        <DashboardProvider>
+          <ConfigurableDashboard />
+        </DashboardProvider>
       </div>
     </DashboardLayout>
   )

@@ -1,40 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useMemo } from 'react'
+import { useDashboard } from '@/lib/dashboard/dashboard-context'
 import { WidgetShell } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
 import { FileSignature } from 'lucide-react'
 import { CompactMetricLink, WidgetError } from './_shared/WidgetPrimitives'
 
-export function PendingDocSignaturesWidget({ organizationId, editMode, onRemove }: WidgetProps) {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-  const [data, setData] = useState({ count: 0 })
+export function PendingDocSignaturesWidget({ organizationId: _organizationId, editMode, onRemove }: WidgetProps) {
+  const { widgets, loading, error, refresh } = useDashboard()
 
-  async function loadData() {
-    setLoading(true)
-    setError(false)
-    try {
-      const { count } = await supabase
-        .from('sent_documents')
-        .select('id', { count: 'exact', head: true })
-        .eq('organization_id', organizationId)
-        .eq('status', 'pending')
-
-      setData({ count: count ?? 0 })
-    } catch (e) {
-      console.error('Error loading doc signatures widget data:', e)
-      setError(true)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (organizationId) loadData()
-  }, [organizationId])
+  const count = useMemo(() => {
+    const found = widgets.find(w => w.id === 'documents')
+    return found?.pending_signatures ?? 0
+  }, [widgets])
 
   return (
     <WidgetShell
@@ -44,12 +24,12 @@ export function PendingDocSignaturesWidget({ organizationId, editMode, onRemove 
       editMode={editMode}
       onRemove={onRemove}
       loading={loading}
-      onRefresh={loadData}
+      onRefresh={refresh}
     >
       {error ? (
-        <WidgetError onRetry={loadData} />
+        <WidgetError onRetry={refresh} />
       ) : (
-        <CompactMetricLink href="/documents" icon={FileSignature} tone="sky" value={data.count} label="Pending" detail="Awaiting signature" />
+        <CompactMetricLink href="/documents" icon={FileSignature} tone="sky" value={count} label="Pending" detail="Awaiting signature" />
       )}
     </WidgetShell>
   )

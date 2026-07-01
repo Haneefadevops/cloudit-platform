@@ -16,6 +16,7 @@ const OWNER_DEFAULT: DashboardConfig = {
     { i: 'w-overtime',      type: 'pending-overtime' },
     { i: 'w-expenses',      type: 'pending-expenses' },
     { i: 'w-announcements', type: 'announcements' },
+    { i: 'w-activity',      type: 'recent-activity' },
   ],
   layouts: {
     lg: [
@@ -27,6 +28,7 @@ const OWNER_DEFAULT: DashboardConfig = {
       { i: 'w-overtime',      x: 8, y: 4, w: 2, h: 3 },
       { i: 'w-expenses',      x: 10, y: 4, w: 2, h: 3 },
       { i: 'w-announcements', x: 4, y: 9, w: 8, h: 3 },
+      { i: 'w-activity',      x: 0, y: 12, w: 12, h: 4 },
     ],
     md: [
       { i: 'w-attendance',    x: 0, y: 0,  w: 4, h: 4 },
@@ -37,6 +39,7 @@ const OWNER_DEFAULT: DashboardConfig = {
       { i: 'w-overtime',      x: 0, y: 7,  w: 2, h: 1 },
       { i: 'w-expenses',      x: 2, y: 7,  w: 2, h: 1 },
       { i: 'w-announcements', x: 0, y: 12, w: 8, h: 3 },
+      { i: 'w-activity',      x: 0, y: 15, w: 8, h: 4 },
     ],
     sm: [
       { i: 'w-attendance',    x: 0, y: 0,  w: 4, h: 3 },
@@ -84,6 +87,7 @@ const HR_DEFAULT: DashboardConfig = {
       { i: 'w-clock-ins',     x: 0, y: 10, w: 4, h: 4 },
       { i: 'w-weekly',        x: 0, y: 14, w: 4, h: 4 },
       { i: 'w-announcements', x: 0, y: 18, w: 4, h: 3 },
+      { i: 'w-activity',      x: 0, y: 21, w: 4, h: 4 },
     ],
   },
 }

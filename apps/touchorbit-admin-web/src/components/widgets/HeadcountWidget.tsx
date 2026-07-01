@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useCallback, useEffect, useState } from 'react'
+import { api } from '@/lib/api'
+import { useDashboard } from '@/lib/dashboard/dashboard-context'
 import { WidgetShell } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
@@ -15,6 +16,7 @@ interface DeptCount {
 }
 
 export function HeadcountWidget({ organizationId, editMode, onRemove }: WidgetProps) {
+  const { summary } = useDashboard()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [data, setData] = useState({
@@ -22,50 +24,43 @@ export function HeadcountWidget({ organizationId, editMode, onRemove }: WidgetPr
     departments: [] as DeptCount[]
   })
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
     setError(false)
     try {
-      const { data: employees } = await supabase
-        .from('employees')
-        .select('id, departments:departments(name)')
-        .eq('organization_id', organizationId)
-        .eq('employment_status', 'active')
+      const result = await api.get<any[]>('/employees?status=active&limit=500')
+      if (!result.ok) throw new Error(result.error || 'Failed to load employees')
 
-      if (employees) {
-        const total = employees.length
-        const counts: Record<string, number> = {}
-        
-        employees.forEach((emp: any) => {
-          const deptName = emp.departments?.name || 'Unassigned'
-          counts[deptName] = (counts[deptName] || 0) + 1
-        })
+      const employees = result.data || []
+      const total = summary?.activeEmployees ?? employees.length
+      const counts: Record<string, number> = {}
 
-        const deptCounts: DeptCount[] = Object.entries(counts)
-          .map(([name, count]) => ({
-            name,
-            count,
-            pct: total > 0 ? Math.round((count / total) * 100) : 0
-          }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 4)
+      employees.forEach((emp: any) => {
+        const deptName = emp.department_name || emp.department || 'Unassigned'
+        counts[deptName] = (counts[deptName] || 0) + 1
+      })
 
-        setData({
-          total,
-          departments: deptCounts
-        })
-      }
+      const deptCounts: DeptCount[] = Object.entries(counts)
+        .map(([name, count]) => ({
+          name,
+          count,
+          pct: total > 0 ? Math.round((count / total) * 100) : 0
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 4)
+
+      setData({ total, departments: deptCounts })
     } catch (error) {
       console.error('Error loading headcount widget data:', error)
       setError(true)
     } finally {
       setLoading(false)
     }
-  }
+  }, [summary?.activeEmployees])
 
   useEffect(() => {
     if (organizationId) loadData()
-  }, [organizationId])
+  }, [organizationId, loadData])
 
   return (
     <WidgetShell

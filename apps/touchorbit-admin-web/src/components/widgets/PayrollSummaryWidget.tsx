@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useMemo } from 'react'
+import { useDashboard } from '@/lib/dashboard/dashboard-context'
 import { WidgetShell } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
@@ -24,40 +24,17 @@ interface PayrollRun {
   year: number
   total_net: number
   total_gross: number
-  employee_count: number
+  total_employees: number
   status: string
 }
 
-export function PayrollSummaryWidget({ organizationId, editMode, onRemove }: WidgetProps) {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-  const [data, setData] = useState<PayrollRun | null>(null)
+export function PayrollSummaryWidget({ organizationId: _organizationId, editMode, onRemove }: WidgetProps) {
+  const { widgets, loading, error, refresh } = useDashboard()
 
-  async function loadData() {
-    setLoading(true)
-    setError(false)
-    try {
-      const { data: run } = await supabase
-        .from('payroll_runs')
-        .select('month, year, total_net, total_gross, employee_count, status')
-        .eq('organization_id', organizationId)
-        .order('year', { ascending: false })
-        .order('month', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      setData(run ?? null)
-    } catch (e) {
-      console.error('Error loading payroll summary widget data:', e)
-      setError(true)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (organizationId) loadData()
-  }, [organizationId])
+  const data = useMemo<PayrollRun | null>(() => {
+    const found = widgets.find(w => w.id === 'payroll')
+    return (found?.data as PayrollRun | undefined) ?? null
+  }, [widgets])
 
   const statusCfg = data ? (STATUS_CONFIG[data.status] ?? STATUS_CONFIG.draft) : null
   const widgetSize = useWidgetSize()
@@ -70,10 +47,10 @@ export function PayrollSummaryWidget({ organizationId, editMode, onRemove }: Wid
       editMode={editMode}
       onRemove={onRemove}
       loading={loading}
-      onRefresh={loadData}
+      onRefresh={refresh}
     >
       {error ? (
-        <WidgetError onRetry={loadData} />
+        <WidgetError onRetry={refresh} />
       ) : !data ? (
         <WidgetEmpty icon={DollarSign} label="No payroll runs yet" />
       ) : (
@@ -108,7 +85,7 @@ export function PayrollSummaryWidget({ organizationId, editMode, onRemove }: Wid
                 </div>
                 <div className="flex items-center justify-between pt-1 border-t border-[#F1F0F4]">
                   <span className="text-[11px] font-bold text-[#9994A8] uppercase tracking-wider">Employees</span>
-                  <span className="text-[13px] font-bold text-[#534AB7]">{data.employee_count ?? 0}</span>
+                  <span className="text-[13px] font-bold text-[#534AB7]">{data.total_employees ?? 0}</span>
                 </div>
               </>
             )}
