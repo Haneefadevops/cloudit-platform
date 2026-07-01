@@ -11,6 +11,7 @@ export interface Actor {
 export interface ListEmployeesFilters {
   status?: string;
   departmentId?: string;
+  branchId?: string;
   search?: string;
   limit: number;
   offset: number;
@@ -21,19 +22,8 @@ export interface CreateEmployeeInput {
   last_name: string;
   email: string;
   employee_number?: string;
-  department_id?: string;
-  branch_id?: string;
-  job_title?: string;
-  hire_date?: string;
-  employment_status?: string;
-  manager_id?: string;
-}
-
-export interface UpdateEmployeeInput {
-  first_name?: string;
-  last_name?: string;
-  email?: string;
   phone?: string;
+  department?: string;
   department_id?: string;
   branch_id?: string;
   job_title?: string;
@@ -41,6 +31,30 @@ export interface UpdateEmployeeInput {
   employment_status?: string;
   manager_id?: string;
   basic_salary?: number;
+}
+
+export interface UpdateEmployeeInput {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  employee_number?: string;
+  nic?: string;
+  department?: string;
+  department_id?: string;
+  branch_id?: string;
+  job_title?: string;
+  hire_date?: string;
+  employment_status?: string;
+  manager_id?: string;
+  basic_salary?: number;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_branch?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  postal_code?: string;
 }
 
 export interface TerminateEmployeeInput {
@@ -76,6 +90,11 @@ export class EmployeesService {
     if (filters.departmentId) {
       params.push(filters.departmentId);
       conditions.push(`e.department_id = $${params.length}::uuid`);
+    }
+
+    if (filters.branchId) {
+      params.push(filters.branchId);
+      conditions.push(`e.branch_id = $${params.length}::uuid`);
     }
 
     if (filters.search) {
@@ -170,10 +189,10 @@ export class EmployeesService {
 
       const employeeResult = await client.query(
         `INSERT INTO employees (
-           organization_id, user_id, employee_number, first_name, last_name, email,
-           department_id, branch_id, job_title, hire_date, employment_status, manager_id
+           organization_id, user_id, employee_number, first_name, last_name, email, phone,
+           department, department_id, branch_id, job_title, hire_date, employment_status, manager_id, basic_salary
          )
-         VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::uuid, $8::uuid, $9, $10, $11, $12::uuid)
+         VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9::uuid, $10::uuid, $11, $12, $13, $14::uuid, $15)
          RETURNING *`,
         [
           organizationId,
@@ -182,12 +201,15 @@ export class EmployeesService {
           input.first_name,
           input.last_name,
           input.email.toLowerCase().trim(),
+          input.phone ?? null,
+          input.department ?? null,
           input.department_id ?? null,
           input.branch_id ?? null,
           input.job_title ?? null,
           input.hire_date ?? null,
           input.employment_status ?? "active",
           input.manager_id ?? null,
+          input.basic_salary ?? null,
         ],
       );
       const employee = employeeResult.rows[0];
@@ -242,6 +264,9 @@ export class EmployeesService {
     add("last_name", input.last_name, current.last_name);
     add("email", input.email?.toLowerCase().trim(), current.email);
     add("phone", input.phone, current.phone);
+    add("employee_number", input.employee_number, current.employee_number);
+    add("nic", input.nic, current.nic);
+    add("department", input.department, current.department);
     add("department_id", input.department_id, current.department_id);
     add("branch_id", input.branch_id, current.branch_id);
     add("job_title", input.job_title, current.job_title);
@@ -253,6 +278,13 @@ export class EmployeesService {
     );
     add("manager_id", input.manager_id, current.manager_id);
     add("basic_salary", input.basic_salary, current.basic_salary);
+    add("bank_name", input.bank_name, current.bank_name);
+    add("bank_account_number", input.bank_account_number, current.bank_account_number);
+    add("bank_branch", input.bank_branch, current.bank_branch);
+    add("address_line1", input.address_line1, current.address_line1);
+    add("address_line2", input.address_line2, current.address_line2);
+    add("city", input.city, current.city);
+    add("postal_code", input.postal_code, current.postal_code);
 
     if (setClauses.length === 0) {
       return current;
@@ -480,6 +512,31 @@ export class EmployeesService {
     return { uploadUrl: url, publicUrl, employee: updateResult.rows[0] };
   }
 
+  async findByUserId(organizationId: string, userId: string) {
+    const result = await this.databaseService.query(
+      `SELECT
+         e.*,
+         d.name AS department_name,
+         b.name AS branch_name,
+         COALESCE(m.first_name || ' ' || m.last_name, '') AS manager_name
+       FROM employees e
+       LEFT JOIN departments d
+         ON d.id = e.department_id AND d.organization_id = e.organization_id
+       LEFT JOIN branches b
+         ON b.id = e.branch_id AND b.organization_id = e.organization_id
+       LEFT JOIN employees m
+         ON m.id = e.manager_id AND m.organization_id = e.organization_id
+       WHERE e.user_id = $1::uuid AND e.organization_id = $2::uuid`,
+      [userId, organizationId],
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException("Employee not found");
+    }
+
+    return result.rows[0];
+  }
+
   async findHistory(organizationId: string, id: string) {
     const result = await this.databaseService.query(
       `SELECT h.*
@@ -538,5 +595,60 @@ export class EmployeesService {
     );
 
     return insertResult.rows[0];
+  }
+
+  async replaceEmergencyContacts(
+    organizationId: string,
+    id: string,
+    inputs: EmergencyContactInput[],
+  ) {
+    const client = await this.databaseService.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const employeeResult = await client.query(
+        `SELECT id FROM employees WHERE id = $1::uuid AND organization_id = $2::uuid`,
+        [id, organizationId],
+      );
+
+      if (employeeResult.rows.length === 0) {
+        throw new NotFoundException("Employee not found");
+      }
+
+      await client.query(
+        `DELETE FROM employee_emergency_contacts WHERE employee_id = $1::uuid`,
+        [id],
+      );
+
+      const rows: any[] = [];
+      for (const input of inputs) {
+        const insertResult = await client.query(
+          `INSERT INTO employee_emergency_contacts (
+             employee_id, organization_id, name, relationship, phone, email, is_primary
+           )
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7)
+           RETURNING *`,
+          [
+            id,
+            organizationId,
+            input.name,
+            input.relationship,
+            input.phone,
+            input.email ?? null,
+            input.is_primary ?? false,
+          ],
+        );
+        rows.push(insertResult.rows[0]);
+      }
+
+      await client.query("COMMIT");
+      return rows;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }

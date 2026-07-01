@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Phone, Plus, X, Star, User } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
 interface EmergencyContact {
@@ -27,19 +27,15 @@ export function EmergencyTab({ employeeId, contacts: initialContacts, isLoading,
   const handleSave = async () => {
     setSaving(true)
     try {
-      await supabase.from('employee_emergency_contacts').delete().eq('employee_id', employeeId)
-      const toInsert = contacts.filter((c) => c.name && c.phone).map((c) => ({
-        employee_id: employeeId,
+      const toSave = contacts.filter((c) => c.name && c.phone).map((c) => ({
         name: c.name,
         relationship: c.relationship,
         phone: c.phone,
         email: c.email || null,
         is_primary: c.is_primary || false,
       }))
-      if (toInsert.length > 0) {
-        const { error } = await supabase.from('employee_emergency_contacts').insert(toInsert)
-        if (error) throw error
-      }
+      const result = await api.put<any[]>(`/employees/${employeeId}/emergency-contacts`, toSave)
+      if (!result.ok) throw new Error(result.error || 'Failed to save emergency contacts')
       toast.success('Emergency contacts saved')
       onUpdate()
     } catch {

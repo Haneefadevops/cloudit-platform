@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { toast } from 'sonner'
 
@@ -50,6 +50,13 @@ export interface CreateEmployeeData {
   basic_salary?: number
 }
 
+function normalizeEmployee(row: any): Employee {
+  return {
+    ...row,
+    department: row.department_name || row.department || null,
+  } as Employee
+}
+
 export function useEmployees(options?: { departmentId?: string | null, branchId?: string | null }) {
   const { organizationId, isLoaded } = useAuth()
 
@@ -58,26 +65,18 @@ export function useEmployees(options?: { departmentId?: string | null, branchId?
     queryFn: async () => {
       if (!organizationId) return []
 
-      let query = supabase
-        .from('employees')
-        .select('*')
-        .eq('organization_id', organizationId)
+      const params = new URLSearchParams()
+      params.set('limit', '500')
+      if (options?.departmentId) params.set('department_id', options.departmentId)
+      if (options?.branchId) params.set('branch_id', options.branchId)
 
-      if (options?.departmentId) {
-        query = query.eq('department_id', options.departmentId)
-      }
-      if (options?.branchId) {
-        query = query.eq('branch_id', options.branchId)
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching employees:', error)
-        throw error
+      const result = await api.get<any[]>(`/employees?${params.toString()}`)
+      if (!result.ok) {
+        console.error('Error fetching employees:', result.error)
+        throw new Error(result.error || 'Failed to fetch employees')
       }
 
-      return data as Employee[]
+      return (result.data || []).map(normalizeEmployee)
     },
     enabled: isLoaded && !!organizationId,
   })
@@ -91,33 +90,26 @@ export function useCreateEmployee() {
     mutationFn: async (data: CreateEmployeeData) => {
       if (!organizationId) throw new Error('No organization')
 
-      // Create employee record without user_id (they'll sign up later)
-      const { data: employee, error: employeeError } = await supabase
-        .from('employees')
-        .insert({
-          organization_id: organizationId,
-          user_id: null, // Will be linked when they sign up via Clerk
-          first_name: data.first_name,
-          last_name: data.last_name,
-          email: data.email,
-          phone: data.phone || null,
-          job_title: data.job_title || null,
-          department: data.department || null,
-          department_id: data.department_id || null,
-          branch_id: data.branch_id || null,
-          hire_date: data.hire_date || null,
-          basic_salary: data.basic_salary || null,
-          employment_status: 'active',
-        })
-        .select()
-        .single()
+      const result = await api.post<any>('/employees', {
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email,
+        phone: data.phone || null,
+        job_title: data.job_title || null,
+        department: data.department || null,
+        department_id: data.department_id || null,
+        branch_id: data.branch_id || null,
+        hire_date: data.hire_date || null,
+        basic_salary: data.basic_salary ?? null,
+        employment_status: 'active',
+      })
 
-      if (employeeError) {
-        console.error('Employee creation error:', employeeError)
-        throw employeeError
+      if (!result.ok) {
+        console.error('Employee creation error:', result.error)
+        throw new Error(result.error || 'Failed to create employee')
       }
 
-      return employee as Employee
+      return normalizeEmployee(result.data) as Employee
     },
     onSuccess: (employee) => {
       queryClient.invalidateQueries({ queryKey: ['employees'] })

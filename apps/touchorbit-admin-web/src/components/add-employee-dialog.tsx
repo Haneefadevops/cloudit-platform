@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { RefreshCcw, X } from 'lucide-react'
 import { useCreateEmployee } from '@/hooks/use-employees'
+import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth'
 
@@ -43,23 +44,15 @@ export function AddEmployeeDialog({ open, onClose }: AddEmployeeDialogProps) {
   }, [open, organizationId])
 
   async function loadDropdownData() {
-    // Load branches
-    const { data: branchesData } = await supabase
-      .from('branches')
-      .select('id, name')
-      .eq('organization_id', organizationId)
-      .eq('is_active', true)
-    setBranches(branchesData || [])
+    // Load branches and departments from the backend
+    const [branchesResult, departmentsResult] = await Promise.all([
+      api.get<any[]>('/organizations/branches'),
+      api.get<any[]>('/organizations/departments'),
+    ])
+    setBranches(branchesResult.ok ? (branchesResult.data || []) : [])
+    setDepartments(departmentsResult.ok ? (departmentsResult.data || []) : [])
 
-    // Load departments
-    const { data: departmentsData } = await supabase
-      .from('departments')
-      .select('id, name')
-      .eq('organization_id', organizationId)
-      .eq('is_active', true)
-      .order('name')
-    setDepartments(departmentsData || [])
-
+    // TODO: migrate permission groups to backend organizations/security endpoints
     const { data: groupsData } = await supabase
       .from('permission_groups')
       .select('id, name, description')
@@ -94,22 +87,13 @@ export function AddEmployeeDialog({ open, onClose }: AddEmployeeDialogProps) {
     })
 
     if (enableAppAccess) {
-      const res = await fetch('/api/provision-employee', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          employeeId: employee.id,
-          email: formData.email,
-          password: tempPassword,
-          forceReset: true,
-          systemRole,
-          permissionGroupIds: selectedGroupIds,
-          scopeType,
-          scopeId: scopeType === 'branch' || scopeType === 'department' ? scopeId : null,
-        })
-      })
-      const result = await res.json()
-      if (result.error) throw new Error(result.error)
+      const resetResult = await api.post<{ reset?: boolean }>(
+        `/employees/${employee.id}/reset-password`,
+        { password: tempPassword }
+      )
+      if (!resetResult.ok) throw new Error(resetResult.error || 'Failed to set password')
+
+      // TODO: migrate security role and permission group assignment to backend
     }
 
     // Reset form and close

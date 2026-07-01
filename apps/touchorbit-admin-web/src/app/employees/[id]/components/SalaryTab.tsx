@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { DollarSign, TrendingUp, RefreshCcw, Plus, X, ArrowUpRight, Eye, EyeOff, Lock, Unlock } from 'lucide-react'
+import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { MiniSparkline } from '@/components/widgets/_shared/MiniSparkline'
@@ -93,6 +94,7 @@ export function SalaryTab({ employee, salaryHistory, isLoading, userEmail, onUpd
     setSaving(true)
     try {
       const reason = incrementRows.map((r) => `${r.type}: ${r.amountType === 'fixed' ? 'LKR ' + r.amount : r.amount + '%'}`).join(', ')
+      // TODO: migrate salary_revisions to backend once a salary/payroll domain API exists
       await supabase.from('salary_revisions').insert({
         employee_id: employee.id,
         organization_id: employee.organization_id,
@@ -101,7 +103,8 @@ export function SalaryTab({ employee, salaryHistory, isLoading, userEmail, onUpd
         effective_date: new Date().toISOString().split('T')[0],
         reason,
       })
-      await supabase.from('employees').update({ basic_salary: newSalary }).eq('id', employee.id)
+      const result = await api.patch<any>(`/employees/${employee.id}`, { basic_salary: newSalary })
+      if (!result.ok) throw new Error(result.error || 'Failed to update salary')
       toast.success(`Salary updated to LKR ${newSalary.toLocaleString()}`)
       setIncrementRows([{ type: 'Annual Increment', amountType: 'fixed', amount: '' }])
       onUpdate()

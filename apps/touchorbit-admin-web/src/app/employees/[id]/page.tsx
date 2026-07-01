@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
+import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { usePermissions } from '@/hooks/use-permissions'
 import {
@@ -170,20 +171,22 @@ export default function EmployeeDetailPage() {
   async function loadEmployee() {
     setLoading(true)
     try {
-      const { data, error } = await supabase.from('employees').select('*').eq('id', employeeId).single()
-      if (error) throw error
-      setEmployee(data)
+      const result = await api.get<any>(`/employees/${employeeId}`)
+      if (!result.ok) throw new Error(result.error || 'Failed to load employee')
+      const data = result.data
+      const employeeRecord = { ...data, department: data.department_name || data.department || null }
+      setEmployee(employeeRecord)
       setEditForm({
         first_name: data.first_name,
         last_name: data.last_name,
         phone: data.phone || '',
         job_title: data.job_title || '',
-        department: data.department || '',
+        department: data.department_name || data.department || '',
         basic_salary: data.basic_salary || 0
       })
       setEmploymentForm({ employee_number: data.employee_number || '', hire_date: data.hire_date || '', employment_status: data.employment_status || '' })
       setBankForm({ bank_name: data.bank_name || '', bank_account_number: data.bank_account_number || '', bank_branch: data.bank_branch || '' })
-      
+
       // Fetch user metadata if user_id exists
       if (data.user_id) {
         try {
@@ -354,11 +357,11 @@ export default function EmployeeDetailPage() {
         const { data } = await supabase.from('employee_documents').select('*').eq('employee_id', employeeId).order('created_at', { ascending: false })
         setDocuments(data || [])
       } else if (tab === 'emergency') {
-        const { data } = await supabase.from('employee_emergency_contacts').select('*').eq('employee_id', employeeId).order('is_primary', { ascending: false })
-        setEmergencyContacts(data || [])
+        const result = await api.get<any[]>(`/employees/${employeeId}/emergency-contacts`)
+        setEmergencyContacts(result.ok ? (result.data || []) : [])
       } else if (tab === 'history') {
-        const { data } = await supabase.from('employee_history').select('*').eq('employee_id', employeeId).order('event_date', { ascending: false })
-        setAttendanceHistory(data || []) // Using attendanceHistory as a temporary holder for generic history
+        const result = await api.get<any[]>(`/employees/${employeeId}/history`)
+        setAttendanceHistory(result.ok ? (result.data || []) : []) // Using attendanceHistory as a temporary holder for generic history
       } else if (tab === 'salary') {
         const { data } = await supabase.from('salary_revisions').select('*').eq('employee_id', employeeId).order('effective_date', { ascending: false })
         setSalaryHistory(data || [])
@@ -423,8 +426,8 @@ export default function EmployeeDetailPage() {
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const { error } = await supabase.from('employees').update(editForm).eq('id', employeeId)
-      if (error) throw error
+      const result = await api.patch<any>(`/employees/${employeeId}`, editForm)
+      if (!result.ok) throw new Error(result.error || 'Failed to update profile')
       toast.success('Profile updated')
       setShowEditDialog(false)
       loadEmployee()
@@ -432,34 +435,34 @@ export default function EmployeeDetailPage() {
   }
 
   const handleResetPassword = async () => {
-    if (!employee?.email) return
+    if (!employee?.id) return
     if (!canManageAppAccess) {
       toast.error('You do not have permission to manage app access')
       return
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(employee.email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
-    if (error) toast.error('Failed to send reset email')
-    else toast.success('Password reset email sent')
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#'
+    const newPass = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+    const result = await api.post<{ reset?: boolean }>(`/employees/${employee.id}/reset-password`, { password: newPass })
+    if (!result.ok) {
+      toast.error('Failed to reset password')
+    } else {
+      setTempPassword(newPass)
+      setShowPassword(true)
+      toast.success('Password reset — temporary password displayed')
+    }
     setShowActionsMenu(false)
   }
 
   const handleSuspendAccess = async () => {
-    if (!employee?.user_id) return
+    if (!employee?.id) return
     if (!canManageAppAccess) {
       toast.error('You do not have permission to manage app access')
       return
     }
     setIsProvisioningAccess(true)
     try {
-      const res = await fetch('/api/toggle-access', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: employee.user_id, suspend: true })
-      })
-      const result = await res.json()
-      if (result.error) throw new Error(result.error)
+      const result = await api.post<{ enabled?: boolean }>(`/employees/${employee.id}/toggle-access`, { enabled: false })
+      if (!result.ok) throw new Error(result.error || 'Failed to suspend access')
 
       toast.success('App access suspended')
       loadTabData('app-access')
@@ -467,7 +470,7 @@ export default function EmployeeDetailPage() {
   }
 
   const handleEnableAccess = async () => {
-    if (!employee?.user_id) return
+    if (!employee?.id) return
     if (!canManageAppAccess) {
       toast.error('You do not have permission to manage app access')
       return
@@ -477,22 +480,12 @@ export default function EmployeeDetailPage() {
 
     setIsProvisioningAccess(true)
     try {
-      const res = await fetch('/api/toggle-access', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: employee.user_id, suspend: false })
-      })
-      const result = await res.json()
-      if (result.error) throw new Error(result.error)
+      const toggleResult = await api.post<{ enabled?: boolean }>(`/employees/${employee.id}/toggle-access`, { enabled: true })
+      if (!toggleResult.ok) throw new Error(toggleResult.error || 'Failed to enable access')
 
       // Also reset password
-      const passRes = await fetch('/api/reset-user-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: employee.user_id, newPassword: newPass })
-      })
-      const passResult = await passRes.json()
-      if (passResult.error) throw new Error(passResult.error)
+      const passResult = await api.post<{ reset?: boolean }>(`/employees/${employee.id}/reset-password`, { password: newPass })
+      if (!passResult.ok) throw new Error(passResult.error || 'Failed to reset password')
 
       setTempPassword(newPass)
       setShowPassword(true)
@@ -508,20 +501,12 @@ export default function EmployeeDetailPage() {
     }
     if (!confirm('Terminate this employee? This cannot be undone easily.')) return
     const today = new Date().toISOString().split('T')[0]
-    const res = await fetch('/api/terminate-employee', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        employeeId,
-        terminationDate: today,
-        lastWorkingDay: today,
-        reason: 'Terminated by Admin',
-        suspendAccess: true,
-        adminId: userId,
-      }),
+    const result = await api.post<any>(`/employees/${employeeId}/terminate`, {
+      termination_date: today,
+      last_working_day: today,
+      termination_reason: 'Terminated by Admin',
     })
-    const result = await res.json()
-    if (!res.ok || result.error) toast.error(result.error || 'Termination failed')
+    if (!result.ok) toast.error(result.error || 'Termination failed')
     else {
       toast.success('Employee terminated')
       loadEmployee()
@@ -532,8 +517,8 @@ export default function EmployeeDetailPage() {
   const handleUpdateEmployment = async () => {
     setSavingTab(true)
     try {
-      const { error } = await supabase.from('employees').update(employmentForm).eq('id', employeeId)
-      if (error) throw error
+      const result = await api.patch<any>(`/employees/${employeeId}`, employmentForm)
+      if (!result.ok) throw new Error(result.error || 'Failed to update employment details')
       toast.success('Employment details updated')
       loadEmployee()
     } catch { toast.error('Failed to update employment details') } finally { setSavingTab(false) }
@@ -542,22 +527,27 @@ export default function EmployeeDetailPage() {
   const handleUpdateBank = async () => {
     setSavingTab(true)
     try {
-      const { error } = await supabase.from('employees').update(bankForm).eq('id', employeeId)
-      if (error) throw error
+      const result = await api.patch<any>(`/employees/${employeeId}`, bankForm)
+      if (!result.ok) throw new Error(result.error || 'Failed to update bank details')
       toast.success('Bank details updated')
+      loadEmployee()
     } catch { toast.error('Failed to update bank details') } finally { setSavingTab(false) }
   }
 
   const handleSaveEmergencyContacts = async () => {
     setSavingTab(true)
     try {
-      await supabase.from('employee_emergency_contacts').delete().eq('employee_id', employeeId)
-      const toInsert = emergencyContacts.filter(c => c.name && c.phone).map(c => ({ employee_id: employeeId, name: c.name, relationship: c.relationship, phone: c.phone, email: c.email || null, is_primary: c.is_primary || false }))
-      if (toInsert.length > 0) {
-        const { error } = await supabase.from('employee_emergency_contacts').insert(toInsert)
-        if (error) throw error
-      }
+      const toSave = emergencyContacts.filter(c => c.name && c.phone).map(c => ({
+        name: c.name,
+        relationship: c.relationship,
+        phone: c.phone,
+        email: c.email || null,
+        is_primary: c.is_primary || false,
+      }))
+      const result = await api.put<any[]>(`/employees/${employeeId}/emergency-contacts`, toSave)
+      if (!result.ok) throw new Error(result.error || 'Failed to save emergency contacts')
       toast.success('Emergency contacts saved')
+      loadTabData('emergency')
     } catch { toast.error('Failed to save emergency contacts') } finally { setSavingTab(false) }
   }
 
@@ -590,30 +580,18 @@ export default function EmployeeDetailPage() {
   }
 
   const handleProvisionAccess = async () => {
-    if (!employee?.email || !tempPassword || tempPassword.length < 8) { toast.error('Email and password (min 8 chars) required'); return }
+    if (!employee?.id || !employee.email || !tempPassword || tempPassword.length < 8) { toast.error('Email and password (min 8 chars) required'); return }
     if (!canManageAppAccess) {
       toast.error('You do not have permission to manage app access')
       return
     }
     setIsProvisioningAccess(true)
     try {
-      const res = await fetch('/api/provision-employee', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          employeeId,
-          email: employee.email,
-          password: tempPassword,
-          forceReset: true,
-          systemRole: accessRole,
-          permissionGroupIds: assignGroupId ? [assignGroupId] : [],
-          scopeType: assignScopeType,
-          scopeId: assignScopeType === 'branch' || assignScopeType === 'department' ? assignScopeId : null,
-        })
-      })
-      const result = await res.json()
-      if (result.error) throw new Error(result.error)
+      // Backend employee creation already linked a user record; just set the password.
+      const result = await api.post<{ reset?: boolean }>(`/employees/${employee.id}/reset-password`, { password: tempPassword })
+      if (!result.ok) throw new Error(result.error || 'Failed to provision access')
 
+      // TODO: migrate security role and permission group assignment to backend endpoints
       toast.success('App access provisioned — credentials sent to employee')
       loadEmployee()
       loadAccessData()
@@ -700,13 +678,22 @@ export default function EmployeeDetailPage() {
     setUploadingPhoto(true)
     try {
       const ext = file.name.split('.').pop()
-      const path = `${employeeId}.${ext}`
-      const { error: uploadError } = await supabase.storage.from('employee-photos').upload(path, file, { upsert: true })
-      if (uploadError) throw uploadError
-      const { data: urlData } = supabase.storage.from('employee-photos').getPublicUrl(path)
-      const { error: updateError } = await supabase.from('employees').update({ photo_url: urlData.publicUrl }).eq('id', employeeId)
-      if (updateError) throw updateError
-      setEmployee((prev: any) => ({ ...prev, photo_url: urlData.publicUrl }))
+      const key = `${employeeId}.${ext}`
+      const presignResult = await api.post<{ uploadUrl: string; publicUrl: string }>(`/employees/${employeeId}/photo`, {
+        bucket: 'employee-photos',
+        key,
+        contentType: file.type,
+      })
+      if (!presignResult.ok || !presignResult.data) throw new Error(presignResult.error || 'Failed to get photo upload URL')
+
+      const uploadRes = await fetch(presignResult.data.uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      })
+      if (!uploadRes.ok) throw new Error('Photo upload failed')
+
+      setEmployee((prev: any) => ({ ...prev, photo_url: presignResult.data!.publicUrl }))
       toast.success('Photo updated')
     } catch (err: any) {
       toast.error(err.message || 'Photo upload failed')

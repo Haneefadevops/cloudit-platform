@@ -18,4 +18,20 @@ export class OrganizationsController {
     const rows = await this.organizationsService.findAll(organizationId);
     return { ok: true, data: rows };
   }
+
+  @Get("branches")
+  @RequireModule("touchorbit", "organizations")
+  @ApiOperation({ summary: "List branches for the current organization" })
+  async findBranches(@CurrentOrganization() organizationId: string) {
+    const rows = await this.organizationsService.findBranches(organizationId);
+    return { ok: true, data: rows };
+  }
+
+  @Get("departments")
+  @RequireModule("touchorbit", "organizations")
+  @ApiOperation({ summary: "List departments for the current organization" })
+  async findDepartments(@CurrentOrganization() organizationId: string) {
+    const rows = await this.organizationsService.findDepartments(organizationId);
+    return { ok: true, data: rows };
+  }
 }

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Body,
   Param,
@@ -21,6 +22,7 @@ import { EmployeesService } from "./employees.service";
 const listQuerySchema = z.object({
   status: z.string().optional(),
   department_id: z.string().uuid().optional(),
+  branch_id: z.string().uuid().optional(),
   search: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(500).default(50),
   offset: z.coerce.number().int().min(0).default(0),
@@ -31,12 +33,15 @@ const createEmployeeSchema = z.object({
   last_name: z.string().min(1),
   email: z.string().email(),
   employee_number: z.string().optional(),
+  phone: z.string().optional(),
+  department: z.string().optional(),
   department_id: z.string().uuid().optional(),
   branch_id: z.string().uuid().optional(),
   job_title: z.string().optional(),
   hire_date: z.string().optional(),
   employment_status: z.string().default("active"),
   manager_id: z.string().uuid().optional(),
+  basic_salary: z.coerce.number().nonnegative().optional(),
 });
 
 const updateEmployeeSchema = z.object({
@@ -44,6 +49,9 @@ const updateEmployeeSchema = z.object({
   last_name: z.string().min(1).optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
+  employee_number: z.string().optional(),
+  nic: z.string().optional(),
+  department: z.string().optional(),
   department_id: z.string().uuid().optional(),
   branch_id: z.string().uuid().optional(),
   job_title: z.string().optional(),
@@ -51,6 +59,13 @@ const updateEmployeeSchema = z.object({
   employment_status: z.string().optional(),
   manager_id: z.string().uuid().optional(),
   basic_salary: z.coerce.number().nonnegative().optional(),
+  bank_name: z.string().optional(),
+  bank_account_number: z.string().optional(),
+  bank_branch: z.string().optional(),
+  address_line1: z.string().optional(),
+  address_line2: z.string().optional(),
+  city: z.string().optional(),
+  postal_code: z.string().optional(),
 });
 
 const terminateSchema = z.object({
@@ -81,6 +96,8 @@ const emergencyContactSchema = z.object({
   is_primary: z.boolean().default(false),
 });
 
+const emergencyContactsReplaceSchema = z.array(emergencyContactSchema);
+
 @ApiTags("employees")
 @Controller("employees")
 @UseGuards(SessionAuthGuard)
@@ -102,12 +119,24 @@ export class EmployeesController {
     const rows = await this.employeesService.findAll(organizationId, {
       status: parsed.data.status,
       departmentId: parsed.data.department_id,
+      branchId: parsed.data.branch_id,
       search: parsed.data.search,
       limit: parsed.data.limit,
       offset: parsed.data.offset,
     });
 
     return { ok: true, data: rows };
+  }
+
+  @Get("me")
+  @RequireModule("touchorbit", "employees")
+  @ApiOperation({ summary: "Get current user's employee record" })
+  async findMe(
+    @CurrentOrganization() organizationId: string,
+    @AuthUser() user: AuthContext,
+  ) {
+    const row = await this.employeesService.findByUserId(organizationId, user.id);
+    return { ok: true, data: row };
   }
 
   @Get(":id")
@@ -309,5 +338,27 @@ export class EmployeesController {
     );
 
     return { ok: true, data: row };
+  }
+
+  @Put(":id/emergency-contacts")
+  @RequireModule("touchorbit", "employees")
+  @ApiOperation({ summary: "Replace all emergency contacts" })
+  async replaceEmergencyContacts(
+    @CurrentOrganization() organizationId: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = emergencyContactsReplaceSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid emergency contacts payload");
+    }
+
+    const rows = await this.employeesService.replaceEmergencyContacts(
+      organizationId,
+      id,
+      parsed.data,
+    );
+
+    return { ok: true, data: rows };
   }
 }

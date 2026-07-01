@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { User, CreditCard, MapPin, Key, Mail, Phone, Calendar, Shield, Check } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { InfoCard } from './InfoCard'
 
@@ -71,15 +71,15 @@ export function OverviewTab({ employee, onUpdate }: OverviewTabProps) {
   const handleSaveGeneral = async () => {
     setSaving(true)
     try {
-      const { error } = await supabase.from('employees').update({
+      const result = await api.patch<any>(`/employees/${employee.id}`, {
         employee_number: generalForm.employee_number,
         email: generalForm.email,
         phone: generalForm.phone,
         hire_date: generalForm.hire_date,
         nic: generalForm.nic,
         employment_status: generalForm.employment_status,
-      }).eq('id', employee.id)
-      if (error) throw error
+      })
+      if (!result.ok) throw new Error(result.error || 'Failed to update')
       toast.success('General information updated')
       setEditingGeneral(false)
       onUpdate()
@@ -93,12 +93,12 @@ export function OverviewTab({ employee, onUpdate }: OverviewTabProps) {
   const handleSaveBank = async () => {
     setSaving(true)
     try {
-      const { error } = await supabase.from('employees').update({
+      const result = await api.patch<any>(`/employees/${employee.id}`, {
         bank_name: bankForm.bank_name,
         bank_account_number: bankForm.bank_account_number,
         bank_branch: bankForm.bank_branch,
-      }).eq('id', employee.id)
-      if (error) throw error
+      })
+      if (!result.ok) throw new Error(result.error || 'Failed to update bank details')
       toast.success('Bank details updated')
       setEditingBank(false)
       onUpdate()
@@ -112,13 +112,13 @@ export function OverviewTab({ employee, onUpdate }: OverviewTabProps) {
   const handleSaveAddress = async () => {
     setSaving(true)
     try {
-      const { error } = await supabase.from('employees').update({
+      const result = await api.patch<any>(`/employees/${employee.id}`, {
         address_line1: addressForm.address_line1,
         address_line2: addressForm.address_line2,
         city: addressForm.city,
         postal_code: addressForm.postal_code,
-      }).eq('id', employee.id)
-      if (error) throw error
+      })
+      if (!result.ok) throw new Error(result.error || 'Failed to update address')
       toast.success('Address updated')
       setEditingAddress(false)
       onUpdate()

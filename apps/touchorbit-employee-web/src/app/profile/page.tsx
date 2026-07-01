@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
+import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import {
   LogOut,
@@ -64,9 +65,11 @@ export default function ProfilePage() {
   async function loadProfile() {
     setLoading(true)
     try {
-      const { data: empData } = await supabase.from('employees').select('*').eq('user_id', userId).single()
+      const empResult = await api.get<any>('/employees/me')
+      if (!empResult.ok) throw new Error(empResult.error || 'Failed to load profile')
+      const empData = empResult.data
       if (empData) {
-        setEmployee(empData)
+        setEmployee({ ...empData, department: empData.department_name || empData.department || null })
         setEditPhone(empData.phone || '')
 
         const now = new Date()
@@ -77,7 +80,8 @@ export default function ProfilePage() {
           supabase.from('leave_balances').select('remaining_days').eq('employee_id', empData.id).eq('leave_type', 'annual').eq('year', now.getFullYear()).single(),
           supabase.from('overtime_records').select('hours').eq('employee_id', empData.id).eq('status', 'approved').gte('date', monthStart),
           supabase.from('comp_off_records').select('id', { count: 'exact', head: true }).eq('employee_id', empData.id).eq('status', 'approved'),
-          supabase.from('employee_emergency_contacts').select('*').eq('employee_id', empData.id).order('is_primary', { ascending: false }),
+          api.get<any[]>(`/employees/${empData.id}/emergency-contacts`),
+          // TODO: migrate asset/training/performance domains to backend
           supabase.from('asset_assignments').select('*, asset:assets(name, serial_number, category)').eq('employee_id', empData.id).eq('status', 'active'),
           supabase.from('training_assignments').select('id, status, start_date, program:training_programs(title, category)').eq('employee_id', empData.id).in('status', ['assigned', 'in_progress']).order('start_date', { ascending: true }).limit(3),
           supabase.from('performance_reviews').select('id, review_period, status').eq('employee_id', empData.id).eq('status', 'pending_self').maybeSingle(),
@@ -89,7 +93,7 @@ export default function ProfilePage() {
         const totalOt = (otRes.data || []).reduce((sum: number, r: any) => sum + (r.hours || 0), 0)
         setOtHours(`${totalOt}h`)
         setCompOff(`${coRes.count ?? 0}d`)
-        setEmergencyContacts(contactsRes.data || [])
+        setEmergencyContacts(contactsRes.ok ? (contactsRes.data || []) : [])
         setAssignedAssets(assetsRes.data || [])
         setTrainings(trainingsRes.data || [])
         setActiveReview(reviewRes.data || null)
@@ -104,8 +108,8 @@ export default function ProfilePage() {
   async function handleSave() {
     setSaving(true)
     try {
-      const { error } = await supabase.from('employees').update({ phone: editPhone }).eq('id', employee.id)
-      if (error) throw error
+      const result = await api.patch<any>(`/employees/${employee.id}`, { phone: editPhone })
+      if (!result.ok) throw new Error(result.error || 'Failed to update profile')
       setEmployee({ ...employee, phone: editPhone })
       setEditMode(false)
       toast.success('Profile updated')

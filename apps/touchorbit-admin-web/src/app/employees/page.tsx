@@ -9,6 +9,7 @@ import {
 import { AddEmployeeDialog } from '@/components/add-employee-dialog'
 import { useEmployees } from '@/hooks/use-employees'
 import { useAuth } from '@/lib/auth'
+import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { ToEmptyState } from '@/components/ui/ToEmptyState'
@@ -474,11 +475,11 @@ function ImportCSVDialog({ onClose, onSuccess }: { onClose: () => void; onSucces
   useEffect(() => {
     if (!organizationId) return
     Promise.all([
-      supabase.from('branches').select('id, name, code').eq('organization_id', organizationId),
-      supabase.from('departments').select('id, name, code').eq('organization_id', organizationId),
-    ]).then(([branchRows, deptRows]) => {
-      setBranches(branchRows.data || [])
-      setDepartments(deptRows.data || [])
+      api.get<any[]>('/organizations/branches'),
+      api.get<any[]>('/organizations/departments'),
+    ]).then(([branchResult, deptResult]) => {
+      setBranches(branchResult.ok ? (branchResult.data || []) : [])
+      setDepartments(deptResult.ok ? (deptResult.data || []) : [])
     })
   }, [organizationId])
 
@@ -555,8 +556,28 @@ EMP002,Jane,Smith,jane@example.com,0771234568,987654321V,1992-05-20,2024-02-01,H
         securityColumns.forEach((key) => delete employee[key])
         return employee
       })
-      const { data, error } = await supabase.from('employees').insert(employeesToImport).select()
-      if (error) throw error
+      const createdEmployees: any[] = []
+      for (const row of employeesToImport) {
+        const createResult = await api.post<any>('/employees', {
+          first_name: row.first_name,
+          last_name: row.last_name,
+          email: row.email,
+          phone: row.phone || null,
+          employee_number: row.employee_number || null,
+          job_title: row.job_title || null,
+          department: row.department || null,
+          department_id: row.department_id || null,
+          branch_id: row.branch_id || null,
+          hire_date: row.hire_date || null,
+          basic_salary: row.basic_salary ? parseFloat(row.basic_salary) : null,
+          employment_status: row.employment_status || 'active',
+        })
+        if (!createResult.ok) {
+          throw new Error(createResult.error || 'Failed to import employee')
+        }
+        createdEmployees.push(createResult.data)
+      }
+
       const tempPasswordFor = (seed: string) => {
         const suffix = Math.random().toString(36).slice(2, 8)
         return `${seed.slice(0, 3) || 'Tmp'}#${suffix}9A`
@@ -569,36 +590,22 @@ EMP002,Jane,Smith,jane@example.com,0771234568,987654321V,1992-05-20,2024-02-01,H
         return null
       }
 
-      for (let i = 0; i < data.length; i++) {
-        const emp = data[i]
+      for (let i = 0; i < createdEmployees.length; i++) {
+        const emp = createdEmployees[i]
         const sourceRow = parsedRows[i]
-        await supabase.from('employee_history').insert({ employee_id: emp.id, event_type: 'imported', details: { source: 'csv_import', imported_by: userId }, changed_by: userId })
 
         const requestedRole = sourceRow.system_role
         const requestedGroups = sourceRow.permission_groups
         if (requestedRole || requestedGroups) {
-          const groupNames = String(requestedGroups || '').split('|').map((value: string) => value.trim()).filter(Boolean)
           const password = sourceRow.temporary_password || tempPasswordFor(sourceRow.first_name || 'Tmp')
-          const scopeType = sourceRow.scope_type || 'organization'
-          const provisionRes = await fetch('/api/provision-employee', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              employeeId: emp.id,
-              email: emp.email,
-              password,
-              forceReset: true,
-              systemRole: requestedRole || 'employee',
-              permissionGroupNames: groupNames,
-              scopeType,
-              scopeId: resolveScopeId(scopeType, sourceRow.scope_code),
-            })
-          })
-          const provisionResult = await provisionRes.json()
-          if (provisionResult.error) throw new Error(`Access setup failed for ${emp.email}: ${provisionResult.error}`)
+          // TODO: migrate security role and permission group provisioning to backend endpoints
+          const resetResult = await api.post<{ reset?: boolean }>(`/employees/${emp.id}/reset-password`, { password })
+          if (!resetResult.ok) {
+            throw new Error(`Access setup failed for ${emp.email}: ${resetResult.error}`)
+          }
         }
       }
-      toast.success(`Successfully imported ${data.length} employees`)
+      toast.success(`Successfully imported ${createdEmployees.length} employees`)
       onSuccess()
     } catch (error: any) {
       console.error('Import error:', error)

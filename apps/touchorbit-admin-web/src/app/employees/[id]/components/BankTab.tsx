@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { CreditCard, Pencil, Check, X, AlertTriangle } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
 interface Employee {
@@ -29,8 +29,8 @@ export function BankTab({ employee, onUpdate }: BankTabProps) {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const { error } = await supabase.from('employees').update(form).eq('id', employee.id)
-      if (error) throw error
+      const result = await api.patch<any>(`/employees/${employee.id}`, form)
+      if (!result.ok) throw new Error(result.error || 'Failed to update bank details')
       toast.success('Bank details updated')
       setIsEditing(false)
       onUpdate()
