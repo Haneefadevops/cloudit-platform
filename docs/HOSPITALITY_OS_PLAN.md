@@ -179,6 +179,10 @@ Each Hospitality OS module can be turned on or off per customer:
 - `taxes`
 - `reports`
 - `housekeeping`
+- `payments`
+- `communications`
+- `public-booking`
+- `self-service`
 
 This lets you sell different pricing tiers:
 
@@ -187,7 +191,7 @@ This lets you sell different pricing tiers:
 | **Free / Trial** | Properties, Room Types, Rooms, Guests, Reservations | Very small homestays |
 | **Basic** | + Invoices, Taxes | Guest houses |
 | **Standard** | + Reports, Housekeeping | Small hotels |
-| **Professional** | + Integrations (payments, channel manager, POS) | Medium hotels |
+| **Professional** | + Payments, Communications, Public Booking, Self-Service | Medium hotels |
 
 ---
 
@@ -200,7 +204,7 @@ These are starting ideas. Final prices should be decided based on customer inter
 | Free | LKR 0 | $0 | 1 property, up to 5 rooms |
 | Basic | LKR 4,900 | ~$16 | 1 property, up to 15 rooms |
 | Standard | LKR 9,900 | ~$33 | 1–3 properties, up to 50 rooms |
-| Professional | LKR 19,900+ | ~$66+ | Multiple properties, integrations |
+| Professional | LKR 19,900+ | ~$66+ | Multiple properties, guest portal, online payments |
 
 Optional add-ons:
 
@@ -258,11 +262,58 @@ Optional add-ons:
 - Multi-property support improvements.
 - Seasonal pricing and promotions.
 
-### Phase 7 — Growth integrations
+### Phase 7 — Guest-facing booking portal and self-service ✅ COMPLETED
+
+Build Option A: public routes inside `apps/hospitality-web` with secure guest tokens.
+
+**Route groups:**
+- `(dashboard)/` — staff-only pages, protected by `middleware.ts`.
+- `(public)/` — guest-facing pages, no login required.
+
+**Public pages:**
+- `/book/[propertySlug]` — property listing with room search.
+- `/book/[propertySlug]/checkout` — guest details + payment.
+- `/guest/[token]` — guest portal (booking summary).
+- `/guest/[token]/checkin` — self check-in.
+- `/guest/[token]/checkout` — self check-out + final bill.
+
+**Public API endpoints:**
+- `GET /public/properties/:slug` — public property info.
+- `POST /public/availability` — search available rooms by dates.
+- `POST /public/bookings` — create a guest booking.
+- `GET /public/bookings/:token` — view booking by secure token.
+- `POST /public/bookings/:token/checkin` — self check-in.
+- `POST /public/bookings/:token/checkout` — self check-out.
+- `POST /public/payments/intent` — create PayHere/Stripe payment intent.
+
+**Database changes:**
+- Add `publicSlug` to `Property` model.
+- Add `guestToken` to `Reservation` model (random, unique, expires).
+- Add `guestPortalEnabled` to `Property` settings.
+
+**Security:**
+- `middleware.ts` blocks unauthenticated users from `(dashboard)/`.
+- Guest portal uses secure token, not login.
+- Public API endpoints return only the data linked to the token.
+- Self check-out creates invoice and payment records same as staff checkout.
+
+**Notifications:**
+- Booking confirmation email/SMS/WhatsApp includes guest portal link.
+- Reminder before check-in.
+- Thank-you message after check-out.
+
+**Sub-phases for Codex:**
+1. Public property page + room availability search.
+2. Public booking creation + confirmation.
+3. Secure guest portal + token system.
+4. Self check-in flow.
+5. Self check-out flow + online payment.
+
+### Phase 8 — Growth integrations (NEXT)
 - Booking.com / Agoda channel manager.
 - Restaurant POS integration.
 - Mobile PWA app.
-- Guest self-check-in portal.
+- Advanced revenue management.
 
 ---
 
@@ -289,16 +340,12 @@ Answer these so the build can be focused:
 4. Do you need WhatsApp/SMS from day one, or can that come later?
 5. Do you want multi-language from day one, or English first?
 6. Do you want to buy a separate domain now (`hospitalityos.com`) or stay on `hospitality.cloudit.lk`?
-7. Should there be a **guest-facing booking page** (so guests can book online), or only an internal dashboard for staff?
+7. ✅ Guest-facing booking page + self check-in/check-out portal will be built in Phase 7.
 
 ---
 
 ## 10. Next step
 
-When you are ready, the first build task is:
+Phases 0–7 are complete. When you are ready, the next build task is:
 
-> **Phase 0 — Add module gating to `apps/hospitality-api`**
-
-This is a small, safe task that takes 1–2 hours and makes Hospitality OS behave like the other products in the platform.
-
-After that, we can move to Phase 1 (Sri Lankan localization) and Phase 2 (tax engine).
+> **Phase 8 — Growth integrations (channel manager, POS, mobile PWA)**

@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import axios from "axios";
 
 interface CachedProduct {
   key: string;
@@ -20,7 +20,11 @@ export class ProductModulesService {
 
   constructor(private readonly configService: ConfigService) {}
 
-  async isEnabled(orgId: string, product: string, moduleKey: string): Promise<boolean> {
+  async isEnabled(
+    orgId: string,
+    product: string,
+    moduleKey: string,
+  ): Promise<boolean> {
     const modules = await this.fetchModules(orgId);
     const productEntry = modules.find((p: CachedProduct) => p.key === product);
     if (!productEntry) return false;
@@ -36,12 +40,12 @@ export class ProductModulesService {
       return cached.products;
     }
 
-    const platformApiUrl = this.configService.get<string>('PLATFORM_API_URL');
-    const internalToken = this.configService.get<string>('INTERNAL_API_TOKEN');
+    const platformApiUrl = this.configService.get<string>("PLATFORM_API_URL");
+    const internalToken = this.configService.get<string>("INTERNAL_API_TOKEN");
 
     if (!platformApiUrl || !internalToken) {
       this.logger.warn(
-        'PLATFORM_API_URL or INTERNAL_API_TOKEN not configured; disabling module gating',
+        "PLATFORM_API_URL or INTERNAL_API_TOKEN not configured; disabling module gating",
       );
       return [];
     }
@@ -50,11 +54,12 @@ export class ProductModulesService {
       const response = await axios.get(
         `${platformApiUrl}/modules/internal/${orgId}`,
         {
-          headers: { 'x-internal-token': internalToken },
+          headers: { "x-internal-token": internalToken },
           timeout: 5000,
         },
       );
-      const products: CachedProduct[] = response.data?.data ?? response.data ?? [];
+      const products: CachedProduct[] =
+        response.data?.data ?? response.data ?? [];
       this.cache.set(orgId, { products, expiresAt: Date.now() + this.ttlMs });
       return products;
     } catch (error) {

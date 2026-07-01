@@ -3,13 +3,13 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { ProductModulesService } from '../../modules/modules.service';
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { ProductModulesService } from "../../modules/modules.service";
 import {
   REQUIRED_MODULE_KEY,
   RequiredModuleMetadata,
-} from '../decorators/require-module.decorator';
+} from "../decorators/require-module.decorator";
 
 @Injectable()
 export class ModuleGuard implements CanActivate {
@@ -32,7 +32,7 @@ export class ModuleGuard implements CanActivate {
     const orgId = request.user?.orgId || request.user?.organizationId;
 
     if (!orgId) {
-      throw new ForbiddenException('Organization context required');
+      throw new ForbiddenException("Organization context required");
     }
 
     const enabled = await this.modulesService.isEnabled(
