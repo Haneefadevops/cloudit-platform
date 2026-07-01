@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { 
   TrendingUp, 
   Plus, 
@@ -57,7 +57,7 @@ interface Goal {
 }
 
 export default function PerformanceAdminPage() {
-  const { organizationId, userId, isLoaded } = useAuth()
+  const { isLoaded } = useAuth()
   const [activeTab, setActiveTab] = useState<'cycles' | 'reviews' | 'goals'>('cycles')
   const [cycles, setCycles] = useState<ReviewCycle[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
@@ -74,32 +74,27 @@ export default function PerformanceAdminPage() {
   const [employees, setEmployees] = useState<any[]>([])
 
   useEffect(() => {
-    if (isLoaded && organizationId) {
+    if (isLoaded) {
       loadData()
     }
-  }, [isLoaded, organizationId, activeTab])
+  }, [isLoaded, activeTab])
 
   async function loadData() {
     setLoading(true)
     try {
       if (activeTab === 'cycles') {
-        const { data } = await supabase.from('performance_review_cycles').select('*').eq('organization_id', organizationId)
-        setCycles(data || [])
+        const res = await api.get<ReviewCycle[]>('/performance/cycles')
+        setCycles(res.data || [])
       } else if (activeTab === 'reviews') {
-        const { data } = await supabase
-          .from('performance_reviews')
-          .select('*, employee:employees(first_name, last_name, job_title)')
-          .eq('organization_id', organizationId)
-        setReviews(data as any || [])
+        const res = await api.get<Review[]>('/performance/reviews')
+        setReviews(res.data || [])
       } else if (activeTab === 'goals') {
-        const { data } = await supabase
-          .from('employee_goals')
-          .select('*, employee:employees(first_name, last_name)')
-          .eq('organization_id', organizationId)
-        setGoals(data as any || [])
-        
-        const { data: empData } = await supabase.from('employees').select('id, first_name, last_name').eq('organization_id', organizationId).eq('employment_status', 'active')
-        setEmployees(empData || [])
+        const [goalRes, empRes] = await Promise.all([
+          api.get<Goal[]>('/performance/goals'),
+          api.get<any[]>('/employees?status=active&limit=500'),
+        ])
+        setGoals(goalRes.data || [])
+        setEmployees(empRes.data || [])
       }
     } finally {
       setLoading(false)
@@ -109,30 +104,38 @@ export default function PerformanceAdminPage() {
   const handleCreateCycle = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const { error } = await supabase.from('performance_review_cycles').insert({ ...cycleForm, organization_id: organizationId })
-      if (error) throw error
+      const res = await api.post<ReviewCycle>('/performance/cycles', {
+        title: cycleForm.title,
+        start_date: cycleForm.start_date,
+        end_date: cycleForm.end_date,
+        status: cycleForm.status,
+      })
+      if (!res.ok) throw new Error(res.error || 'Failed to create cycle')
       setShowCycleDialog(false)
       loadData()
       toast.success('Review cycle created')
-    } catch (error) {
-      toast.error('Failed to create cycle')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create cycle')
     }
   }
 
   const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const { error } = await supabase.from('employee_goals').insert({ 
-        ...goalForm, 
-        organization_id: organizationId,
-        target_value: parseFloat(goalForm.target_value)
+      const res = await api.post<Goal>('/performance/goals', { 
+        employee_id: goalForm.employee_id,
+        title: goalForm.title,
+        kpi_metric: goalForm.kpi_metric,
+        target_value: parseFloat(goalForm.target_value),
+        target_date: goalForm.target_date || null,
+        status: goalForm.status,
       })
-      if (error) throw error
+      if (!res.ok) throw new Error(res.error || 'Failed to assign goal')
       setShowGoalDialog(false)
       loadData()
       toast.success('Goal assigned')
-    } catch (error) {
-      toast.error('Failed to assign goal')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to assign goal')
     }
   }
 

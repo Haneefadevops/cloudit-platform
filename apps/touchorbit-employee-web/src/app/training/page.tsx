@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { BookOpen, Plus, Pencil, Trash2, X, XCircle, Clock, GraduationCap, ChevronRight, CheckCircle2, History, Send, ShieldCheck, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAutoLinkEmployee } from '@/hooks/use-auto-link-employee'
@@ -47,8 +47,13 @@ interface AssignedTraining {
   }
 }
 
+interface EmployeeTrainingPayload {
+  personal: Training[]
+  assigned: AssignedTraining[]
+}
+
 export default function TrainingPage() {
-  const { userId, organizationId, isLoaded, isSignedIn } = useAuth()
+  const { isLoaded, isSignedIn } = useAuth()
   const { isLinked } = useAutoLinkEmployee()
   
   const [trainings, setTrainings] = useState<Training[]>([])
@@ -80,12 +85,13 @@ export default function TrainingPage() {
   const loadEmployeeData = async () => {
     setLoading(true)
     try {
-      const { data: emp } = await supabase.from('employees').select('id').eq('user_id', userId).single()
-      if (emp) {
-        const { data: tData } = await supabase.from('employee_training').select('*').eq('employee_id', emp.id).order('start_date', { ascending: false })
-        const { data: aData } = await supabase.from('training_assignments').select('*, program:training_programs(title, description, category)').eq('employee_id', emp.id).order('start_date', { ascending: false })
-        setTrainings(tData || [])
-        setAssignedTrainings(aData as any || [])
+      const meRes = await api.get<{ id: string }>('/employees/me')
+      if (!meRes.ok || !meRes.data?.id) return
+      const employeeId = meRes.data.id
+      const res = await api.get<EmployeeTrainingPayload>(`/training/employee/${employeeId}`)
+      if (res.ok && res.data) {
+        setTrainings(res.data.personal || [])
+        setAssignedTrainings(res.data.assigned || [])
       }
     } finally {
       setLoading(false)
@@ -96,18 +102,31 @@ export default function TrainingPage() {
   const handleSavePersonal = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const { data: emp } = await supabase.from('employees').select('id, organization_id').eq('user_id', userId).single()
-      if (!emp) throw new Error('Not linked')
-      const data = { ...formData, organization_id: emp.organization_id, employee_id: emp.id, description: formData.description || null }
-      if (editingTraining) await supabase.from('employee_training').update(data).eq('id', editingTraining.id)
-      else await supabase.from('employee_training').insert({ ...data, created_by: userId })
+      const meRes = await api.get<{ id: string }>('/employees/me')
+      if (!meRes.ok || !meRes.data?.id) throw new Error('Not linked')
+      const employeeId = meRes.data.id
+      const payload = {
+        employee_id: employeeId,
+        training_name: formData.training_name,
+        description: formData.description || null,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+      }
+      const res = editingTraining
+        ? await api.patch<Training>(`/training/employee-records/${editingTraining.id}`, payload)
+        : await api.post<Training>('/training/employee-records', payload)
+      if (!res.ok) throw new Error(res.error || 'Save failed')
       toast.success('Record saved'); setIsDialogOpen(false); loadEmployeeData()
-    } catch (error) { toast.error('Save failed') }
+    } catch (error: any) { toast.error(error.message || 'Save failed') }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this record?')) return
-    await supabase.from('employee_training').delete().eq('id', id)
+    const res = await api.del<{ id: string }>(`/training/employee-records/${id}`)
+    if (!res.ok) {
+      toast.error(res.error || 'Delete failed')
+      return
+    }
     toast.success('Deleted'); loadEmployeeData()
   }
 
@@ -115,8 +134,16 @@ export default function TrainingPage() {
     e.preventDefault(); if (!selectedAssignment) return
     setRequestLoading(true)
     try {
-      await supabase.from('training_assignments').update({ reschedule_requested: true, reschedule_reason: requestForm.reason, reschedule_new_start_date: requestForm.new_start, reschedule_new_end_date: requestForm.new_end }).eq('id', selectedAssignment.id)
+      const res = await api.patch<AssignedTraining>(`/training/assignments/${selectedAssignment.id}`, {
+        reschedule_requested: true,
+        reschedule_reason: requestForm.reason,
+        reschedule_new_start_date: requestForm.new_start,
+        reschedule_new_end_date: requestForm.new_end,
+      })
+      if (!res.ok) throw new Error(res.error || 'Request failed')
       toast.success('Reschedule requested'); setShowRescheduleModal(false); loadEmployeeData()
+    } catch (error: any) {
+      toast.error(error.message || 'Request failed')
     } finally { setRequestLoading(false) }
   }
 
@@ -124,8 +151,14 @@ export default function TrainingPage() {
     e.preventDefault(); if (!selectedAssignment) return
     setRequestLoading(true)
     try {
-      await supabase.from('training_assignments').update({ cancel_requested: true, cancel_reason: requestForm.reason }).eq('id', selectedAssignment.id)
+      const res = await api.patch<AssignedTraining>(`/training/assignments/${selectedAssignment.id}`, {
+        cancel_requested: true,
+        cancel_reason: requestForm.reason,
+      })
+      if (!res.ok) throw new Error(res.error || 'Request failed')
       toast.success('Cancellation requested'); setShowCancelModal(false); loadEmployeeData()
+    } catch (error: any) {
+      toast.error(error.message || 'Request failed')
     } finally { setRequestLoading(false) }
   }
 
@@ -177,6 +210,7 @@ export default function TrainingPage() {
                                 as.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : as.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
                               }`}>{as.status}</span>
                               {as.reschedule_requested && <div className="text-[7px] font-black text-amber-500 uppercase mt-1 tracking-tighter">Reschedule Requested</div>}
+                              {as.cancel_requested && <div className="text-[7px] font-black text-red-500 uppercase mt-1 tracking-tighter">Withdrawal Requested</div>}
                            </div>
                         </div>
                         <h4 className="text-[16px] font-black text-[#1A1727] leading-tight mb-1">{as.program?.title}</h4>

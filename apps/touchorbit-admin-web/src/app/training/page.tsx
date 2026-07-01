@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import {
   GraduationCap,
   Plus,
@@ -71,7 +71,7 @@ const formatTime = (timeString: string | null) => {
 }
 
 export default function TrainingAdminPage() {
-  const { organizationId, isLoaded } = useAuth()
+  const { isLoaded } = useAuth()
   const [activeTab, setActiveTab] = useState<'programs' | 'assignments'>('programs')
   const [programs, setPrograms] = useState<TrainingProgram[]>([])
   const [assignments, setAssignments] = useState<TrainingAssignment[]>([])
@@ -95,25 +95,22 @@ export default function TrainingAdminPage() {
   const [editDatesForm, setEditDatesForm] = useState({ start: '', end: '', start_time: '', end_time: '' })
 
   useEffect(() => {
-    if (isLoaded && organizationId) {
+    if (isLoaded) {
       loadData()
     }
-  }, [isLoaded, organizationId])
+  }, [isLoaded])
 
   async function loadData() {
     setLoading(true)
     try {
-      const { data: progData } = await supabase.from('training_programs').select('*').eq('organization_id', organizationId)
-      setPrograms(progData || [])
-
-      const { data: assignData } = await supabase
-        .from('training_assignments')
-        .select('*, employee:employees(first_name, last_name, department), program:training_programs(title)')
-        .eq('organization_id', organizationId)
-      setAssignments(assignData as any || [])
-
-      const { data: empData } = await supabase.from('employees').select('id, first_name, last_name').eq('organization_id', organizationId).eq('employment_status', 'active')
-      setEmployees(empData || [])
+      const [progRes, assignRes, empRes] = await Promise.all([
+        api.get<TrainingProgram[]>('/training'),
+        api.get<TrainingAssignment[]>('/training/assignments'),
+        api.get<any[]>('/employees?status=active&limit=500'),
+      ])
+      setPrograms(progRes.data || [])
+      setAssignments(assignRes.data || [])
+      setEmployees(empRes.data || [])
     } finally {
       setLoading(false)
     }
@@ -122,37 +119,37 @@ export default function TrainingAdminPage() {
   const handleSaveProgram = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const data = { ...programForm, organization_id: organizationId, total_hours: programForm.total_hours ? parseFloat(programForm.total_hours) : null }
-      if (editingProgram) {
-        await supabase.from('training_programs').update(data).eq('id', editingProgram.id)
-      } else {
-        await supabase.from('training_programs').insert(data)
+      const data = {
+        title: programForm.title,
+        description: programForm.description || null,
+        category: programForm.category,
+        total_hours: programForm.total_hours ? parseFloat(programForm.total_hours) : null,
+        is_mandatory: programForm.is_mandatory,
       }
+      const res = editingProgram
+        ? await api.patch<TrainingProgram>(`/training/programs/${editingProgram.id}`, data)
+        : await api.post<TrainingProgram>('/training/programs', data)
+      if (!res.ok) throw new Error(res.error || 'Save failed')
       setShowProgramDialog(false)
       loadData()
       toast.success('Program saved')
-    } catch (error) {
-      toast.error('Error saving program')
+    } catch (error: any) {
+      toast.error(error.message || 'Error saving program')
     }
   }
 
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const { error } = await supabase.from('training_assignments').insert({
-        organization_id: organizationId,
+      const res = await api.post<TrainingAssignment>('/training/assignments', {
         program_id: selectedProgramId,
         employee_id: selectedEmployeeId,
         start_date: assignmentDates.start,
         end_date: assignmentDates.end,
         start_time: assignmentDates.start_time || null,
         end_time: assignmentDates.end_time || null,
-        status: 'assigned'
       })
-      if (error) {
-        if (error.code === '23505') throw new Error('Employee is already assigned to this program')
-        throw error
-      }
+      if (!res.ok) throw new Error(res.error || 'Failed to assign training')
       setShowAssignDialog(false)
       loadData()
       toast.success('Training assigned')
@@ -161,26 +158,15 @@ export default function TrainingAdminPage() {
     }
   }
 
-  const handleApproveReschedule = async (requestId: string, newStart: string, newEnd: string) => {
+  const handleApproveReschedule = async (requestId: string) => {
     setProcessingId(requestId)
     try {
-      const { error } = await supabase
-        .from('training_assignments')
-        .update({
-          start_date: newStart,
-          end_date: newEnd,
-          reschedule_requested: false,
-          reschedule_new_start_date: null,
-          reschedule_new_end_date: null,
-          reschedule_reason: null
-        })
-        .eq('id', requestId)
-
-      if (error) throw error
+      const res = await api.post<TrainingAssignment>(`/training/assignments/${requestId}/reschedule-approve`, {})
+      if (!res.ok) throw new Error(res.error || 'Failed')
       toast.success('Reschedule approved')
       loadData()
-    } catch (error) {
-      toast.error('Failed to approve reschedule')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to approve reschedule')
     } finally {
       setProcessingId(null)
     }
@@ -189,21 +175,12 @@ export default function TrainingAdminPage() {
   const handleRejectReschedule = async (requestId: string) => {
     setProcessingId(requestId)
     try {
-      const { error } = await supabase
-        .from('training_assignments')
-        .update({
-          reschedule_requested: false,
-          reschedule_new_start_date: null,
-          reschedule_new_end_date: null,
-          reschedule_reason: null
-        })
-        .eq('id', requestId)
-
-      if (error) throw error
+      const res = await api.post<TrainingAssignment>(`/training/assignments/${requestId}/reschedule-reject`, {})
+      if (!res.ok) throw new Error(res.error || 'Failed')
       toast.success('Reschedule request rejected')
       loadData()
-    } catch (error) {
-      toast.error('Failed to reject reschedule')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to reject reschedule')
     } finally {
       setProcessingId(null)
     }
@@ -212,20 +189,12 @@ export default function TrainingAdminPage() {
   const handleApproveCancel = async (requestId: string) => {
     setProcessingId(requestId)
     try {
-      const { error } = await supabase
-        .from('training_assignments')
-        .update({
-          status: 'cancelled',
-          cancel_requested: false,
-          cancel_reason: null
-        })
-        .eq('id', requestId)
-
-      if (error) throw error
+      const res = await api.post<TrainingAssignment>(`/training/assignments/${requestId}/cancel-approve`, {})
+      if (!res.ok) throw new Error(res.error || 'Failed')
       toast.success('Cancellation approved')
       loadData()
-    } catch (error) {
-      toast.error('Failed to approve cancellation')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to approve cancellation')
     } finally {
       setProcessingId(null)
     }
@@ -234,19 +203,12 @@ export default function TrainingAdminPage() {
   const handleRejectCancel = async (requestId: string) => {
     setProcessingId(requestId)
     try {
-      const { error } = await supabase
-        .from('training_assignments')
-        .update({
-          cancel_requested: false,
-          cancel_reason: null
-        })
-        .eq('id', requestId)
-
-      if (error) throw error
+      const res = await api.post<TrainingAssignment>(`/training/assignments/${requestId}/cancel-reject`, {})
+      if (!res.ok) throw new Error(res.error || 'Failed')
       toast.success('Cancellation request rejected')
       loadData()
-    } catch (error) {
-      toast.error('Failed to reject cancellation')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to reject cancellation')
     } finally {
       setProcessingId(null)
     }
@@ -268,22 +230,18 @@ export default function TrainingAdminPage() {
     if (!editingAssignment) return
 
     try {
-      const { error } = await supabase
-        .from('training_assignments')
-        .update({
-          start_date: editDatesForm.start,
-          end_date: editDatesForm.end,
-          start_time: editDatesForm.start_time || null,
-          end_time: editDatesForm.end_time || null
-        })
-        .eq('id', editingAssignment.id)
-
-      if (error) throw error
+      const res = await api.patch<TrainingAssignment>(`/training/assignments/${editingAssignment.id}`, {
+        start_date: editDatesForm.start,
+        end_date: editDatesForm.end,
+        start_time: editDatesForm.start_time || null,
+        end_time: editDatesForm.end_time || null,
+      })
+      if (!res.ok) throw new Error(res.error || 'Failed')
       toast.success('Training schedule updated')
       setShowEditDatesModal(false)
       loadData()
-    } catch (error) {
-      toast.error('Failed to update dates')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update dates')
     }
   }
 
@@ -291,16 +249,12 @@ export default function TrainingAdminPage() {
     if (!confirm('Are you sure you want to cancel this training assignment?')) return
 
     try {
-      const { error } = await supabase
-        .from('training_assignments')
-        .update({ status: 'cancelled' })
-        .eq('id', assignmentId)
-
-      if (error) throw error
+      const res = await api.patch<TrainingAssignment>(`/training/assignments/${assignmentId}`, { status: 'cancelled' })
+      if (!res.ok) throw new Error(res.error || 'Failed')
       toast.success('Training cancelled')
       loadData()
-    } catch (error) {
-      toast.error('Failed to cancel training')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to cancel training')
     }
   }
 
@@ -483,7 +437,7 @@ export default function TrainingAdminPage() {
                                       <div className="text-[9px] font-black text-amber-600 uppercase mb-2">Reschedule Review</div>
                                       <div className="text-[10px] text-amber-800 font-bold mb-3">"{as.reschedule_reason}"</div>
                                       <div className="flex gap-2">
-                                        <button onClick={() => handleApproveReschedule(as.id, as.reschedule_new_start_date!, as.reschedule_new_end_date!)} disabled={!!processingId} className="flex-1 py-1.5 bg-emerald-600 text-white rounded-lg text-[8px] font-black uppercase tracking-widest shadow-sm">Approve</button>
+                                        <button onClick={() => handleApproveReschedule(as.id)} disabled={!!processingId} className="flex-1 py-1.5 bg-emerald-600 text-white rounded-lg text-[8px] font-black uppercase tracking-widest shadow-sm">Approve</button>
                                         <button onClick={() => handleRejectReschedule(as.id)} disabled={!!processingId} className="flex-1 py-1.5 bg-white border border-amber-200 text-amber-600 rounded-lg text-[8px] font-black uppercase tracking-widest">Reject</button>
                                       </div>
                                     </div>
