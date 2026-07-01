@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { Lock, Mail } from 'lucide-react'
 
@@ -23,22 +23,17 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      const result = await api.post('/auth/login', { email, password })
 
-      if (error) {
-        console.error('Login error:', error)
-        toast.error(error.message || 'Failed to sign in')
+      if (!result.ok) {
+        console.error('Login error:', result.error)
+        toast.error(result.error || 'Failed to sign in')
         return
       }
 
-      if (data.session) {
-        toast.success('Signed in successfully!')
-        router.push('/')
-        router.refresh()
-      }
+      toast.success('Signed in successfully!')
+      router.push('/')
+      router.refresh()
     } catch (error) {
       console.error('Login error:', error)
       toast.error('An unexpected error occurred')

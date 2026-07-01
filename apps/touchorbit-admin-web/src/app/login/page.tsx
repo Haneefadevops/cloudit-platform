@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { Users, TrendingUp, Shield, Eye, EyeOff, Mail, Lock } from 'lucide-react'
@@ -23,22 +23,20 @@ export default function LoginPage() {
     }
     setIsLoading(true)
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        toast.error(error.message || 'Failed to sign in')
+      const result = await api.post('/auth/login', { email, password })
+      if (!result.ok) {
+        toast.error(result.error || 'Failed to sign in')
         return
       }
-      if (data.session) {
-        if (rememberMe) {
-          localStorage.setItem('touchorbit_remember_me', 'true')
-        } else {
-          localStorage.setItem('touchorbit_remember_me', 'false')
-          sessionStorage.setItem('touchorbit_session_active', 'true')
-        }
-        toast.success('Signed in successfully!')
-        router.push('/')
-        router.refresh()
+      if (rememberMe) {
+        localStorage.setItem('touchorbit_remember_me', 'true')
+      } else {
+        localStorage.setItem('touchorbit_remember_me', 'false')
+        sessionStorage.setItem('touchorbit_session_active', 'true')
       }
+      toast.success('Signed in successfully!')
+      router.push('/')
+      router.refresh()
     } catch {
       toast.error('An unexpected error occurred')
     } finally {
@@ -51,9 +49,7 @@ export default function LoginPage() {
       toast.error('Enter your email address first')
       return
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(email)
-    if (error) toast.error(error.message)
-    else toast.success('Password reset email sent — check your inbox')
+    toast.info('Please contact your administrator to reset your password.')
   }
 
   return (

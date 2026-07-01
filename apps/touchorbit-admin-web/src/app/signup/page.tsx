@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { Clock, MapPin, Star, Eye, EyeOff, User, Mail, Building2, Lock } from 'lucide-react'
 
@@ -37,31 +37,18 @@ export default function SignupPage() {
       const firstName = nameParts[0]
       const lastName = nameParts.slice(1).join(' ') || ''
 
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const result = await api.post('/auth/register', {
         email,
         password,
-        options: { data: { first_name: firstName, last_name: lastName } }
+        firstName,
+        lastName,
+        organizationName: orgName.trim(),
       })
-      if (authError) throw authError
-      if (!authData.user) throw new Error('User creation failed')
 
-      const slug = orgName.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-      const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .insert({ name: orgName.trim(), slug, status: 'active' })
-        .select()
-        .single()
-      if (orgError) throw orgError
-
-      const { error: userError } = await supabase.from('users').insert({
-        id: authData.user.id,
-        organization_id: org.id,
-        email,
-        role: 'owner',
-        first_name: firstName,
-        last_name: lastName,
-      })
-      if (userError) throw userError
+      if (!result.ok) {
+        toast.error(result.error || 'Failed to create organization')
+        return
+      }
 
       toast.success('Organization created! Welcome to TouchOrbit.')
       window.location.href = '/'

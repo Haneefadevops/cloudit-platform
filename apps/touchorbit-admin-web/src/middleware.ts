@@ -1,57 +1,64 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL
+
+const ADMIN_ROLES = [
+  'owner',
+  'super_admin',
+  'admin',
+  'manager',
+  'hr_admin',
+  'finance',
+  'dept_manager',
+  'branch_manager',
+]
+
+interface MeData {
+  id: string
+  email: string
+  fullName: string
+  role: string
+  organizationId: string
+}
+
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request })
+  const { pathname } = request.nextUrl
+  const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/signup')
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => request.cookies.getAll(),
-        setAll: (cookiesToSet: { name: string; value: string; options?: any }[]) => {
-          cookiesToSet.forEach(({ name, value, options }: { name: string; value: string; options?: any }) => {
-            response.cookies.set(name, value, options)
-          })
-        },
-      },
+  let me: MeData | null = null
+
+  if (API_URL) {
+    try {
+      const cookie = request.headers.get('cookie') || ''
+      const response = await fetch(`${API_URL}/api/auth/me`, {
+        headers: { Cookie: cookie },
+        credentials: 'include',
+      })
+
+      if (response.ok) {
+        const body = await response.json()
+        if (body?.ok && body.data) {
+          me = body.data as MeData
+        }
+      }
+    } catch (error) {
+      console.error('Auth middleware check failed:', error)
     }
-  )
+  }
 
-  const { data: { session } } = await supabase.auth.getSession()
-
-  // Redirect to /login if not authenticated (except login/signup pages)
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login') ||
-                     request.nextUrl.pathname.startsWith('/signup')
-
-  if (!session && !isAuthPage) {
+  if (!me && !isAuthPage) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // If authenticated, check if the user has an admin role
-  if (session && !isAuthPage) {
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
-
-    const adminRoles = ['owner', 'super_admin', 'admin', 'manager', 'hr_admin', 'finance', 'dept_manager', 'branch_manager']
-    
-    // If user has a role but it's not an admin role, redirect to login with error
-    // (Wait: if it's a new signup, profile might be null for a split second)
-    if (profile && !adminRoles.includes(profile.role)) {
-      await supabase.auth.signOut()
-      return NextResponse.redirect(new URL('/login?error=unauthorized', request.url))
-    }
+  if (me && !isAuthPage && !ADMIN_ROLES.includes(me.role)) {
+    return NextResponse.redirect(new URL('/login?error=unauthorized', request.url))
   }
 
-  if (session && isAuthPage) {
+  if (me && isAuthPage) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  return response
+  return NextResponse.next()
 }
 
 export const config = {

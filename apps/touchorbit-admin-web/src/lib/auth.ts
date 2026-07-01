@@ -1,6 +1,22 @@
 import { useEffect, useState } from 'react'
-import { supabase } from './supabase'
-import type { User, Session } from '@supabase/supabase-js'
+import { api } from './api'
+
+interface MeData {
+  id: string
+  email: string
+  fullName: string
+  role: string
+  organizationId: string
+  organization?: { id: string; name: string }
+}
+
+interface ApiUser {
+  id: string
+  email: string
+  fullName?: string
+  role?: string
+  organizationId?: string
+}
 
 interface AuthState {
   userId: string | null
@@ -16,52 +32,62 @@ interface AuthState {
   isAdmin: boolean
   isLoaded: boolean
   isSignedIn: boolean
-  user: User | null
+  user: ApiUser | null
   userProfile: any
   userRole: string | undefined
   signOut: () => Promise<void>
 }
 
+function splitName(fullName?: string) {
+  const parts = (fullName || '').trim().split(/\s+/)
+  return {
+    first_name: parts[0] || '',
+    last_name: parts.slice(1).join(' ') || '',
+  }
+}
+
 export function useAuth(): AuthState {
-  const [session, setSession] = useState<Session | null>(null)
-  const [userProfile, setUserProfile] = useState<any>(null)
+  const [profile, setProfile] = useState<MeData | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
-      setSession(session)
-      if (session) loadUserProfile(session.user.id)
-      else setIsLoaded(true)
-    })
+    let mounted = true
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event: string, session: Session | null) => {
-        setSession(session)
-        if (session) loadUserProfile(session.user.id)
-        else { setUserProfile(null); setIsLoaded(true) }
+    async function fetchMe() {
+      const result = await api.get<MeData>('/auth/me')
+      if (!mounted) return
+      if (result.ok && result.data) {
+        setProfile(result.data)
+      } else {
+        setProfile(null)
       }
-    )
+      setIsLoaded(true)
+    }
 
-    return () => subscription.unsubscribe()
+    fetchMe()
+    const interval = setInterval(fetchMe, 30000)
+
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
   }, [])
 
-  async function loadUserProfile(userId: string) {
-    const { data } = await supabase
-      .from('users')
-      .select('organization_id, role, first_name, last_name')
-      .eq('id', userId)
-      .single()
-    setUserProfile(data)
-    setIsLoaded(true)
-  }
+  const role = profile?.role
+  const names = splitName(profile?.fullName)
 
-  const role = userProfile?.role
+  const userProfile = profile
+    ? {
+        ...profile,
+        organization_id: profile.organizationId,
+        first_name: names.first_name,
+        last_name: names.last_name,
+      }
+    : null
 
   return {
-    userId: session?.user?.id ?? null,
-    organizationId: userProfile?.organization_id,
+    userId: profile?.id ?? null,
+    organizationId: profile?.organizationId,
     role,
     isEmployee: role === 'employee',
     isOwner: role === 'owner',
@@ -72,12 +98,20 @@ export function useAuth(): AuthState {
     isBranchManager: role === 'branch_manager',
     isAdmin: ['owner', 'super_admin', 'admin', 'manager', 'hr_admin', 'finance', 'dept_manager', 'branch_manager'].includes(role as string),
     isLoaded,
-    isSignedIn: !!session,
-    user: session?.user ?? null,
+    isSignedIn: !!profile,
+    user: profile
+      ? {
+          id: profile.id,
+          email: profile.email,
+          fullName: profile.fullName,
+          role: profile.role,
+          organizationId: profile.organizationId,
+        }
+      : null,
     userProfile,
     userRole: role,
-    signOut: async () => { 
-      await supabase.auth.signOut()
+    signOut: async () => {
+      await api.post('/auth/logout', {})
       window.location.href = '/login'
     },
   }

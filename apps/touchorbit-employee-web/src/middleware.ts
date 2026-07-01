@@ -1,47 +1,50 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL
+
+interface MeData {
+  id: string
+  email: string
+  fullName: string
+  role: string
+  organizationId: string
+}
+
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request })
+  const { pathname } = request.nextUrl
+  const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/signup')
+  const isResetPage = pathname.startsWith('/reset-password')
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => request.cookies.getAll(),
-        setAll: (cookiesToSet: { name: string; value: string; options?: any }[]) => {
-          cookiesToSet.forEach(({ name, value, options }: { name: string; value: string; options?: any }) => {
-            response.cookies.set(name, value, options)
-          })
-        },
-      },
+  let me: MeData | null = null
+
+  if (API_URL) {
+    try {
+      const cookie = request.headers.get('cookie') || ''
+      const response = await fetch(`${API_URL}/api/auth/me`, {
+        headers: { Cookie: cookie },
+        credentials: 'include',
+      })
+
+      if (response.ok) {
+        const body = await response.json()
+        if (body?.ok && body.data) {
+          me = body.data as MeData
+        }
+      }
+    } catch (error) {
+      console.error('Auth middleware check failed:', error)
     }
-  )
+  }
 
-  const { data: { session } } = await supabase.auth.getSession()
-
-  // Redirect to /login if not authenticated (except login/signup pages)
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login') ||
-                     request.nextUrl.pathname.startsWith('/signup')
-  const isResetPage = request.nextUrl.pathname.startsWith('/reset-password')
-
-  if (!session && !isAuthPage) {
+  if (!me && !isAuthPage && !isResetPage) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (session) {
-    // Check if password change is forced
-    if (session.user.user_metadata?.force_password_change === true && !isResetPage) {
-      return NextResponse.redirect(new URL('/reset-password', request.url))
-    }
-
-    if (isAuthPage && !session.user.user_metadata?.force_password_change) {
-      return NextResponse.redirect(new URL('/', request.url))
-    }
+  if (me && isAuthPage) {
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
-  return response
+  return NextResponse.next()
 }
 
 export const config = {
