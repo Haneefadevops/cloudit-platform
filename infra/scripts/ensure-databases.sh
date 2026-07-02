@@ -32,12 +32,12 @@ DATABASES=(
 
 wait_for_postgres() {
   echo "[ensure-databases] Waiting for PostgreSQL to be ready..."
-  for i in {1..30}; do
-    if docker exec postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+  for i in {1..60}; do
+    if docker exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT 1" >/dev/null 2>&1; then
       echo "[ensure-databases] PostgreSQL is ready"
       return 0
     fi
-    sleep 1
+    sleep 2
   done
   echo "[ensure-databases] ERROR: PostgreSQL did not become ready"
   return 1

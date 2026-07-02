@@ -34,7 +34,6 @@ async function getAppliedMigrations(
 async function run() {
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
     await ensureMigrationsTable(client);
 
     const applied = await getAppliedMigrations(client);
@@ -50,21 +49,27 @@ async function run() {
       const sql = await fs.readFile(filePath, "utf-8");
 
       console.log(`Applying migration: ${file}`);
-      await client.query(sql);
-      await client.query("INSERT INTO migrations (filename) VALUES ($1)", [
-        file,
-      ]);
+      await client.query("BEGIN");
+      try {
+        await client.query(sql);
+        await client.query("INSERT INTO migrations (filename) VALUES ($1)", [
+          file,
+        ]);
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        console.error(`Migration failed while applying ${file}:`, error);
+        throw error;
+      }
       appliedCount++;
     }
 
-    await client.query("COMMIT");
     console.log(
       appliedCount === 0
         ? "No new migrations to apply."
         : `Applied ${appliedCount} migration(s).`,
     );
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
     console.error("Migration failed:", error);
     process.exit(1);
   } finally {

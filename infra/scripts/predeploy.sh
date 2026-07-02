@@ -14,18 +14,15 @@ log() {
 
 cd "$PROJECT_ROOT"
 
-log "Applying migrations for touchorbit-api..."
-docker compose -f infra/touchorbit-api/docker-compose.yml run --rm --build touchorbit-api npm run migrate
+api_services=(touchorbit-api platform-api hospitality-api orbitone-api)
 
-log "Applying pending migrations for platform-api..."
-docker compose -f infra/platform-api/docker-compose.yml run --rm --build platform-api npx prisma migrate deploy
+for svc in "${api_services[@]}"; do
+  log "Building ${svc} image..."
+  docker compose -f "infra/${svc}/docker-compose.yml" build "${svc}"
 
-log "Applying pending migrations for hospitality-api..."
-docker compose -f infra/hospitality-api/docker-compose.yml run --rm --build hospitality-api npx prisma migrate deploy
-
-log "Applying pending migrations for orbitone-api..."
-docker compose -f infra/orbitone-api/docker-compose.yml run --rm --build orbitone-api npx prisma migrate deploy
-
+  log "Running predeploy for ${svc}..."
+  docker compose -f "infra/${svc}/docker-compose.yml" run --rm --no-build "${svc}" npm run predeploy
+done
 
 
 log "Pre-deployment checks complete"

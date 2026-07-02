@@ -20,4 +20,4 @@ COPY --from=builder /app/package*.json ./
 RUN npm install --omit=dev && npm cache clean --force
 RUN npx prisma generate
 EXPOSE 3004
-CMD ["sh", "-c", "npm run migrate && node dist/src/main"]
+CMD ["node", "dist/src/main"]
