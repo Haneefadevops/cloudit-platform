@@ -16,3 +16,11 @@ GRANT ALL PRIVILEGES ON DATABASE platform TO cloudit;
 -- hospitality database
 CREATE DATABASE hospitality;
 GRANT ALL PRIVILEGES ON DATABASE hospitality TO cloudit;
+
+-- touchorbit database
+CREATE DATABASE touchorbit;
+GRANT ALL PRIVILEGES ON DATABASE touchorbit TO cloudit;
+
+-- orbitone database
+CREATE DATABASE orbitone;
+GRANT ALL PRIVILEGES ON DATABASE orbitone TO cloudit;
