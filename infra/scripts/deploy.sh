@@ -45,16 +45,40 @@ tag_previous_image() {
   fi
 }
 
+load_env_file() {
+  local env_file="$1"
+  local line key value
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    line="${line#"${line%%[![:space:]]*}"}"
+
+    if [ -z "$line" ] || [[ "$line" == \#* ]]; then
+      continue
+    fi
+
+    if [[ "$line" == export[[:space:]]* ]]; then
+      line="${line#export}"
+      line="${line#"${line%%[![:space:]]*}"}"
+    fi
+
+    key="${line%%=*}"
+    value="${line#*=}"
+    key="${key%"${key##*[![:space:]]}"}"
+
+    if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && [ "$line" != "$key" ]; then
+      export "${key}=${value}"
+    fi
+  done < "$env_file"
+}
+
 build_service() {
   local svc="$1"
   local env_file="$PROJECT_ROOT/apps/${svc}/.env"
 
   if [ -f "$env_file" ]; then
     (
-      set -a
-      # shellcheck source=/dev/null
-      source "$env_file"
-      set +a
+      load_env_file "$env_file"
       docker compose -f "infra/${svc}/docker-compose.yml" build "$svc"
     )
   else
