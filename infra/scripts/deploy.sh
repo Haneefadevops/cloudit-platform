@@ -45,6 +45,17 @@ tag_previous_image() {
   fi
 }
 
+escape_traefik_dashboard_auth() {
+  local env_file="$PROJECT_ROOT/infra/traefik/.env"
+
+  if [ -f "$env_file" ]; then
+    if grep -Eq '^DASHBOARD_AUTH=.*(^|[^$])\$[A-Za-z0-9_]' "$env_file"; then
+      log "Escaping Traefik dashboard auth dollars for Docker Compose..."
+      sed -i -E '/^DASHBOARD_AUTH=/ s/\$/$$/g' "$env_file"
+    fi
+  fi
+}
+
 cd "$PROJECT_ROOT"
 
 log "Pulling latest code..."
@@ -61,12 +72,14 @@ done
 log "Ensuring shared network exists..."
 docker network inspect cloudit >/dev/null 2>&1 || docker network create cloudit --driver bridge --attachable
 
+escape_traefik_dashboard_auth
+
 log "Starting core infrastructure..."
 docker compose -f infra/postgres/docker-compose.yml up -d
 docker compose -f infra/redis/docker-compose.yml up -d
 
-log "Waiting for database and cache to become healthy..."
-sleep 10
+wait_for_service postgres
+wait_for_service redis
 
 log "Ensuring application databases exist..."
 "$PROJECT_ROOT/infra/scripts/ensure-databases.sh"
@@ -77,8 +90,13 @@ log "Running pre-deployment checks and migrations..."
 frontend_services=(platform-web hospitality-web orbitone-web touchorbit-web touchorbit-admin-web touchorbit-employee-web)
 
 docker compose -f infra/traefik/docker-compose.yml up -d
+wait_for_service traefik
+
 docker compose -f infra/n8n/docker-compose.yml up -d
+wait_for_service n8n
+
 docker compose -f infra/uptime-kuma/docker-compose.yml up -d
+wait_for_service uptime-kuma
 
 log "Building frontend images..."
 for svc in "${frontend_services[@]}"; do

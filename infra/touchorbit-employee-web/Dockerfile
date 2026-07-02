@@ -17,6 +17,7 @@ RUN npm run build --workspace=@cloudit/touchorbit-employee-web
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk add --no-cache curl
 COPY --from=builder /app/apps/touchorbit-employee-web/.next/standalone ./
 COPY --from=builder /app/apps/touchorbit-employee-web/public ./public
 EXPOSE 3009

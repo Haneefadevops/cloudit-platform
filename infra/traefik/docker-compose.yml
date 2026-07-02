@@ -37,7 +37,7 @@ services:
       - "traefik.http.routers.traefik-http.middlewares=redirect-to-https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/ping || exit 1"]
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
       interval: 10s
       timeout: 5s
       retries: 3

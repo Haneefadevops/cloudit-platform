@@ -17,6 +17,7 @@ RUN npm run build --workspace=@cloudit/hospitality-web
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk add --no-cache curl
 COPY --from=builder /app/apps/hospitality-web/.next/standalone ./
 COPY --from=builder /app/apps/hospitality-web/public ./public
 EXPOSE 3003

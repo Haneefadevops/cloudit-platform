@@ -16,6 +16,8 @@ services:
       --maxmemory 256mb
       --maxmemory-policy allkeys-lru
       --requirepass ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     networks:
@@ -23,7 +25,7 @@ services:
     # NOT exposed to the internet — internal only
     ports: []
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" --raw incr ping >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 3
