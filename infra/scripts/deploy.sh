@@ -45,6 +45,23 @@ tag_previous_image() {
   fi
 }
 
+build_service() {
+  local svc="$1"
+  local env_file="$PROJECT_ROOT/apps/${svc}/.env"
+
+  if [ -f "$env_file" ]; then
+    (
+      set -a
+      # shellcheck source=/dev/null
+      source "$env_file"
+      set +a
+      docker compose -f "infra/${svc}/docker-compose.yml" build "$svc"
+    )
+  else
+    docker compose -f "infra/${svc}/docker-compose.yml" build "$svc"
+  fi
+}
+
 escape_traefik_dashboard_auth() {
   local env_file="$PROJECT_ROOT/infra/traefik/.env"
 
@@ -101,7 +118,7 @@ wait_for_service uptime-kuma
 log "Building frontend images..."
 for svc in "${frontend_services[@]}"; do
   tag_previous_image "$svc"
-  docker compose -f "infra/${svc}/docker-compose.yml" build "$svc"
+  build_service "$svc"
 done
 
 log "Starting platform-api..."
