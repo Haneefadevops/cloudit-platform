@@ -44,7 +44,10 @@ jobs:
           ssh ${SERVER_USER}@${SERVER_IP} '
             export DOMAIN="${DOMAIN}"
             cd /opt/cloudit/cloudit-platform
-            ./infra/scripts/deploy.sh
+            git fetch origin
+            git reset --hard origin/master
+            chmod +x infra/scripts/*.sh
+            bash infra/scripts/deploy.sh
           '
 
       - name: Run health checks
