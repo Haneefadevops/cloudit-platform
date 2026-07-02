@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import pg from "pg";
 
-const MIGRATIONS_DIR = path.resolve(__dirname, "..", "migrations");
+const MIGRATIONS_DIR = path.resolve(process.cwd(), "migrations");
 
 const { DATABASE_URL } = process.env;
 if (!DATABASE_URL) {
