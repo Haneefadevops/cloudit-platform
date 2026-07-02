@@ -26,7 +26,7 @@ for app_dir in apps/*; do
 done
 
 log "Ensuring shared network exists..."
-docker compose -f infra/docker-compose.network.yml up -d
+docker network inspect cloudit >/dev/null 2>&1 || docker network create cloudit --driver bridge --attachable
 
 log "Starting core infrastructure..."
 docker compose -f infra/postgres/docker-compose.yml up -d
