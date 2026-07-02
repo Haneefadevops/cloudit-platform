@@ -17,6 +17,14 @@ cd "$PROJECT_ROOT"
 log "Pulling latest code..."
 git pull origin master
 
+log "Ensuring app .env files exist..."
+for app_dir in apps/*; do
+  if [ -f "${app_dir}/.env.example" ] && [ ! -f "${app_dir}/.env" ]; then
+    cp "${app_dir}/.env.example" "${app_dir}/.env"
+    log "Created ${app_dir}/.env from .env.example"
+  fi
+done
+
 log "Running pre-deployment checks and migrations..."
 "$PROJECT_ROOT/infra/scripts/predeploy.sh"
 
