@@ -41,14 +41,14 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
           DOMAIN: ${{ vars.DOMAIN }}
         run: |
-          ssh ${SERVER_USER}@${SERVER_IP} '
-            export DOMAIN="${DOMAIN}"
+          ssh "${SERVER_USER}@${SERVER_IP}" "DOMAIN='${DOMAIN}' bash -s" <<'REMOTE'
+            set -euo pipefail
             cd /opt/cloudit/cloudit-platform
             git fetch origin
             git reset --hard origin/master
             chmod +x infra/scripts/*.sh
             bash infra/scripts/deploy.sh
-          '
+          REMOTE
 
       - name: Run health checks
         id: health
@@ -58,11 +58,11 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
           DOMAIN: ${{ vars.DOMAIN }}
         run: |
-          ssh ${SERVER_USER}@${SERVER_IP} '
-            export DOMAIN="${DOMAIN}"
+          ssh "${SERVER_USER}@${SERVER_IP}" "DOMAIN='${DOMAIN}' bash -s" <<'REMOTE'
+            set -euo pipefail
             cd /opt/cloudit/cloudit-platform
             ./infra/scripts/health-check.sh
-          '
+          REMOTE
 
       - name: Rollback on failure
         if: failure() && steps.deploy.outcome == 'success'
@@ -71,11 +71,11 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
           DOMAIN: ${{ vars.DOMAIN }}
         run: |
-          ssh ${SERVER_USER}@${SERVER_IP} '
-            export DOMAIN="${DOMAIN}"
+          ssh "${SERVER_USER}@${SERVER_IP}" "DOMAIN='${DOMAIN}' bash -s" <<'REMOTE'
+            set -euo pipefail
             cd /opt/cloudit/cloudit-platform
             ./infra/scripts/rollback.sh
-          '
+          REMOTE
 
       - name: Notify deployment result
         if: always()
@@ -83,5 +83,5 @@ jobs:
           SERVER_IP: ${{ secrets.SERVER_IP }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
-          ssh ${SERVER_USER}@${SERVER_IP} \
+          ssh "${SERVER_USER}@${SERVER_IP}" \
             "echo '[deploy] $(date -Iseconds) status=${{ job.status }} commit=${{ github.sha }} branch=${{ github.ref_name }}' >> /var/log/cloudit-deploy.log"

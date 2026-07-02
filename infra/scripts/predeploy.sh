@@ -12,16 +12,29 @@ log() {
   echo "[predeploy] $(date -Iseconds) $1"
 }
 
+tag_previous_image() {
+  local svc="$1"
+  local image="cloudit/${svc}:latest"
+  local previous="cloudit/${svc}:previous"
+
+  if docker image inspect "$image" >/dev/null 2>&1; then
+    docker image tag "$image" "$previous"
+    log "Tagged existing ${svc} image as previous"
+  fi
+}
+
 cd "$PROJECT_ROOT"
 
 api_services=(touchorbit-api platform-api hospitality-api orbitone-api)
 
 for svc in "${api_services[@]}"; do
+  tag_previous_image "$svc"
+
   log "Building ${svc} image..."
   docker compose -f "infra/${svc}/docker-compose.yml" build "${svc}"
 
   log "Running predeploy for ${svc}..."
-  docker compose -f "infra/${svc}/docker-compose.yml" run --rm --no-build "${svc}" npm run predeploy
+  docker compose -f "infra/${svc}/docker-compose.yml" run --rm "${svc}" npm run predeploy
 done
 
 

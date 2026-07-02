@@ -34,6 +34,17 @@ wait_for_service() {
   return 1
 }
 
+tag_previous_image() {
+  local svc="$1"
+  local image="cloudit/${svc}:latest"
+  local previous="cloudit/${svc}:previous"
+
+  if docker image inspect "$image" >/dev/null 2>&1; then
+    docker image tag "$image" "$previous"
+    log "Tagged existing ${svc} image as previous"
+  fi
+}
+
 cd "$PROJECT_ROOT"
 
 log "Pulling latest code..."
@@ -63,7 +74,6 @@ log "Ensuring application databases exist..."
 log "Running pre-deployment checks and migrations..."
 "$PROJECT_ROOT/infra/scripts/predeploy.sh"
 
-app_services=(platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web touchorbit-admin-web touchorbit-employee-web)
 frontend_services=(platform-web hospitality-web orbitone-web touchorbit-web touchorbit-admin-web touchorbit-employee-web)
 
 docker compose -f infra/traefik/docker-compose.yml up -d
@@ -72,16 +82,17 @@ docker compose -f infra/uptime-kuma/docker-compose.yml up -d
 
 log "Building frontend images..."
 for svc in "${frontend_services[@]}"; do
+  tag_previous_image "$svc"
   docker compose -f "infra/${svc}/docker-compose.yml" build "$svc"
 done
 
 log "Starting platform-api..."
-docker compose -f infra/platform-api/docker-compose.yml up -d --no-build platform-api
+docker compose -f infra/platform-api/docker-compose.yml up -d platform-api
 wait_for_service platform-api
 
 log "Starting product APIs..."
 for svc in hospitality-api orbitone-api touchorbit-api; do
-  docker compose -f "infra/${svc}/docker-compose.yml" up -d --no-build "$svc"
+  docker compose -f "infra/${svc}/docker-compose.yml" up -d "$svc"
 done
 for svc in hospitality-api orbitone-api touchorbit-api; do
   wait_for_service "$svc"
@@ -89,19 +100,10 @@ done
 
 log "Starting web frontends..."
 for svc in "${frontend_services[@]}"; do
-  docker compose -f "infra/${svc}/docker-compose.yml" up -d --no-build "$svc"
+  docker compose -f "infra/${svc}/docker-compose.yml" up -d "$svc"
 done
 for svc in "${frontend_services[@]}"; do
   wait_for_service "$svc"
-done
-
-log "Tagging deployed app images for rollback..."
-for svc in "${app_services[@]}"; do
-  image="cloudit/${svc}:latest"
-  if docker image inspect "$image" >/dev/null 2>&1; then
-    docker image tag "$image" "cloudit/${svc}:previous"
-    log "Tagged ${svc} image as previous"
-  fi
 done
 
 log "Pruning old Docker resources..."
