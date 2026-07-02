@@ -20,6 +20,9 @@ endpoints=(
   "https://hospitality.${DOMAIN}"
   "https://orbitone.${DOMAIN}"
   "https://touchorbit.${DOMAIN}"
+  "https://to-admin.${DOMAIN}"
+  "https://to-employee.${DOMAIN}"
+  "https://to-kiosk.${DOMAIN}"
 )
 
 log "Starting health checks (timeout ${TIMEOUT_SECONDS}s)..."

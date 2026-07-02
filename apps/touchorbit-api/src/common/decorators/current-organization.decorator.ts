@@ -3,19 +3,17 @@ import {
   ExecutionContext,
   BadRequestException,
 } from "@nestjs/common";
-import { AuthenticatedRequest } from "../guards/jwt-auth.guard";
+import { AuthenticatedRequest } from "./auth-user.decorator";
 
 export const CurrentOrganization = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): string => {
     const request = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
-    const orgId =
-      request.headers["x-organization-id"] || request.query["organizationId"];
+    const orgId = request.user?.organizationId;
 
     if (!orgId) {
-      throw new BadRequestException("Organization ID is required");
+      throw new BadRequestException("Organization context required");
     }
 
-    const value = Array.isArray(orgId) ? orgId[0] : orgId;
-    return value as string;
+    return orgId;
   },
 );

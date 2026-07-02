@@ -20,10 +20,19 @@ export class TransformInterceptor implements NestInterceptor {
     }
 
     return next.handle().pipe(
-      map((data) => ({
-        success: true,
-        data,
-      })),
+      map((data) => {
+        if (
+          data &&
+          typeof data === "object" &&
+          ("ok" in data || "success" in data)
+        ) {
+          return data;
+        }
+        return {
+          ok: true,
+          data,
+        };
+      }),
     );
   }
 }

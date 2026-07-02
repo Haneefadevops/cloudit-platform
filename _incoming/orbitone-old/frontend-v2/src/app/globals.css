@@ -1,0 +1,269 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* OrbitOne Brand — Light */
+  --background: #FFFBF7;
+  --foreground: #1F2937;
+  --surface: #F5F2EE;
+  --surface-elevated: #FFFFFF;
+  --border: #E7E2DC;
+  --primary: #1A2E26;
+  --primary-foreground: #FFFFFF;
+  --secondary: #047857;
+  --secondary-foreground: #FFFFFF;
+  --accent: #D97706;
+  --accent-foreground: #FFFFFF;
+  --accent-2: #F59E0B;
+  --muted: #786B5D;
+
+  /* Semantic feedback */
+  --success: #047857;
+  --success-foreground: #FFFFFF;
+  --success-subtle: #D1FAE5;
+  --error: #DC2626;
+  --error-foreground: #FFFFFF;
+  --error-subtle: #FEE2E2;
+  --warning: #D97706;
+  --warning-foreground: #FFFFFF;
+  --warning-subtle: #FEF3C7;
+  --info: #0EA5E9;
+  --info-foreground: #FFFFFF;
+  --info-subtle: #E0F2FE;
+
+  /* Elevation */
+  --shadow-none: 0 0 #0000;
+  --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-dropdown: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
+  --shadow-dialog: 0 25px 50px -12px rgb(0 0 0 / 0.15);
+
+  /* Radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* Focus ring */
+  --ring: #047857;
+  --ring-offset: #FFFBF7;
+}
+
+.dark {
+  /* OrbitOne Brand — Dark */
+  --background: #0F1A17;
+  --foreground: #F5F2EE;
+  --surface: #1A2E26;
+  --surface-elevated: #243B32;
+  --border: #2F4A3E;
+  --primary: #F5F2EE;
+  --primary-foreground: #0F1A17;
+  --secondary: #34D399;
+  --secondary-foreground: #0F1A17;
+  --accent: #FBBF24;
+  --accent-foreground: #0F1A17;
+  --accent-2: #F59E0B;
+  --muted: #A89B8C;
+
+  --success: #34D399;
+  --success-foreground: #0F1A17;
+  --success-subtle: rgba(52, 211, 153, 0.15);
+  --error: #F87171;
+  --error-foreground: #0F1A17;
+  --error-subtle: rgba(248, 113, 113, 0.15);
+  --warning: #FBBF24;
+  --warning-foreground: #0F1A17;
+  --warning-subtle: rgba(251, 191, 36, 0.15);
+  --info: #38BDF8;
+  --info-foreground: #0F1A17;
+  --info-subtle: rgba(56, 189, 248, 0.15);
+
+  --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-dropdown: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-dialog: 0 25px 50px -12px rgb(0 0 0 / 0.6);
+
+  --ring: #34D399;
+  --ring-offset: #0F1A17;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-2: var(--accent-2);
+  --color-muted: var(--muted);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-error: var(--error);
+  --color-error-foreground: var(--error-foreground);
+  --color-error-subtle: var(--error-subtle);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-subtle: var(--info-subtle);
+
+  --shadow-none: var(--shadow-none);
+  --shadow-card: var(--shadow-card);
+  --shadow-dropdown: var(--shadow-dropdown);
+  --shadow-dialog: var(--shadow-dialog);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-3xl: var(--radius-3xl);
+  --radius-full: var(--radius-full);
+
+  --color-ring: var(--ring);
+  --color-ring-offset: var(--ring-offset);
+
+  --font-sans: "Inter", "Noto Sans Sinhala", "Noto Sans Tamil", system-ui,
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(217, 119, 6, 0.25);
+}
+
+.dark ::selection {
+  background: rgba(251, 191, 36, 0.35);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Celestial animations for the dashboard greeting */
+@keyframes sun-rise {
+  0% {
+    transform: translateY(12px);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes sun-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.95;
+  }
+}
+
+@keyframes sun-set {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(8px);
+    opacity: 0.85;
+  }
+}
+
+@keyframes moon-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-sun-rise {
+  animation: sun-rise 1.2s ease-out forwards;
+}
+
+.animate-sun-pulse {
+  animation: sun-pulse 3s ease-in-out infinite;
+}
+
+.animate-sun-set {
+  animation: sun-set 1.2s ease-out forwards;
+}
+
+.animate-moon-float {
+  animation: moon-float 3s ease-in-out infinite;
+}
+
+.animate-twinkle {
+  animation: twinkle 2s ease-in-out infinite;
+}
+
+.animate-twinkle-delayed {
+  animation: twinkle 2s ease-in-out 0.5s infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+}
+
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s ease-out forwards;
+}

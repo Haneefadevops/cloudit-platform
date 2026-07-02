@@ -21,7 +21,7 @@ log "Running pre-deployment checks and migrations..."
 "$PROJECT_ROOT/infra/scripts/predeploy.sh"
 
 log "Tagging current app images for rollback..."
-app_services=(platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web)
+app_services=(platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web touchorbit-admin-web touchorbit-employee-web)
 for svc in "${app_services[@]}"; do
   image="cloudit/${svc}:latest"
   if docker image inspect "$image" >/dev/null 2>&1; then

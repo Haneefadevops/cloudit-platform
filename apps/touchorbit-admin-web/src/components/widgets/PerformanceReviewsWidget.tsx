@@ -1,0 +1,123 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import { WidgetShell } from './WidgetShell'
+import type { WidgetProps } from '@/lib/widgets/types'
+import { registerWidget } from '@/lib/widgets/registry'
+import { Star, ArrowRight } from 'lucide-react'
+import Link from 'next/link'
+import { useWidgetSize } from './WidgetShell'
+import { WidgetEmpty, WidgetError, WidgetIcon } from './_shared/WidgetPrimitives'
+
+export function PerformanceReviewsWidget({ organizationId, editMode, onRemove }: WidgetProps) {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const [data, setData] = useState({ activeCycles: 0, pendingSelf: 0, pendingManager: 0 })
+
+  async function loadData() {
+    setLoading(true)
+    setError(false)
+    try {
+      const [reviewsRes, cyclesRes] = await Promise.all([
+        supabase
+          .from('performance_reviews')
+          .select('status')
+          .eq('organization_id', organizationId),
+        supabase
+          .from('performance_review_cycles')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', organizationId)
+          .eq('status', 'active'),
+      ])
+
+      let pendingSelf = 0, pendingManager = 0
+      if (reviewsRes.data) {
+        for (const r of reviewsRes.data) {
+          if (r.status === 'pending_self') pendingSelf++
+          else if (r.status === 'pending_manager') pendingManager++
+        }
+      }
+
+      setData({
+        activeCycles: cyclesRes.count ?? 0,
+        pendingSelf,
+        pendingManager,
+      })
+    } catch (e) {
+      console.error('Error loading performance reviews widget data:', e)
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (organizationId) loadData()
+  }, [organizationId])
+
+  const total = data.pendingSelf + data.pendingManager
+  const widgetSize = useWidgetSize()
+
+  return (
+    <WidgetShell
+      title="Performance Reviews"
+      icon={Star}
+      tone="amber"
+      editMode={editMode}
+      onRemove={onRemove}
+      loading={loading}
+      onRefresh={loadData}
+    >
+      {error ? (
+        <WidgetError onRetry={loadData} />
+      ) : total === 0 && data.activeCycles === 0 ? (
+        <WidgetEmpty icon={Star} label="No active review cycles" />
+      ) : (
+        <Link href="/performance" className="block p-4 h-full group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <WidgetIcon icon={Star} tone="amber" size="sm" />
+              <span className="text-[11px] font-black text-[#9994A8] uppercase tracking-wider">Review Cycles</span>
+            </div>
+            <ArrowRight size={16} className="text-[#D1D5DB] group-hover:text-[#534AB7] group-hover:translate-x-1 transition-all" />
+          </div>
+
+          <div className="flex items-baseline gap-1.5 mb-4">
+            <span className="text-[24px] font-black text-[#1A1727]">{data.activeCycles}</span>
+            <span className="text-[12px] font-bold text-[#9994A8]">Active {data.activeCycles === 1 ? 'Cycle' : 'Cycles'}</span>
+          </div>
+
+          {widgetSize !== 'xs' && widgetSize !== 'sm' && (
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-400" />
+                  <span className="text-[12px] font-semibold text-[#6B6578]">Pending Self-Review</span>
+                </div>
+                <span className="text-[13px] font-black text-[#1A1727]">{data.pendingSelf}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-purple-400" />
+                  <span className="text-[12px] font-semibold text-[#6B6578]">Pending Manager</span>
+                </div>
+                <span className="text-[13px] font-black text-[#1A1727]">{data.pendingManager}</span>
+              </div>
+            </div>
+          )}
+        </Link>
+      )}
+    </WidgetShell>
+  )
+}
+
+registerWidget({
+  type: 'performance-reviews',
+  title: 'Performance Reviews',
+  description: 'Active review cycles and pending reviews',
+  category: 'people',
+  component: PerformanceReviewsWidget,
+  defaultSize: { w: 4, h: 3 },
+  minSize: { w: 3, h: 3 }
+})

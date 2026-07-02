@@ -1,18 +1,40 @@
 import { Module, MiddlewareConsumer } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from "@nestjs/core";
-import { JwtModule } from "@nestjs/jwt";
-import { PassportModule } from "@nestjs/passport";
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { PrismaModule } from "./prisma/prisma.module";
+import { DatabaseModule } from "./database/database.module";
+import { RedisModule } from "./redis/redis.module";
+import { AuthModule } from "./auth/auth.module";
 import { HealthModule } from "./health/health.module";
 import { ProductModulesModule } from "./modules/modules.module";
 import { EmployeesModule } from "./employees/employees.module";
 import { AttendanceModule } from "./attendance/attendance.module";
 import { PayrollModule } from "./payroll/payroll.module";
-import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
+import { EventsModule } from "./events/events.module";
+import { StorageModule } from "./storage/storage.module";
+import { TasksModule } from "./tasks/tasks.module";
+import { LeaveModule } from "./leave/leave.module";
+import { OvertimeModule } from "./overtime/overtime.module";
+import { ExpensesModule } from "./expenses/expenses.module";
+import { RosterModule } from "./roster/roster.module";
+import { ShiftSwapsModule } from "./shift-swaps/shift-swaps.module";
+import { ShiftsModule } from "./shifts/shifts.module";
+import { CalendarEventsModule } from "./calendar/calendar.module";
+import { TrainingModule } from "./training/training.module";
+import { AssetsModule } from "./assets/assets.module";
+import { DocumentsModule } from "./documents/documents.module";
+import { NotificationsModule } from "./notifications/notifications.module";
+import { ReportsModule } from "./reports/reports.module";
+import { OrganizationsModule } from "./organizations/organizations.module";
+import { RequestsModule } from "./requests/requests.module";
+import { DashboardModule } from "./dashboard/dashboard.module";
+import { MeModule } from "./me/me.module";
+import { KioskModule } from "./kiosk/kiosk.module";
+import { PerformanceModule } from "./performance/performance.module";
+import { SessionAuthGuard } from "./common/guards/session-auth.guard";
 import { ModuleGuard } from "./common/guards/module.guard";
 import { RequestLoggingInterceptor } from "./common/interceptors/request-logging.interceptor";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
@@ -45,29 +67,43 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
         },
       }),
     }),
-    PassportModule.register({ defaultStrategy: "jwt" }),
-    JwtModule.registerAsync({
-      global: true,
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get("JWT_SECRET"),
-        signOptions: { expiresIn: "1d" },
-      }),
-      inject: [ConfigService],
-    }),
+    DatabaseModule,
+    RedisModule,
+    AuthModule,
     PrismaModule,
     HealthModule,
     ProductModulesModule,
     EmployeesModule,
     AttendanceModule,
     PayrollModule,
+    StorageModule,
+    TasksModule,
+    EventsModule,
+    LeaveModule,
+    OvertimeModule,
+    ExpensesModule,
+    RosterModule,
+    ShiftSwapsModule,
+    ShiftsModule,
+    CalendarEventsModule,
+    TrainingModule,
+    AssetsModule,
+    DocumentsModule,
+    NotificationsModule,
+    ReportsModule,
+    OrganizationsModule,
+    RequestsModule,
+    DashboardModule,
+    MeModule,
+    KioskModule,
+    PerformanceModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     {
       provide: APP_GUARD,
-      useClass: JwtAuthGuard,
+      useClass: SessionAuthGuard,
     },
     {
       provide: APP_GUARD,

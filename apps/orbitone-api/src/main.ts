@@ -60,8 +60,12 @@ async function bootstrap() {
     }),
   );
 
+  const corsOrigin =
+    configService.get<string>("CORS_ORIGIN") ||
+    configService.get<string>("FRONTEND_ORIGIN");
+
   app.enableCors({
-    origin: buildCorsOrigin(configService.get<string>("CORS_ORIGIN")),
+    origin: buildCorsOrigin(corsOrigin),
     credentials: true,
   });
 

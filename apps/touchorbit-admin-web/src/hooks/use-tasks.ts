@@ -1,0 +1,65 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { useAuth } from "@/lib/auth";
+import { api } from "@/lib/api";
+
+export interface CalendarTask {
+  id: string;
+  title: string;
+  description?: string;
+  category: "work" | "personal" | "training" | "compliance";
+  dueDate?: string;
+  status: "pending" | "in_progress" | "completed" | "overdue";
+  completedAt?: string;
+  assignedBy?: string;
+  isRecurring: boolean;
+}
+
+export function useTasks() {
+  const { organizationId, isLoaded } = useAuth();
+  const [tasks, setTasks] = useState<CalendarTask[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadTasks = useCallback(async () => {
+    if (!organizationId || !isLoaded) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await api.get<any[]>("/employee-tasks?limit=50");
+      if (!result.ok) {
+        console.warn("employee_tasks error:", result.error);
+        setTasks([]);
+        setLoading(false);
+        return;
+      }
+
+      const mapped = (result.data || []).map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        category: t.category || "work",
+        dueDate: t.due_date,
+        status: t.status || "pending",
+        completedAt: t.completed_at,
+        assignedBy: t.assigned_by,
+        isRecurring: t.is_recurring || false,
+      }));
+
+      setTasks(mapped);
+    } catch (err) {
+      console.error("useTasks error:", err);
+      setTasks([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [organizationId, isLoaded]);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
+  return { tasks, loading, refetch: loadTasks };
+}

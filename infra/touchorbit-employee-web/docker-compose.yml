@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  touchorbit-employee-web:
+    build:
+      context: ../..
+      dockerfile: infra/touchorbit-employee-web/Dockerfile
+    image: cloudit/touchorbit-employee-web:latest
+    container_name: touchorbit-employee-web
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file:
+      - ../../apps/touchorbit-employee-web/.env
+    environment:
+      - NODE_ENV=production
+      - PORT=3009
+    networks:
+      - cloudit
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.touchorbit-employee-web.rule=Host(`to-employee.${DOMAIN:-cloudit.lk}`)"
+      - "traefik.http.routers.touchorbit-employee-web.entrypoints=websecure"
+      - "traefik.http.routers.touchorbit-employee-web.tls.certresolver=cloudflare"
+      - "traefik.http.routers.touchorbit-employee-web.tls.domains[0].main=${DOMAIN:-cloudit.lk}"
+      - "traefik.http.routers.touchorbit-employee-web.tls.domains[0].sans=*.${DOMAIN:-cloudit.lk}"
+      - "traefik.http.routers.touchorbit-employee-web-kiosk.rule=Host(`to-kiosk.${DOMAIN:-cloudit.lk}`)"
+      - "traefik.http.routers.touchorbit-employee-web-kiosk.entrypoints=websecure"
+      - "traefik.http.routers.touchorbit-employee-web-kiosk.tls.certresolver=cloudflare"
+      - "traefik.http.routers.touchorbit-employee-web-kiosk.tls.domains[0].main=${DOMAIN:-cloudit.lk}"
+      - "traefik.http.routers.touchorbit-employee-web-kiosk.tls.domains[0].sans=*.${DOMAIN:-cloudit.lk}"
+      - "traefik.http.services.touchorbit-employee-web.loadbalancer.server.port=3009"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3009 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+networks:
+  cloudit:
+    external: true
