@@ -1,8 +1,13 @@
 -- CreateEnum
-CREATE TYPE "EventStatus" AS ENUM ('pending', 'success', 'failed');
+DO $$
+BEGIN
+  CREATE TYPE "EventStatus" AS ENUM ('pending', 'success', 'failed');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- CreateTable
-CREATE TABLE "event_logs" (
+CREATE TABLE IF NOT EXISTS "event_logs" (
     "id" TEXT NOT NULL,
     "event_type" TEXT NOT NULL,
     "payload" JSONB NOT NULL DEFAULT '{}',
@@ -17,10 +22,10 @@ CREATE TABLE "event_logs" (
 );
 
 -- CreateIndex
-CREATE INDEX "event_logs_event_type_idx" ON "event_logs"("event_type");
+CREATE INDEX IF NOT EXISTS "event_logs_event_type_idx" ON "event_logs"("event_type");
 
 -- CreateIndex
-CREATE INDEX "event_logs_status_idx" ON "event_logs"("status");
+CREATE INDEX IF NOT EXISTS "event_logs_status_idx" ON "event_logs"("status");
 
 -- CreateIndex
-CREATE INDEX "event_logs_created_at_idx" ON "event_logs"("created_at");
+CREATE INDEX IF NOT EXISTS "event_logs_created_at_idx" ON "event_logs"("created_at");
