@@ -17,7 +17,9 @@ import {
 import { Plus, Pencil, Trash2, BedDouble } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { RoomTypeModal } from "@/components/room-type-modal";
+import { SeasonalRatesModal } from "@/components/seasonal-rates-modal";
 import { api } from "@/lib/api";
+import { formatLkr } from "@/lib/format";
 import type { Property, RoomType, PaginatedResponse } from "@/lib/types";
 
 export default function RoomTypesPage() {
@@ -27,6 +29,7 @@ export default function RoomTypesPage() {
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRoomType, setEditingRoomType] = useState<RoomType | null>(null);
+  const [seasonalRoomType, setSeasonalRoomType] = useState<RoomType | null>(null);
 
   useEffect(() => {
     loadData();
@@ -111,17 +114,18 @@ export default function RoomTypesPage() {
                   <TableHead>Base Price</TableHead>
                   <TableHead>Max Occupancy</TableHead>
                   <TableHead>Rooms</TableHead>
+                  <TableHead>Seasonal Rates</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">Loading...</TableCell>
+                    <TableCell colSpan={7} className="text-center">Loading...</TableCell>
                   </TableRow>
                 ) : filteredRoomTypes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">
                       No room types found
                     </TableCell>
                   </TableRow>
@@ -135,11 +139,19 @@ export default function RoomTypesPage() {
                         </div>
                       </TableCell>
                       <TableCell>{getPropertyName(rt.propertyId)}</TableCell>
-                      <TableCell>Rs. {Number(rt.basePrice).toLocaleString()}</TableCell>
+                      <TableCell>{formatLkr(rt.basePrice)}</TableCell>
                       <TableCell>{rt.maxOccupancy}</TableCell>
                       <TableCell>{rt._count?.rooms ?? 0}</TableCell>
+                      <TableCell>{rt.seasonalRates?.length ?? 0}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSeasonalRoomType(rt)}
+                          >
+                            Rates
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -172,6 +184,13 @@ export default function RoomTypesPage() {
         roomType={editingRoomType}
         properties={properties.map((p) => ({ id: p.id, name: p.name }))}
         onSubmit={handleSubmit}
+      />
+
+      <SeasonalRatesModal
+        open={!!seasonalRoomType}
+        onClose={() => setSeasonalRoomType(null)}
+        roomType={seasonalRoomType}
+        onChange={loadData}
       />
     </div>
   );

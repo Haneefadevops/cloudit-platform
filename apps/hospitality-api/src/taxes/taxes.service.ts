@@ -2,6 +2,38 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateTaxRateDto } from "./dto/create-tax-rate.dto";
 import { UpdateTaxRateDto } from "./dto/update-tax-rate.dto";
+import { TaxRateType } from "@prisma/client-hospitality";
+
+const SRI_LANKA_TAX_PRESETS = [
+  {
+    name: "Service Charge",
+    rate: 10,
+    type: TaxRateType.percentage,
+    isActive: true,
+    isDefault: true,
+  },
+  {
+    name: "TDL",
+    rate: 1,
+    type: TaxRateType.percentage,
+    isActive: true,
+    isDefault: true,
+  },
+  {
+    name: "SSCL",
+    rate: 2.5,
+    type: TaxRateType.percentage,
+    isActive: false,
+    isDefault: true,
+  },
+  {
+    name: "VAT",
+    rate: 18,
+    type: TaxRateType.percentage,
+    isActive: true,
+    isDefault: true,
+  },
+];
 
 @Injectable()
 export class TaxesService {
@@ -10,7 +42,7 @@ export class TaxesService {
   async findAll(organizationId: string) {
     return this.prisma.taxRate.findMany({
       where: { organizationId },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ isDefault: "desc" }, { name: "asc" }],
     });
   }
 
@@ -40,6 +72,28 @@ export class TaxesService {
         organizationId,
       },
     });
+  }
+
+  async applySriLankaPresets(organizationId: string) {
+    await Promise.all(
+      SRI_LANKA_TAX_PRESETS.map((preset) =>
+        this.prisma.taxRate.upsert({
+          where: {
+            organizationId_name: {
+              organizationId,
+              name: preset.name,
+            },
+          },
+          update: preset,
+          create: {
+            ...preset,
+            organizationId,
+          },
+        }),
+      ),
+    );
+
+    return this.findAll(organizationId);
   }
 
   async update(id: string, organizationId: string, dto: UpdateTaxRateDto) {

@@ -5,6 +5,7 @@ import { Button, Card, CardContent, Select, Badge } from "@cloudit/ui";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { api } from "@/lib/api";
+import { formatMonthYear } from "@/lib/format";
 import type { Property, CalendarDay, PaginatedResponse } from "@/lib/types";
 
 const weekDays = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -64,7 +65,7 @@ export default function CalendarPage() {
     return map;
   }, [calendarDays]);
 
-  const monthName = currentDate.toLocaleString("default", { month: "long", year: "numeric" });
+  const monthName = formatMonthYear(currentDate);
 
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
   const startDayOfWeek = firstDayOfMonth.getDay();
@@ -173,12 +174,12 @@ export default function CalendarPage() {
           <CardContent className="p-4">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
               <CalendarDays className="h-4 w-4" />
-              {new Date(selectedDay.date).toLocaleDateString(undefined, {
+              {new Intl.DateTimeFormat("en-LK", {
                 weekday: "long",
                 year: "numeric",
                 month: "long",
                 day: "numeric",
-              })}
+              }).format(new Date(selectedDay.date))}
             </h3>
             {selectedDay.reservations.length === 0 ? (
               <p className="text-sm text-muted-foreground">No reservations on this day.</p>

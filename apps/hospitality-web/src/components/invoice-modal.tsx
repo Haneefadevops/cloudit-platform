@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Modal, Button, Input, Select, Form, FormField, FormLabel, FormError } from "@cloudit/ui";
+import { formatDate, formatLkr } from "@/lib/format";
 import type { Invoice, Reservation } from "@/lib/types";
 
 interface InvoiceModalProps {
@@ -130,7 +131,7 @@ export function InvoiceModal({ open, onClose, invoice, reservations, onSubmit }:
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField>
             <FormLabel>Issue Date</FormLabel>
-            <Input value={invoice ? new Date(invoice.issueDate).toLocaleDateString() : new Date().toLocaleDateString()} disabled />
+            <Input value={invoice ? formatDate(invoice.issueDate) : formatDate(new Date())} disabled />
           </FormField>
           <FormField>
             <FormLabel>Due Date</FormLabel>
@@ -154,7 +155,7 @@ export function InvoiceModal({ open, onClose, invoice, reservations, onSubmit }:
           />
           {selectedReservation && !invoice && (
             <p className="text-xs text-muted-foreground">
-              Reservation total: Rs. {Number(selectedReservation.totalAmount).toLocaleString()}
+              Reservation total: {formatLkr(selectedReservation.totalAmount)}
             </p>
           )}
         </FormField>

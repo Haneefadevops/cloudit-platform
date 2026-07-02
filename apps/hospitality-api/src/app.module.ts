@@ -8,6 +8,7 @@ import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { PrismaModule } from "./prisma/prisma.module";
 import { HealthModule } from "./health/health.module";
+import { ProductModulesModule } from "./modules/modules.module";
 import { PropertiesModule } from "./properties/properties.module";
 import { RoomTypesModule } from "./room-types/room-types.module";
 import { RoomsModule } from "./rooms/rooms.module";
@@ -17,7 +18,15 @@ import { InvoicesModule } from "./invoices/invoices.module";
 import { TaxesModule } from "./taxes/taxes.module";
 import { ReportsModule } from "./reports/reports.module";
 import { EventsModule } from "./events/events.module";
+import { CommunicationsModule } from "./communications/communications.module";
+import { PaymentsModule } from "./payments/payments.module";
+import { HousekeepingModule } from "./housekeeping/housekeeping.module";
+import { IntegrationsModule } from "./integrations/integrations.module";
+import { GuestPortalModule } from "./guest-portal/guest-portal.module";
+import { PublicModule } from "./public/public.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
+import { ModuleGuard } from "./common/guards/module.guard";
+import { RolesGuard } from "./common/guards/roles.guard";
 import { RequestLoggingInterceptor } from "./common/interceptors/request-logging.interceptor";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
 import { TimeoutInterceptor } from "./common/interceptors/timeout.interceptor";
@@ -61,6 +70,7 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
     }),
     PrismaModule,
     HealthModule,
+    ProductModulesModule,
     PropertiesModule,
     RoomTypesModule,
     RoomsModule,
@@ -70,6 +80,12 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
     TaxesModule,
     ReportsModule,
     EventsModule,
+    CommunicationsModule,
+    PaymentsModule,
+    HousekeepingModule,
+    IntegrationsModule,
+    GuestPortalModule,
+    PublicModule,
   ],
   controllers: [AppController],
   providers: [
@@ -81,6 +97,14 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ModuleGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
     {
       provide: APP_INTERCEPTOR,

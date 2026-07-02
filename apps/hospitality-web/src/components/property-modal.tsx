@@ -83,6 +83,22 @@ export function PropertyModal({ open, onClose, property, onSubmit }: PropertyMod
             onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
           />
         </FormField>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField>
+            <FormLabel>Business Registration No.</FormLabel>
+            <Input
+              value={formData.registrationNumber || ""}
+              onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
+            />
+          </FormField>
+          <FormField>
+            <FormLabel>SLTDA Number</FormLabel>
+            <Input
+              value={formData.sltdaNumber || ""}
+              onChange={(e) => setFormData({ ...formData, sltdaNumber: e.target.value })}
+            />
+          </FormField>
+        </div>
       </Form>
     </Modal>
   );

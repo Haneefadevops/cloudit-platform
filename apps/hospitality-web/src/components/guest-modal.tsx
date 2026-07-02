@@ -77,26 +77,76 @@ export function GuestModal({ open, onClose, guest, onSubmit }: GuestModalProps) 
             error={errors.email}
           />
         </FormField>
-        <FormField>
-          <FormLabel>Phone</FormLabel>
-          <Input
-            value={formData.phone || ""}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-          />
-        </FormField>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField>
-            <FormLabel>ID Number</FormLabel>
+            <FormLabel>Phone</FormLabel>
             <Input
-              value={formData.idNumber || ""}
-              onChange={(e) => setFormData({ ...formData, idNumber: e.target.value })}
+              value={formData.phone || ""}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             />
           </FormField>
+          <FormField>
+            <FormLabel>Local Phone</FormLabel>
+            <Input
+              value={formData.localPhone || ""}
+              onChange={(e) => setFormData({ ...formData, localPhone: e.target.value })}
+            />
+          </FormField>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <FormField>
+            <FormLabel>NIC Number</FormLabel>
+            <Input
+              value={formData.nicNumber || formData.idNumber || ""}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  nicNumber: e.target.value,
+                  idNumber: e.target.value,
+                })
+              }
+            />
+          </FormField>
+          <FormField>
+            <FormLabel>Passport Number</FormLabel>
+            <Input
+              value={formData.passportNumber || ""}
+              onChange={(e) => setFormData({ ...formData, passportNumber: e.target.value })}
+            />
+          </FormField>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField>
             <FormLabel>Nationality</FormLabel>
             <Input
               value={formData.nationality || ""}
               onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+            />
+          </FormField>
+          <FormField>
+            <label className="flex items-center gap-2 pt-7 text-sm">
+              <input
+                type="checkbox"
+                checked={formData.isForeignGuest ?? false}
+                onChange={(e) => setFormData({ ...formData, isForeignGuest: e.target.checked })}
+              />
+              Foreign guest
+            </label>
+          </FormField>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField>
+            <FormLabel>Emergency Contact</FormLabel>
+            <Input
+              value={formData.emergencyContactName || ""}
+              onChange={(e) => setFormData({ ...formData, emergencyContactName: e.target.value })}
+            />
+          </FormField>
+          <FormField>
+            <FormLabel>Emergency Phone</FormLabel>
+            <Input
+              value={formData.emergencyContactPhone || ""}
+              onChange={(e) => setFormData({ ...formData, emergencyContactPhone: e.target.value })}
             />
           </FormField>
         </div>

@@ -25,7 +25,19 @@ export class CreatePropertyDto {
 
   @IsOptional()
   @IsString()
+  publicSlug?: string;
+
+  @IsOptional()
+  @IsString()
   taxId?: string;
+
+  @IsOptional()
+  @IsString()
+  registrationNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  sltdaNumber?: string;
 
   @IsOptional()
   @IsObject()

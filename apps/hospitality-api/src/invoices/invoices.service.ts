@@ -5,7 +5,12 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateInvoiceDto } from "./dto/create-invoice.dto";
-import { InvoiceStatus, ReservationStatus } from "@prisma/client-hospitality";
+import {
+  InvoiceStatus,
+  PaymentMethod,
+  PaymentProviderStatus,
+  ReservationStatus,
+} from "@prisma/client-hospitality";
 import { EventPublisherService } from "../events/event-publisher.service";
 import { EventTypes } from "../events/event-types";
 
@@ -13,6 +18,7 @@ export interface TaxBreakdownItem {
   name: string;
   rate: number;
   amount: number;
+  taxableBase?: number;
 }
 
 export interface InvoiceCalculation {
@@ -52,6 +58,7 @@ export class InvoicesService {
         include: {
           guest: true,
           property: true,
+          payments: true,
           reservation: {
             select: {
               id: true,
@@ -82,6 +89,7 @@ export class InvoicesService {
       include: {
         guest: true,
         property: true,
+        payments: true,
         reservation: {
           include: {
             room: { include: { roomType: true } },
@@ -111,11 +119,16 @@ export class InvoicesService {
         phone: invoice.property.phone,
         email: invoice.property.email,
         taxId: invoice.property.taxId,
+        registrationNumber: invoice.property.registrationNumber,
+        sltdaNumber: invoice.property.sltdaNumber,
       },
       guest: {
         name: `${invoice.guest.firstName} ${invoice.guest.lastName}`,
         email: invoice.guest.email,
         phone: invoice.guest.phone,
+        localPhone: invoice.guest.localPhone,
+        nicNumber: invoice.guest.nicNumber,
+        passportNumber: invoice.guest.passportNumber,
         address: invoice.guest.address,
       },
       reservation: invoice.reservation,
@@ -129,6 +142,15 @@ export class InvoicesService {
       taxBreakdown: invoice.taxBreakdown,
       totalAmount: Number(invoice.totalAmount),
       paidAmount: Number(invoice.paidAmount),
+      payments: invoice.payments.map((payment) => ({
+        id: payment.id,
+        amount: Number(payment.amount),
+        method: payment.method,
+        providerStatus: payment.providerStatus,
+        providerRef: payment.providerRef,
+        transactionDate: payment.transactionDate,
+        notes: payment.notes,
+      })),
       status: invoice.status,
       notes: invoice.notes,
     };
@@ -174,8 +196,12 @@ export class InvoicesService {
           (1000 * 60 * 60 * 24),
       ),
     );
+    const reservationTotal = Number(reservation.totalAmount);
     const subtotal =
-      dto.subtotal ?? Number(reservation.room.roomType.basePrice) * nights;
+      dto.subtotal ??
+      (reservationTotal > 0
+        ? reservationTotal
+        : Number(reservation.room.roomType.basePrice) * nights);
 
     const calculation = await this.calculateTaxes(organizationId, subtotal);
     const invoiceNumber = await this.generateInvoiceNumber();
@@ -255,19 +281,47 @@ export class InvoicesService {
 
   async markPaid(id: string, organizationId: string) {
     const invoice = await this.findOne(id, organizationId);
+    const balance = Number(invoice.totalAmount) - Number(invoice.paidAmount);
 
-    return this.prisma.invoice.update({
-      where: { id },
-      data: {
-        paidAmount: invoice.totalAmount,
-        status: InvoiceStatus.paid,
-      },
-      include: {
-        guest: true,
-        property: true,
-        reservation: true,
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (balance > 0) {
+        await tx.payment.create({
+          data: {
+            invoice: { connect: { id: invoice.id } },
+            reservation: { connect: { id: invoice.reservationId } },
+            organizationId,
+            amount: balance,
+            method: PaymentMethod.cash,
+            providerStatus: PaymentProviderStatus.succeeded,
+            notes: "Marked paid from invoice action",
+          },
+        });
+      }
+
+      await tx.reservation.update({
+        where: { id: invoice.reservationId },
+        data: {
+          paidAmount: invoice.totalAmount,
+          paymentStatus: "paid",
+        },
+      });
+
+      return tx.invoice.update({
+        where: { id },
+        data: {
+          paidAmount: invoice.totalAmount,
+          status: InvoiceStatus.paid,
+        },
+        include: {
+          guest: true,
+          property: true,
+          reservation: true,
+          payments: true,
+        },
+      });
     });
+
+    return updated;
   }
 
   async generateFromCheckout(reservationId: string, organizationId: string) {
@@ -282,11 +336,16 @@ export class InvoicesService {
       where: { organizationId, isActive: true },
     });
 
-    const getRate = (name: string) => {
-      const rate = activeRates.find(
-        (r) => r.name.toLowerCase() === name.toLowerCase(),
-      );
-      return rate ? Number(rate.rate) : 0;
+    const getRate = (name: string) =>
+      activeRates.find((r) => r.name.toLowerCase() === name.toLowerCase());
+
+    const calculateAmount = (
+      rate: ReturnType<typeof getRate>,
+      taxableBase: number,
+    ) => {
+      if (!rate) return 0;
+      if (rate.type === "fixed") return Number(rate.rate);
+      return taxableBase * (Number(rate.rate) / 100);
     };
 
     const serviceChargeRate = getRate("Service Charge");
@@ -294,39 +353,44 @@ export class InvoicesService {
     const ssclRate = getRate("SSCL");
     const vatRate = getRate("VAT");
 
-    const serviceCharge = subtotal * (serviceChargeRate / 100);
-    const tdl = subtotal * (tdlRate / 100);
-    const sscl = subtotal * (ssclRate / 100);
+    const serviceCharge = calculateAmount(serviceChargeRate, subtotal);
+    const tdlBase = subtotal + serviceCharge;
+    const tdl = calculateAmount(tdlRate, tdlBase);
+    const sscl = calculateAmount(ssclRate, tdlBase);
     const vatBase = subtotal + serviceCharge + tdl + sscl;
-    const vat = vatBase * (vatRate / 100);
+    const vat = calculateAmount(vatRate, vatBase);
 
     const taxBreakdown: TaxBreakdownItem[] = [];
 
-    if (serviceChargeRate > 0) {
+    if (serviceChargeRate && Number(serviceChargeRate.rate) > 0) {
       taxBreakdown.push({
         name: "Service Charge",
-        rate: serviceChargeRate,
+        rate: Number(serviceChargeRate.rate),
+        taxableBase: Number(subtotal.toFixed(2)),
         amount: Number(serviceCharge.toFixed(2)),
       });
     }
-    if (tdlRate > 0) {
+    if (tdlRate && Number(tdlRate.rate) > 0) {
       taxBreakdown.push({
         name: "TDL",
-        rate: tdlRate,
+        rate: Number(tdlRate.rate),
+        taxableBase: Number(tdlBase.toFixed(2)),
         amount: Number(tdl.toFixed(2)),
       });
     }
-    if (ssclRate > 0) {
+    if (ssclRate && Number(ssclRate.rate) > 0) {
       taxBreakdown.push({
         name: "SSCL",
-        rate: ssclRate,
+        rate: Number(ssclRate.rate),
+        taxableBase: Number(tdlBase.toFixed(2)),
         amount: Number(sscl.toFixed(2)),
       });
     }
-    if (vatRate > 0) {
+    if (vatRate && Number(vatRate.rate) > 0) {
       taxBreakdown.push({
         name: "VAT",
-        rate: vatRate,
+        rate: Number(vatRate.rate),
+        taxableBase: Number(vatBase.toFixed(2)),
         amount: Number(vat.toFixed(2)),
       });
     }

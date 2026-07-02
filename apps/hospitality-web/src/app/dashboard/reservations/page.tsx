@@ -15,18 +15,20 @@ import {
   Badge,
   Select,
 } from "@cloudit/ui";
-import { Plus, Pencil, Trash2, ClipboardList, LogIn, LogOut } from "lucide-react";
+import { Plus, Pencil, Trash2, ClipboardList, LogIn, LogOut, Link } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { ReservationModal } from "@/components/reservation-modal";
 import { CheckInModal } from "@/components/check-in-modal";
 import { CheckOutModal } from "@/components/check-out-modal";
 import { api } from "@/lib/api";
+import { formatDate } from "@/lib/format";
 import type {
   Property,
   Room,
   RoomType,
   Guest,
   Reservation,
+  GuestCheckInLink,
   PaginatedResponse,
 } from "@/lib/types";
 
@@ -136,6 +138,20 @@ export default function ReservationsPage() {
     }
   };
 
+  const handleSelfCheckInLink = async (reservation: Reservation) => {
+    try {
+      const payload = await api.post<GuestCheckInLink | { data: GuestCheckInLink }>("/guest-portal/check-in-links", {
+        reservationId: reservation.id,
+      });
+      const link = "data" in payload ? payload.data : payload;
+      const url = `${window.location.origin}${link.url}`;
+      await navigator.clipboard?.writeText(url);
+      alert(`Self check-in link copied:\n${url}`);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const statusOptions = [
     { value: "", label: "All Statuses" },
     { value: "pending", label: "Pending" },
@@ -226,8 +242,8 @@ export default function ReservationsPage() {
                       </TableCell>
                       <TableCell>{reservation.room?.roomNumber}</TableCell>
                       <TableCell>{reservation.property?.name}</TableCell>
-                      <TableCell>{new Date(reservation.checkInDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{new Date(reservation.checkOutDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatDate(reservation.checkInDate)}</TableCell>
+                      <TableCell>{formatDate(reservation.checkOutDate)}</TableCell>
                       <TableCell>
                         <Badge variant={statusBadgeVariant[reservation.status] as any}>
                           {reservation.status.replace("_", " ")}
@@ -235,6 +251,16 @@ export default function ReservationsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {reservation.status === "confirmed" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleSelfCheckInLink(reservation)}
+                              title="Copy Self Check-in Link"
+                            >
+                              <Link className="h-4 w-4" />
+                            </Button>
+                          )}
                           {reservation.status === "confirmed" && (
                             <Button
                               variant="outline"

@@ -6,6 +6,7 @@ import { LogOut, Calendar } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { CheckOutModal } from "@/components/check-out-modal";
 import { api } from "@/lib/api";
+import { formatDate } from "@/lib/format";
 import type { Reservation, PaginatedResponse } from "@/lib/types";
 
 export default function CheckOutPage() {
@@ -46,7 +47,7 @@ export default function CheckOutPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Check-out" description={`Expected check-outs for ${today}`} />
+      <PageHeader title="Check-out" description={`Expected check-outs for ${formatDate(today)}`} />
 
       <Card>
         <CardContent className="p-0">
@@ -88,7 +89,7 @@ export default function CheckOutPage() {
                       </TableCell>
                       <TableCell>{reservation.room?.roomNumber}</TableCell>
                       <TableCell>{reservation.property?.name}</TableCell>
-                      <TableCell>{new Date(reservation.checkInDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatDate(reservation.checkInDate)}</TableCell>
                       <TableCell>
                         <Badge variant="default">{reservation.status.replace("_", " ")}</Badge>
                       </TableCell>

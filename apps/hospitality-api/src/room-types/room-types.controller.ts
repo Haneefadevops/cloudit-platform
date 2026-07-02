@@ -18,11 +18,15 @@ import {
 import { RoomTypesService } from "./room-types.service";
 import { CreateRoomTypeDto } from "./dto/create-room-type.dto";
 import { UpdateRoomTypeDto } from "./dto/update-room-type.dto";
+import { CreateSeasonalRateDto } from "./dto/create-seasonal-rate.dto";
+import { UpdateSeasonalRateDto } from "./dto/update-seasonal-rate.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { RequireModule } from "../common/decorators/require-module.decorator";
 
 @ApiTags("room-types")
 @Controller("room-types")
+@RequireModule("hospitality", "room-types")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class RoomTypesController {
@@ -56,6 +60,15 @@ export class RoomTypesController {
     return this.roomTypesService.findOne(id, organizationId);
   }
 
+  @Get(":id/seasonal-rates")
+  @ApiOperation({ summary: "List seasonal rates for room type" })
+  async listSeasonalRates(
+    @Param("id") id: string,
+    @CurrentOrganization() organizationId: string,
+  ) {
+    return this.roomTypesService.listSeasonalRates(id, organizationId);
+  }
+
   @Post()
   @ApiOperation({ summary: "Create room type" })
   async create(
@@ -63,6 +76,16 @@ export class RoomTypesController {
     @Body() dto: CreateRoomTypeDto,
   ) {
     return this.roomTypesService.create(organizationId, dto);
+  }
+
+  @Post(":id/seasonal-rates")
+  @ApiOperation({ summary: "Create seasonal rate for room type" })
+  async createSeasonalRate(
+    @Param("id") id: string,
+    @CurrentOrganization() organizationId: string,
+    @Body() dto: CreateSeasonalRateDto,
+  ) {
+    return this.roomTypesService.createSeasonalRate(id, organizationId, dto);
   }
 
   @Patch(":id")
@@ -75,6 +98,22 @@ export class RoomTypesController {
     return this.roomTypesService.update(id, organizationId, dto);
   }
 
+  @Patch(":id/seasonal-rates/:rateId")
+  @ApiOperation({ summary: "Update seasonal rate" })
+  async updateSeasonalRate(
+    @Param("id") id: string,
+    @Param("rateId") rateId: string,
+    @CurrentOrganization() organizationId: string,
+    @Body() dto: UpdateSeasonalRateDto,
+  ) {
+    return this.roomTypesService.updateSeasonalRate(
+      id,
+      rateId,
+      organizationId,
+      dto,
+    );
+  }
+
   @Delete(":id")
   @ApiOperation({ summary: "Delete room type" })
   async remove(
@@ -82,5 +121,19 @@ export class RoomTypesController {
     @CurrentOrganization() organizationId: string,
   ) {
     return this.roomTypesService.remove(id, organizationId);
+  }
+
+  @Delete(":id/seasonal-rates/:rateId")
+  @ApiOperation({ summary: "Delete seasonal rate" })
+  async removeSeasonalRate(
+    @Param("id") id: string,
+    @Param("rateId") rateId: string,
+    @CurrentOrganization() organizationId: string,
+  ) {
+    return this.roomTypesService.removeSeasonalRate(
+      id,
+      rateId,
+      organizationId,
+    );
   }
 }

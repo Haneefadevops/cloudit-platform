@@ -1,6 +1,10 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { ReservationStatus, RoomStatus } from "@prisma/client-hospitality";
+import {
+  InvoiceStatus,
+  ReservationStatus,
+  RoomStatus,
+} from "@prisma/client-hospitality";
 
 @Injectable()
 export class ReportsService {
@@ -184,6 +188,349 @@ export class ReportsService {
     };
   }
 
+  async revenueManagement(
+    organizationId: string,
+    propertyId: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    await this.validateProperty(organizationId, propertyId);
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const days = Math.max(
+      1,
+      Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1,
+    );
+    const previousStart = new Date(start);
+    previousStart.setDate(previousStart.getDate() - days);
+    const previousEnd = new Date(start);
+    previousEnd.setDate(previousEnd.getDate() - 1);
+
+    const [rooms, roomTypes, reservations, previousReservations, invoices] =
+      await Promise.all([
+        this.prisma.room.findMany({
+          where: { propertyId },
+          select: { id: true, roomTypeId: true },
+        }),
+        this.prisma.roomType.findMany({
+          where: { propertyId },
+          include: {
+            seasonalRates: {
+              where: {
+                organizationId,
+                isActive: true,
+                startDate: { lte: end },
+                endDate: { gte: start },
+              },
+              orderBy: [{ startDate: "asc" }, { createdAt: "desc" }],
+            },
+          },
+          orderBy: { name: "asc" },
+        }),
+        this.prisma.reservation.findMany({
+          where: {
+            propertyId,
+            status: { notIn: [ReservationStatus.cancelled, ReservationStatus.no_show] },
+            checkInDate: { lte: end },
+            checkOutDate: { gte: start },
+          },
+          include: { room: { select: { roomTypeId: true } } },
+        }),
+        this.prisma.reservation.findMany({
+          where: {
+            propertyId,
+            status: { notIn: [ReservationStatus.cancelled, ReservationStatus.no_show] },
+            checkInDate: { lte: previousEnd },
+            checkOutDate: { gte: previousStart },
+          },
+          select: { id: true },
+        }),
+        this.prisma.invoice.aggregate({
+          where: {
+            propertyId,
+            status: { not: InvoiceStatus.cancelled },
+            issueDate: { gte: start, lte: end },
+          },
+          _sum: { totalAmount: true },
+        }),
+      ]);
+
+    const totalRooms = rooms.length;
+    const roomNightsAvailable = totalRooms * days;
+    const occupiedRoomNights = reservations.reduce(
+      (sum, reservation) =>
+        sum +
+        this.countNightsInRange(
+          reservation.checkInDate,
+          reservation.checkOutDate,
+          start,
+          end,
+        ),
+      0,
+    );
+    const revenue = Number(invoices._sum.totalAmount ?? 0);
+    const occupancyRate =
+      roomNightsAvailable > 0
+        ? Number(((occupiedRoomNights / roomNightsAvailable) * 100).toFixed(2))
+        : 0;
+    const adr =
+      occupiedRoomNights > 0
+        ? Number((revenue / occupiedRoomNights).toFixed(2))
+        : 0;
+    const revPar =
+      roomNightsAvailable > 0
+        ? Number((revenue / roomNightsAvailable).toFixed(2))
+        : 0;
+    const pickup = reservations.length - previousReservations.length;
+
+    const byRoomType = roomTypes.map((roomType) => {
+      const roomTypeRooms = rooms.filter((room) => room.roomTypeId === roomType.id);
+      const roomTypeReservations = reservations.filter(
+        (reservation) => reservation.room.roomTypeId === roomType.id,
+      );
+      const occupiedNights = roomTypeReservations.reduce(
+        (sum, reservation) =>
+          sum +
+          this.countNightsInRange(
+            reservation.checkInDate,
+            reservation.checkOutDate,
+            start,
+            end,
+          ),
+        0,
+      );
+      const availableNights = roomTypeRooms.length * days;
+      const roomTypeOccupancy =
+        availableNights > 0
+          ? Number(((occupiedNights / availableNights) * 100).toFixed(2))
+          : 0;
+      const activeRate = roomType.seasonalRates[0];
+      const currentRate = Number(activeRate?.price ?? roomType.basePrice);
+      const suggestedRate = this.suggestRate(currentRate, roomTypeOccupancy, pickup);
+
+      return {
+        roomTypeId: roomType.id,
+        name: roomType.name,
+        rooms: roomTypeRooms.length,
+        occupancyRate: roomTypeOccupancy,
+        currentRate,
+        suggestedRate,
+        rateChange: Number((suggestedRate - currentRate).toFixed(2)),
+        recommendation: this.recommendationText(roomTypeOccupancy, pickup),
+      };
+    });
+
+    return {
+      summary: {
+        totalRooms,
+        roomNightsAvailable,
+        occupiedRoomNights,
+        occupancyRate,
+        adr,
+        revPar,
+        pickup,
+        revenue: Number(revenue.toFixed(2)),
+      },
+      byRoomType,
+    };
+  }
+
+  async dashboard(organizationId: string) {
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 1);
+
+    const [totalRooms, availableRooms, occupiedRooms, todaysReservations, revenue] =
+      await Promise.all([
+        this.prisma.room.count({ where: { property: { organizationId } } }),
+        this.prisma.room.count({
+          where: { property: { organizationId }, status: RoomStatus.available },
+        }),
+        this.prisma.room.count({
+          where: { property: { organizationId }, status: RoomStatus.occupied },
+        }),
+        this.prisma.reservation.findMany({
+          where: {
+            property: { organizationId },
+            status: { notIn: [ReservationStatus.cancelled, ReservationStatus.no_show] },
+            OR: [
+              { checkInDate: { gte: start, lt: end } },
+              { checkOutDate: { gte: start, lt: end } },
+            ],
+          },
+          orderBy: [{ checkInDate: "asc" }, { checkOutDate: "asc" }],
+          include: {
+            guest: true,
+            room: true,
+            property: true,
+          },
+        }),
+        this.prisma.invoice.aggregate({
+          where: {
+            property: { organizationId },
+            status: { not: InvoiceStatus.cancelled },
+            issueDate: { gte: start, lt: end },
+          },
+          _sum: { totalAmount: true },
+        }),
+      ]);
+
+    const checkIns = todaysReservations.filter(
+      (reservation) =>
+        reservation.checkInDate >= start && reservation.checkInDate < end,
+    );
+    const checkOuts = todaysReservations.filter(
+      (reservation) =>
+        reservation.checkOutDate >= start && reservation.checkOutDate < end,
+    );
+
+    return {
+      date: start.toISOString().split("T")[0],
+      summary: {
+        checkIns: checkIns.length,
+        checkOuts: checkOuts.length,
+        availableRooms,
+        occupiedRooms,
+        totalRooms,
+        occupancyRate:
+          totalRooms > 0
+            ? Number(((occupiedRooms / totalRooms) * 100).toFixed(1))
+            : 0,
+        revenue: Number(revenue._sum.totalAmount ?? 0),
+      },
+      checkIns,
+      checkOuts,
+    };
+  }
+
+  async tdl(
+    organizationId: string,
+    propertyId: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    await this.validateProperty(organizationId, propertyId);
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        propertyId,
+        status: { not: "cancelled" },
+        issueDate: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      select: {
+        invoiceNumber: true,
+        issueDate: true,
+        subtotal: true,
+        totalAmount: true,
+        taxBreakdown: true,
+      },
+      orderBy: { issueDate: "asc" },
+    });
+
+    const byInvoice = invoices.map((invoice) => {
+      const taxes = invoice.taxBreakdown as any[];
+      const tdl = taxes.find((tax) => tax.name === "TDL");
+      const serviceCharge = taxes.find((tax) => tax.name === "Service Charge");
+      const taxableRevenue =
+        tdl?.taxableBase ?? Number(invoice.subtotal) + Number(serviceCharge?.amount ?? 0);
+      return {
+        invoiceNumber: invoice.invoiceNumber,
+        issueDate: invoice.issueDate,
+        taxableRevenue: Number(taxableRevenue),
+        tdlRate: Number(tdl?.rate ?? 0),
+        tdlAmount: Number(tdl?.amount ?? 0),
+        totalAmount: Number(invoice.totalAmount),
+      };
+    });
+
+    const taxableRevenue = byInvoice.reduce(
+      (sum, invoice) => sum + invoice.taxableRevenue,
+      0,
+    );
+    const tdlAmount = byInvoice.reduce(
+      (sum, invoice) => sum + invoice.tdlAmount,
+      0,
+    );
+
+    return {
+      summary: {
+        invoiceCount: invoices.length,
+        taxableRevenue: Number(taxableRevenue.toFixed(2)),
+        tdlAmount: Number(tdlAmount.toFixed(2)),
+      },
+      byInvoice,
+    };
+  }
+
+  async taxSummary(
+    organizationId: string,
+    propertyId: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    await this.validateProperty(organizationId, propertyId);
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        propertyId,
+        status: { not: InvoiceStatus.cancelled },
+        issueDate: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      select: {
+        invoiceNumber: true,
+        taxBreakdown: true,
+      },
+    });
+
+    const taxTotals: Record<
+      string,
+      { taxableBase: number; amount: number; invoiceCount: number; rate: number }
+    > = {};
+
+    for (const invoice of invoices) {
+      for (const tax of invoice.taxBreakdown as any[]) {
+        const entry = taxTotals[tax.name] ?? {
+          taxableBase: 0,
+          amount: 0,
+          invoiceCount: 0,
+          rate: Number(tax.rate ?? 0),
+        };
+        entry.taxableBase += Number(tax.taxableBase ?? 0);
+        entry.amount += Number(tax.amount ?? 0);
+        entry.invoiceCount += 1;
+        entry.rate = Number(tax.rate ?? entry.rate);
+        taxTotals[tax.name] = entry;
+      }
+    }
+
+    const byTax = Object.entries(taxTotals).map(([name, values]) => ({
+      name,
+      rate: values.rate,
+      taxableBase: Number(values.taxableBase.toFixed(2)),
+      amount: Number(values.amount.toFixed(2)),
+      invoiceCount: values.invoiceCount,
+    }));
+
+    const totalTax = byTax.reduce((sum, tax) => sum + tax.amount, 0);
+
+    return {
+      summary: {
+        invoiceCount: invoices.length,
+        totalTax: Number(totalTax.toFixed(2)),
+      },
+      byTax,
+    };
+  }
+
   async guests(
     organizationId: string,
     propertyId: string,
@@ -236,6 +583,56 @@ export class ReportsService {
         returningGuests,
       },
       topNationalities,
+    };
+  }
+
+  async guestSources(
+    organizationId: string,
+    propertyId: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    await this.validateProperty(organizationId, propertyId);
+
+    const reservations = await this.prisma.reservation.findMany({
+      where: {
+        propertyId,
+        checkInDate: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      select: {
+        source: true,
+        totalAmount: true,
+      },
+    });
+
+    const totalReservations = reservations.length;
+    const bySource: Record<string, { count: number; revenue: number }> = {};
+
+    for (const reservation of reservations) {
+      const source = reservation.source || "unknown";
+      bySource[source] = bySource[source] ?? { count: 0, revenue: 0 };
+      bySource[source].count += 1;
+      bySource[source].revenue += Number(reservation.totalAmount);
+    }
+
+    return {
+      summary: {
+        totalReservations,
+      },
+      bySource: Object.entries(bySource)
+        .map(([source, values]) => ({
+          source,
+          count: values.count,
+          revenue: Number(values.revenue.toFixed(2)),
+          share:
+            totalReservations > 0
+              ? Number(((values.count / totalReservations) * 100).toFixed(2))
+              : 0,
+        }))
+        .sort((a, b) => b.count - a.count),
     };
   }
 
@@ -300,5 +697,48 @@ export class ReportsService {
         count,
       })),
     };
+  }
+
+  private countNightsInRange(
+    checkInDate: Date,
+    checkOutDate: Date,
+    startDate: Date,
+    endDate: Date,
+  ) {
+    const start = new Date(Math.max(checkInDate.getTime(), startDate.getTime()));
+    const end = new Date(Math.min(checkOutDate.getTime(), endDate.getTime()));
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    if (end < start) return 0;
+    return Math.max(
+      1,
+      Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)),
+    );
+  }
+
+  private suggestRate(currentRate: number, occupancyRate: number, pickup: number) {
+    if (occupancyRate >= 85 || pickup >= 5) {
+      return Number((currentRate * 1.1).toFixed(2));
+    }
+    if (occupancyRate <= 40 && pickup <= 0) {
+      return Number((currentRate * 0.9).toFixed(2));
+    }
+    if (occupancyRate >= 70) {
+      return Number((currentRate * 1.05).toFixed(2));
+    }
+    return Number(currentRate.toFixed(2));
+  }
+
+  private recommendationText(occupancyRate: number, pickup: number) {
+    if (occupancyRate >= 85 || pickup >= 5) {
+      return "High demand: increase public rates and restrict discounts.";
+    }
+    if (occupancyRate <= 40 && pickup <= 0) {
+      return "Low demand: open promotions or reduce rates for this period.";
+    }
+    if (occupancyRate >= 70) {
+      return "Healthy demand: small rate lift is recommended.";
+    }
+    return "Stable demand: keep rates unchanged and monitor pickup.";
   }
 }

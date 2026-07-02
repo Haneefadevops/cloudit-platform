@@ -20,9 +20,11 @@ import { CreateGuestDto } from "./dto/create-guest.dto";
 import { UpdateGuestDto } from "./dto/update-guest.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { RequireModule } from "../common/decorators/require-module.decorator";
 
 @ApiTags("guests")
 @Controller("guests")
+@RequireModule("hospitality", "guests")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class GuestsController {

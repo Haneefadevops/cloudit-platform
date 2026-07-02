@@ -14,9 +14,11 @@ import { CreateTaxRateDto } from "./dto/create-tax-rate.dto";
 import { UpdateTaxRateDto } from "./dto/update-tax-rate.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { RequireModule } from "../common/decorators/require-module.decorator";
 
 @ApiTags("taxes")
 @Controller("taxes")
+@RequireModule("hospitality", "taxes")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class TaxesController {
@@ -32,6 +34,12 @@ export class TaxesController {
   @ApiOperation({ summary: "List active tax rates" })
   async findActive(@CurrentOrganization() organizationId: string) {
     return this.taxesService.findActive(organizationId);
+  }
+
+  @Post("presets/sri-lanka")
+  @ApiOperation({ summary: "Apply Sri Lankan hospitality tax presets" })
+  async applySriLankaPresets(@CurrentOrganization() organizationId: string) {
+    return this.taxesService.applySriLankaPresets(organizationId);
   }
 
   @Get(":id")

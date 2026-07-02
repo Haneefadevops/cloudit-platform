@@ -14,7 +14,16 @@ import {
 import { UserPlus } from "lucide-react";
 import { GuestModal } from "./guest-modal";
 import { api } from "@/lib/api";
-import type { Property, Room, RoomType, Guest, Reservation, PaginatedResponse } from "@/lib/types";
+import { formatLkr } from "@/lib/format";
+import type {
+  Property,
+  Room,
+  RoomType,
+  Guest,
+  Reservation,
+  ReservationQuote,
+  PaginatedResponse,
+} from "@/lib/types";
 
 interface ReservationModalProps {
   open: boolean;
@@ -51,6 +60,7 @@ export function ReservationModal({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [guestModalOpen, setGuestModalOpen] = useState(false);
   const [localGuests, setLocalGuests] = useState<Guest[]>(guests);
+  const [quote, setQuote] = useState<ReservationQuote | null>(null);
 
   useEffect(() => {
     setLocalGuests(guests);
@@ -74,7 +84,43 @@ export function ReservationModal({
       });
     }
     setErrors({});
+    setQuote(null);
   }, [reservation, open]);
+
+  useEffect(() => {
+    if (
+      !open ||
+      reservation ||
+      !formData.roomId ||
+      !formData.checkInDate ||
+      !formData.checkOutDate
+    ) {
+      return;
+    }
+
+    const checkIn = new Date(formData.checkInDate);
+    const checkOut = new Date(formData.checkOutDate);
+    if (checkOut <= checkIn) {
+      return;
+    }
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          roomId: formData.roomId || "",
+          checkInDate: formData.checkInDate || "",
+          checkOutDate: formData.checkOutDate || "",
+        });
+        const data = await api.get<ReservationQuote>(`/reservations/quote?${params.toString()}`);
+        setQuote(data);
+        setFormData((prev) => ({ ...prev, totalAmount: data.totalAmount }));
+      } catch (error) {
+        console.error(error);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [open, reservation, formData.roomId, formData.checkInDate, formData.checkOutDate]);
 
   const propertyOptions = useMemo(
     () => properties.map((p) => ({ value: p.id, label: p.name })),
@@ -291,6 +337,11 @@ export function ReservationModal({
                 onChange={(e) => setFormData({ ...formData, totalAmount: Number(e.target.value) })}
                 error={errors.totalAmount}
               />
+              {quote && (
+                <p className="text-xs text-muted-foreground">
+                  {quote.nights} night(s) at average {formatLkr(quote.averageNightlyRate)}
+                </p>
+              )}
             </FormField>
             <FormField>
               <FormLabel required>Paid Amount (Rs.)</FormLabel>

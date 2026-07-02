@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Modal, Button, Form, FormField, FormLabel } from "@cloudit/ui";
+import { formatDate } from "@/lib/format";
 import type { Reservation } from "@/lib/types";
 
 interface CheckInModalProps {
@@ -23,9 +24,9 @@ export function CheckInModal({ open, onClose, reservation, onConfirm }: CheckInM
       open={open}
       onClose={onClose}
       title="Check-in Guest"
-      description={`${guestName} — Room ${reservation.room?.roomNumber} — ${new Date(
-        reservation.checkInDate
-      ).toLocaleDateString()} to ${new Date(reservation.checkOutDate).toLocaleDateString()}`}
+      description={`${guestName} — Room ${reservation.room?.roomNumber} — ${formatDate(
+        reservation.checkInDate,
+      )} to ${formatDate(reservation.checkOutDate)}`}
       footer={
         <>
           <Button variant="outline" onClick={onClose}>Cancel</Button>

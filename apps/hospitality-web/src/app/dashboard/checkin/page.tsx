@@ -6,6 +6,7 @@ import { LogIn, Calendar } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { CheckInModal } from "@/components/check-in-modal";
 import { api } from "@/lib/api";
+import { formatDate } from "@/lib/format";
 import type { Reservation, PaginatedResponse } from "@/lib/types";
 
 export default function CheckInPage() {
@@ -45,7 +46,7 @@ export default function CheckInPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Check-in" description={`Expected check-ins for ${today}`} />
+      <PageHeader title="Check-in" description={`Expected check-ins for ${formatDate(today)}`} />
 
       <Card>
         <CardContent className="p-0">
@@ -87,7 +88,7 @@ export default function CheckInPage() {
                       </TableCell>
                       <TableCell>{reservation.room?.roomNumber}</TableCell>
                       <TableCell>{reservation.property?.name}</TableCell>
-                      <TableCell>{new Date(reservation.checkOutDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatDate(reservation.checkOutDate)}</TableCell>
                       <TableCell>
                         <Badge variant="default">{reservation.status.replace("_", " ")}</Badge>
                       </TableCell>

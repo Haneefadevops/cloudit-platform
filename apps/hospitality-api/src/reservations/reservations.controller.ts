@@ -23,12 +23,15 @@ import { UpdateReservationDto } from "./dto/update-reservation.dto";
 import { CheckInDto } from "./dto/check-in.dto";
 import { CheckOutDto } from "./dto/check-out.dto";
 import { CalendarQueryDto } from "./dto/calendar-query.dto";
+import { QuoteReservationDto } from "./dto/quote-reservation.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { RequireModule } from "../common/decorators/require-module.decorator";
 
 @ApiTags("reservations")
 @Controller("reservations")
+@RequireModule("hospitality", "reservations")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class ReservationsController {
@@ -72,6 +75,20 @@ export class ReservationsController {
       query.propertyId,
       query.month,
       query.year,
+    );
+  }
+
+  @Get("quote")
+  @ApiOperation({ summary: "Quote reservation total with seasonal pricing" })
+  async quote(
+    @CurrentOrganization() organizationId: string,
+    @Query() query: QuoteReservationDto,
+  ) {
+    return this.reservationsService.quote(
+      organizationId,
+      query.roomId,
+      new Date(query.checkInDate),
+      new Date(query.checkOutDate),
     );
   }
 

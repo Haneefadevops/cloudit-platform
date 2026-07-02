@@ -15,11 +15,13 @@ import {
   Badge,
   Select,
 } from "@cloudit/ui";
-import { Plus, Pencil, Trash2, FileText, Eye, CheckCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText, Eye, CheckCircle, CreditCard } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { InvoiceModal } from "@/components/invoice-modal";
 import { InvoicePreviewModal } from "@/components/invoice-preview-modal";
+import { PaymentModal } from "@/components/payment-modal";
 import { api } from "@/lib/api";
+import { formatDate, formatLkr } from "@/lib/format";
 import type { Invoice, Reservation, PaginatedResponse, Property } from "@/lib/types";
 
 const statusBadgeVariant: Record<string, string> = {
@@ -40,6 +42,7 @@ export default function InvoicesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
+  const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
 
   useEffect(() => {
     loadData();
@@ -172,7 +175,9 @@ export default function InvoicesPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredInvoices.map((invoice) => (
+                  filteredInvoices.map((invoice) => {
+                    const balance = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+                    return (
                     <TableRow key={invoice.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -184,9 +189,9 @@ export default function InvoicesPage() {
                         {invoice.guest?.firstName} {invoice.guest?.lastName}
                       </TableCell>
                       <TableCell>{invoice.property?.name}</TableCell>
-                      <TableCell>{new Date(invoice.issueDate).toLocaleDateString()}</TableCell>
-                      <TableCell>Rs. {Number(invoice.totalAmount).toLocaleString()}</TableCell>
-                      <TableCell>Rs. {Number(invoice.paidAmount).toLocaleString()}</TableCell>
+                      <TableCell>{formatDate(invoice.issueDate)}</TableCell>
+                      <TableCell>{formatLkr(invoice.totalAmount)}</TableCell>
+                      <TableCell>{formatLkr(invoice.paidAmount)}</TableCell>
                       <TableCell>
                         <Badge variant={statusBadgeVariant[invoice.status] as any}>
                           {invoice.status}
@@ -202,6 +207,18 @@ export default function InvoicesPage() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
+                          {invoice.status !== "paid" && invoice.status !== "cancelled" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setPaymentInvoice(invoice)}
+                              title="Record Payment"
+                              disabled={balance <= 0}
+                              className="text-blue-600"
+                            >
+                              <CreditCard className="h-4 w-4" />
+                            </Button>
+                          )}
                           {invoice.status !== "paid" && invoice.status !== "cancelled" && (
                             <Button
                               variant="ghost"
@@ -231,7 +248,8 @@ export default function InvoicesPage() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -251,6 +269,13 @@ export default function InvoicesPage() {
         open={!!previewInvoiceId}
         onClose={() => setPreviewInvoiceId(null)}
         invoiceId={previewInvoiceId}
+      />
+
+      <PaymentModal
+        open={!!paymentInvoice}
+        onClose={() => setPaymentInvoice(null)}
+        invoice={paymentInvoice}
+        onSuccess={loadData}
       />
     </div>
   );

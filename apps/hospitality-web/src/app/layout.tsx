@@ -3,8 +3,14 @@ import "@cloudit/ui/globals.css";
 import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
-  title: { default: "CloudIT Hospitality", template: "%s — CloudIT Hospitality" },
+  title: { default: "CloudIT Hospitality", template: "%s - CloudIT Hospitality" },
   description: "Hospitality OS by CloudIT Solutions",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "CloudIT Hospitality",
+    statusBarStyle: "default",
+  },
 };
 
 export default function RootLayout({

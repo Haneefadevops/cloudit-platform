@@ -5,6 +5,8 @@ import {
   LayoutDashboard,
   Building2,
   BedDouble,
+  Sparkles,
+  PlugZap,
   Users,
   Calendar,
   ClipboardList,
@@ -18,11 +20,13 @@ const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: <LayoutDashboard className="h-4 w-4" />, active: true },
   { label: "Properties", href: "/dashboard/properties", icon: <Building2 className="h-4 w-4" /> },
   { label: "Rooms", href: "/dashboard/rooms", icon: <BedDouble className="h-4 w-4" /> },
+  { label: "Housekeeping", href: "/dashboard/housekeeping", icon: <Sparkles className="h-4 w-4" /> },
   { label: "Guests", href: "/dashboard/guests", icon: <Users className="h-4 w-4" /> },
   { label: "Reservations", href: "/dashboard/reservations", icon: <ClipboardList className="h-4 w-4" /> },
   { label: "Calendar", href: "/dashboard/calendar", icon: <Calendar className="h-4 w-4" /> },
   { label: "Invoices", href: "/dashboard/invoices", icon: <FileText className="h-4 w-4" /> },
   { label: "Reports", href: "/dashboard/reports", icon: <BarChart3 className="h-4 w-4" /> },
+  { label: "Integrations", href: "/dashboard/integrations", icon: <PlugZap className="h-4 w-4" /> },
   { label: "Settings", href: "/dashboard/settings", icon: <Settings className="h-4 w-4" /> },
 ];
 
