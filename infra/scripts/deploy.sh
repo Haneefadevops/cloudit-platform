@@ -25,6 +25,19 @@ for app_dir in apps/*; do
   fi
 done
 
+log "Ensuring shared network exists..."
+docker compose -f infra/docker-compose.network.yml up -d
+
+log "Starting core infrastructure..."
+docker compose -f infra/postgres/docker-compose.yml up -d
+docker compose -f infra/redis/docker-compose.yml up -d
+
+log "Waiting for database and cache to become healthy..."
+sleep 10
+
+log "Ensuring application databases exist..."
+"$PROJECT_ROOT/infra/scripts/ensure-databases.sh"
+
 log "Running pre-deployment checks and migrations..."
 "$PROJECT_ROOT/infra/scripts/predeploy.sh"
 
@@ -37,16 +50,6 @@ for svc in "${app_services[@]}"; do
     log "Tagged ${svc} image as previous"
   fi
 done
-
-log "Ensuring shared network exists..."
-docker compose -f infra/docker-compose.network.yml up -d
-
-log "Starting core infrastructure..."
-docker compose -f infra/postgres/docker-compose.yml up -d
-docker compose -f infra/redis/docker-compose.yml up -d
-
-log "Waiting for database and cache to become healthy..."
-sleep 10
 
 docker compose -f infra/traefik/docker-compose.yml up -d
 docker compose -f infra/n8n/docker-compose.yml up -d
