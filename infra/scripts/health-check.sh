@@ -16,7 +16,7 @@ endpoints=(
   "https://api-hospitality.${DOMAIN}/api/health/live"
   "https://api-orbitone.${DOMAIN}/api/health/live"
   "https://api-touchorbit.${DOMAIN}/api/health/live"
-  "https://app.${DOMAIN}"
+  "https://platform.${DOMAIN}"
   "https://hospitality.${DOMAIN}"
   "https://orbitone.${DOMAIN}"
   "https://touchorbit.${DOMAIN}"

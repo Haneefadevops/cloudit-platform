@@ -14,7 +14,7 @@ services:
       - cloudit
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.maintenance-platform.rule=Host(`app.${DOMAIN:-cloudit.lk}`)"
+      - "traefik.http.routers.maintenance-platform.rule=Host(`platform.${DOMAIN:-cloudit.lk}`)"
       - "traefik.http.routers.maintenance-platform.entrypoints=websecure"
       - "traefik.http.routers.maintenance-platform.tls.certresolver=cloudflare"
       - "traefik.http.routers.maintenance-platform.priority=100"

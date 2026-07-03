@@ -20,7 +20,7 @@ services:
       - cloudit
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.platform-web.rule=Host(`app.${DOMAIN:-cloudit.lk}`)"
+      - "traefik.http.routers.platform-web.rule=Host(`platform.${DOMAIN:-cloudit.lk}`)"
       - "traefik.http.routers.platform-web.entrypoints=websecure"
       - "traefik.http.routers.platform-web.tls.certresolver=cloudflare"
       - "traefik.http.routers.platform-web.tls.domains[0].main=${DOMAIN:-cloudit.lk}"
