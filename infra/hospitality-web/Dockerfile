@@ -18,6 +18,7 @@ FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 RUN apk add --no-cache curl
+ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/apps/hospitality-web/.next/standalone ./
 COPY --from=builder /app/apps/hospitality-web/public ./apps/hospitality-web/public
 COPY --from=builder /app/apps/hospitality-web/.next/static ./apps/hospitality-web/.next/static

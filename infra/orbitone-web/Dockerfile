@@ -18,6 +18,7 @@ FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 RUN apk add --no-cache curl
+ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/apps/orbitone-web/.next/standalone ./
 COPY --from=builder /app/apps/orbitone-web/public ./apps/orbitone-web/public
 COPY --from=builder /app/apps/orbitone-web/.next/static ./apps/orbitone-web/.next/static
