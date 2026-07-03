@@ -40,8 +40,12 @@ tag_previous_image() {
   local previous="cloudit/${svc}:previous"
 
   if docker image inspect "$image" >/dev/null 2>&1; then
-    docker image tag "$image" "$previous"
-    log "Tagged existing ${svc} image as previous"
+    docker image rm -f "$previous" >/dev/null 2>&1 || true
+    if docker image tag "$image" "$previous"; then
+      log "Tagged existing ${svc} image as previous"
+    else
+      log "WARNING: unable to tag existing ${svc} image as previous; continuing"
+    fi
   fi
 }
 
