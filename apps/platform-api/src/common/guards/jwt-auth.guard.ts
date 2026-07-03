@@ -38,6 +38,7 @@ export class JwtAuthGuard implements CanActivate {
       request['user'] = {
         userId: payload.sub,
         orgId: payload.orgId,
+        email: payload.email,
         role: payload.role,
       };
     } catch {

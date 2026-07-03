@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 
@@ -6,28 +10,16 @@ import * as bcrypt from 'bcrypt';
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
-    const [data, total] = await Promise.all([
-      this.prisma.user.findMany({
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          members: {
-            include: { organization: { select: { id: true, name: true } } },
-          },
+  async findAll() {
+    const users = await this.prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        members: {
+          include: { organization: { select: { id: true, name: true } } },
         },
-      }),
-      this.prisma.user.count(),
-    ]);
-    return {
-      data: data.map(this.sanitize),
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+      },
+    });
+    return users.map((user) => this.toFrontendUser(user));
   }
 
   async findById(id: string) {
@@ -36,23 +28,64 @@ export class UsersService {
       include: { members: { include: { organization: true } } },
     });
     if (!user) throw new NotFoundException('User not found');
-    return this.sanitize(user);
+    return this.toFrontendUser(user);
   }
 
-  async update(id: string, dto: any) {
+  async update(id: string, dto: any, adminOrgId?: string) {
     const data: any = {};
-    if (dto.firstName) data.firstName = dto.firstName;
-    if (dto.lastName) data.lastName = dto.lastName;
-    if (dto.avatar) data.avatar = dto.avatar;
+    if (dto.firstName !== undefined) data.firstName = dto.firstName;
+    if (dto.lastName !== undefined) data.lastName = dto.lastName;
+    if (dto.avatar !== undefined) data.avatar = dto.avatar;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.password) data.passwordHash = await bcrypt.hash(dto.password, 12);
 
-    const user = await this.prisma.user.update({
+    let user = await this.prisma.user.update({
       where: { id },
       data,
       include: { members: { include: { organization: true } } },
     });
-    return this.sanitize(user);
+
+    if (dto.role && adminOrgId) {
+      const member = user.members.find((m) => m.orgId === adminOrgId);
+      if (member) {
+        const role = dto.role === 'admin' ? 'ADMIN' : 'MEMBER';
+        await this.prisma.organizationMember.update({
+          where: { id: member.id },
+          data: { role },
+        });
+        user = (await this.prisma.user.findUnique({
+          where: { id },
+          include: { members: { include: { organization: true } } },
+        })) as any;
+        if (!user) throw new NotFoundException('User not found');
+      }
+    }
+
+    return this.toFrontendUser(user);
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+
+    return { message: 'Password changed successfully' };
   }
 
   async remove(id: string) {
@@ -63,8 +96,23 @@ export class UsersService {
     return { message: 'User deactivated' };
   }
 
-  private sanitize(user: any) {
+  private toFrontendUser(user: any) {
+    const member = user.members?.[0];
+    let status: string;
+    if (!user.isActive) {
+      status = 'inactive';
+    } else if (!user.emailVerified) {
+      status = 'pending';
+    } else {
+      status = 'active';
+    }
+
     const { passwordHash, ...rest } = user;
-    return rest;
+    return {
+      ...rest,
+      role: member?.role === 'ADMIN' ? 'admin' : 'user',
+      status,
+      organizationId: member?.orgId,
+    };
   }
 }

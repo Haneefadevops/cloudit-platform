@@ -15,7 +15,12 @@ export class OrganizationsService {
       where: { userId },
       include: { organization: true },
     });
-    return members.map((m) => ({ ...m.organization, role: m.role }));
+    return members.map((m) => ({
+      ...m.organization,
+      role: m.role,
+      description:
+        (m.organization.settings as Record<string, any>)?.description || '',
+    }));
   }
 
   async findOne(id: string, userId: string) {
@@ -39,7 +44,10 @@ export class OrganizationsService {
       },
     });
     if (!org) throw new NotFoundException('Organization not found');
-    return org;
+    return {
+      ...org,
+      description: (org.settings as Record<string, any>)?.description || '',
+    };
   }
 
   async create(userId: string, dto: any) {
@@ -62,16 +70,33 @@ export class OrganizationsService {
 
   async update(id: string, userId: string, dto: any) {
     await this.checkAdmin(id, userId);
+    const existing = await this.prisma.organization.findUnique({
+      where: { id },
+    });
+    if (!existing) throw new NotFoundException('Organization not found');
+
     const data: any = {};
-    if (dto.name) data.name = dto.name;
+    if (dto.name !== undefined) data.name = dto.name;
     if (dto.logo !== undefined) data.logo = dto.logo;
     if (dto.plan) data.plan = dto.plan;
-    if (dto.settings) data.settings = dto.settings;
 
-    return this.prisma.organization.update({
+    const settings = (existing.settings as Record<string, any>) || {};
+    if (dto.description !== undefined) {
+      settings.description = dto.description;
+      data.settings = settings;
+    } else if (dto.settings) {
+      data.settings = dto.settings;
+    }
+
+    const updated = await this.prisma.organization.update({
       where: { id },
       data,
     });
+
+    return {
+      ...updated,
+      description: (updated.settings as Record<string, any>)?.description || '',
+    };
   }
 
   async remove(id: string, userId: string) {

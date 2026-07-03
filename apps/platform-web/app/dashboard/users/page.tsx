@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, handleApiError } from "@/lib/api-client";
+import { useAuth } from "@/hooks/use-auth";
 import type { User } from "@/types";
 
 const mockUsers: User[] = [
@@ -43,6 +44,7 @@ const mockUsers: User[] = [
 ];
 
 export default function UsersPage() {
+  const { organization } = useAuth();
   const [users, setUsers] = React.useState<User[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -51,6 +53,9 @@ export default function UsersPage() {
   const [currentPage, setCurrentPage] = React.useState(1);
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [editUser, setEditUser] = React.useState<User | null>(null);
+  const [editRole, setEditRole] = React.useState("user");
+  const [editStatus, setEditStatus] = React.useState("active");
+  const [isEditLoading, setIsEditLoading] = React.useState(false);
   const [deleteUser, setDeleteUser] = React.useState<User | null>(null);
   const [inviteEmail, setInviteEmail] = React.useState("");
   const [inviteRole, setInviteRole] = React.useState("user");
@@ -88,8 +93,15 @@ export default function UsersPage() {
   );
 
   const handleInvite = async () => {
+    if (!organization?.id) {
+      toast.error("No organization selected");
+      return;
+    }
     try {
-      await api.post("/users/invite", { email: inviteEmail, role: inviteRole });
+      await api.post(`/organizations/${organization.id}/members`, {
+        email: inviteEmail,
+        role: inviteRole === "admin" ? "ADMIN" : "MEMBER",
+      });
       toast.success("Invitation sent successfully");
       setInviteOpen(false);
       setInviteEmail("");
@@ -103,11 +115,37 @@ export default function UsersPage() {
     try {
       await api.delete(`/users/${deleteUser.id}`);
       setUsers(users.filter((u) => u.id !== deleteUser.id));
-      toast.success("User deleted successfully");
+      toast.success("User deactivated successfully");
       setDeleteUser(null);
     } catch (error) {
       handleApiError(error);
     }
+  };
+
+  const handleEdit = async () => {
+    if (!editUser) return;
+    setIsEditLoading(true);
+    try {
+      const updated = await api.patch<User>(`/users/${editUser.id}`, {
+        role: editRole,
+        isActive: editStatus === "active" || editStatus === "pending",
+      });
+      setUsers((prev) =>
+        prev.map((u) => (u.id === updated.id ? updated : u))
+      );
+      toast.success("User updated successfully");
+      setEditUser(null);
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setIsEditLoading(false);
+    }
+  };
+
+  const openEdit = (user: User) => {
+    setEditUser(user);
+    setEditRole(user.role);
+    setEditStatus(user.status);
   };
 
   const getStatusBadge = (status: string) => {
@@ -261,7 +299,7 @@ export default function UsersPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setEditUser(user)}
+                            onClick={() => openEdit(user)}
                             className="min-h-[44px] min-w-[44px]"
                           >
                             <Pencil className="h-4 w-4" />
@@ -314,7 +352,7 @@ export default function UsersPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setEditUser(user)}
+                          onClick={() => openEdit(user)}
                           className="min-h-[44px]"
                         >
                           <Pencil className="h-4 w-4" />
@@ -381,10 +419,38 @@ export default function UsersPage() {
               <br />
               {editUser?.email}
             </p>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Role</label>
+              <Select value={editRole} onValueChange={setEditRole}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Status</label>
+              <Select value={editStatus} onValueChange={setEditStatus}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditUser(null)}>
-              Close
+              Cancel
+            </Button>
+            <Button onClick={handleEdit} disabled={isEditLoading}>
+              {isEditLoading ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Delete,
   Body,
@@ -42,6 +43,16 @@ export class OrganizationsController {
   @Patch(':id')
   @ApiOperation({ summary: 'Update organization' })
   async update(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() dto: any,
+  ) {
+    return this.organizationsService.update(id, user.userId, dto);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update organization (alias)' })
+  async updatePut(
     @Param('id') id: string,
     @CurrentUser() user: any,
     @Body() dto: any,

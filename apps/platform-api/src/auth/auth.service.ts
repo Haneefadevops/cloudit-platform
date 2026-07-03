@@ -196,7 +196,7 @@ export class AuthService {
     const orgId = user?.members?.[0]?.orgId;
     const isAdmin = user?.members?.some((m) => m.role === 'ADMIN') ?? false;
     const accessToken = this.jwtService.sign(
-      { sub: userId, orgId, role: isAdmin ? 'ADMIN' : 'MEMBER' },
+      { sub: userId, orgId, email: user?.email, role: isAdmin ? 'ADMIN' : 'MEMBER' },
       { expiresIn: '15m' },
     );
     const refreshToken = this.generateRandomToken();

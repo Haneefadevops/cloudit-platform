@@ -29,7 +29,7 @@ export default function SettingsPage() {
     resolver: zodResolver(orgSettingsSchema),
     defaultValues: {
       name: organization?.name || "",
-      description: "",
+      description: organization?.description || "",
     },
   });
 

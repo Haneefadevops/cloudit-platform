@@ -2,13 +2,12 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Delete,
   Body,
   Param,
-  Query,
   UseGuards,
-  ParseIntPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -26,8 +25,8 @@ export class UsersController {
   @Get()
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'List all users' })
-  async findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
-    return this.usersService.findAll(Number(page) || 1, Number(limit) || 20);
+  async findAll() {
+    return this.usersService.findAll();
   }
 
   @Get('profile')
@@ -42,6 +41,31 @@ export class UsersController {
     return this.usersService.update(user.userId, dto);
   }
 
+  @Get('me')
+  @ApiOperation({ summary: 'Get current user profile (alias)' })
+  async me(@CurrentUser() user: any) {
+    return this.usersService.findById(user.userId);
+  }
+
+  @Put('me')
+  @ApiOperation({ summary: 'Update current user profile (alias)' })
+  async updateMe(@CurrentUser() user: any, @Body() dto: any) {
+    return this.usersService.update(user.userId, dto);
+  }
+
+  @Put('me/password')
+  @ApiOperation({ summary: 'Change current user password' })
+  async changePassword(
+    @CurrentUser() user: any,
+    @Body() dto: { currentPassword: string; newPassword: string },
+  ) {
+    return this.usersService.changePassword(
+      user.userId,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get user by ID' })
   async findOne(@Param('id') id: string) {
@@ -51,8 +75,12 @@ export class UsersController {
   @Patch(':id')
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Update user by ID' })
-  async update(@Param('id') id: string, @Body() dto: any) {
-    return this.usersService.update(id, dto);
+  async update(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() dto: any,
+  ) {
+    return this.usersService.update(id, dto, user.orgId);
   }
 
   @Delete(':id')
