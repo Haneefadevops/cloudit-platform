@@ -19,7 +19,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN apk add --no-cache curl
 COPY --from=builder /app/apps/touchorbit-web/.next/standalone ./
-COPY --from=builder /app/apps/touchorbit-web/public ./public
+COPY --from=builder /app/apps/touchorbit-web/public ./apps/touchorbit-web/public
+COPY --from=builder /app/apps/touchorbit-web/.next/static ./apps/touchorbit-web/.next/static
 EXPOSE 3007
 ENV PORT=3007
-CMD ["node", "server.js"]
+CMD ["node", "apps/touchorbit-web/server.js"]

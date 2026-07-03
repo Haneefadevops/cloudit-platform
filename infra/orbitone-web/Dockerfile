@@ -19,7 +19,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN apk add --no-cache curl
 COPY --from=builder /app/apps/orbitone-web/.next/standalone ./
-COPY --from=builder /app/apps/orbitone-web/public ./public
+COPY --from=builder /app/apps/orbitone-web/public ./apps/orbitone-web/public
+COPY --from=builder /app/apps/orbitone-web/.next/static ./apps/orbitone-web/.next/static
 EXPOSE 3005
 ENV PORT=3005
-CMD ["node", "server.js"]
+CMD ["node", "apps/orbitone-web/server.js"]

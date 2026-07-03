@@ -19,7 +19,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN apk add --no-cache curl
 COPY --from=builder /app/apps/hospitality-web/.next/standalone ./
-COPY --from=builder /app/apps/hospitality-web/public ./public
+COPY --from=builder /app/apps/hospitality-web/public ./apps/hospitality-web/public
+COPY --from=builder /app/apps/hospitality-web/.next/static ./apps/hospitality-web/.next/static
 EXPOSE 3003
 ENV PORT=3003
-CMD ["node", "server.js"]
+CMD ["node", "apps/hospitality-web/server.js"]

@@ -36,7 +36,8 @@ ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 RUN apk add --no-cache curl
 COPY --from=builder /app/apps/touchorbit-employee-web/.next/standalone ./
-COPY --from=builder /app/apps/touchorbit-employee-web/public ./public
+COPY --from=builder /app/apps/touchorbit-employee-web/public ./apps/touchorbit-employee-web/public
+COPY --from=builder /app/apps/touchorbit-employee-web/.next/static ./apps/touchorbit-employee-web/.next/static
 EXPOSE 3009
 ENV PORT=3009
-CMD ["node", "server.js"]
+CMD ["node", "apps/touchorbit-employee-web/server.js"]
