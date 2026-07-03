@@ -19,6 +19,7 @@ RUN rm -rf apps/touchorbit-employee-web/node_modules/@cloudit/ui && \
     cp -r packages/ui/dist packages/ui/package.json packages/ui/src/globals.css \
           packages/ui/tailwind.config.ts packages/ui/postcss.config.mjs \
           apps/touchorbit-employee-web/node_modules/@cloudit/ui/
+RUN mkdir -p apps/touchorbit-employee-web/public
 RUN npm run build --workspace=@cloudit/touchorbit-employee-web
 
 # Production stage
