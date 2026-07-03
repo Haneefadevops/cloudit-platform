@@ -1,6 +1,5 @@
 import { Global, Module } from "@nestjs/common";
 import { PlanService } from "./services/plan.service";
-import { RequireRoleGuard } from "./guards/require-role.guard";
 import { RequireAdminOrBillingGuard } from "./guards/require-admin-or-billing.guard";
 import { RequireOrgMemberGuard } from "./guards/require-org-member.guard";
 import { RequireCRMGuard } from "./guards/require-crm.guard";
@@ -12,7 +11,6 @@ import { RequireAnalyticsGuard } from "./guards/require-analytics.guard";
 @Module({
   providers: [
     PlanService,
-    RequireRoleGuard,
     RequireAdminOrBillingGuard,
     RequireOrgMemberGuard,
     RequireCRMGuard,
@@ -22,7 +20,6 @@ import { RequireAnalyticsGuard } from "./guards/require-analytics.guard";
   ],
   exports: [
     PlanService,
-    RequireRoleGuard,
     RequireAdminOrBillingGuard,
     RequireOrgMemberGuard,
     RequireCRMGuard,
