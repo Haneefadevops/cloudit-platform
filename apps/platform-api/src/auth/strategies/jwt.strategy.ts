@@ -9,19 +9,19 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET')!,
+      secretOrKey: configService.get<string>('JWT_SECRET') || 'cloudit-dev-secret',
     });
   }
 
   async validate(payload: {
     sub: string;
-    email: string;
-    permissions: string[];
+    orgId: string;
+    role: string;
   }) {
     return {
       userId: payload.sub,
-      email: payload.email,
-      permissions: payload.permissions,
+      orgId: payload.orgId,
+      role: payload.role,
     };
   }
 }
