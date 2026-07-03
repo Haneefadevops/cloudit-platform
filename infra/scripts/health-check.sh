@@ -12,10 +12,10 @@ log() {
 }
 
 endpoints=(
-  "https://api-platform.${DOMAIN}/api/health"
-  "https://api-hospitality.${DOMAIN}/api/health"
-  "https://api-orbitone.${DOMAIN}/api/health"
-  "https://api-touchorbit.${DOMAIN}/api/health"
+  "https://api-platform.${DOMAIN}/api/health/live"
+  "https://api-hospitality.${DOMAIN}/api/health/live"
+  "https://api-orbitone.${DOMAIN}/api/health/live"
+  "https://api-touchorbit.${DOMAIN}/api/health/live"
   "https://app.${DOMAIN}"
   "https://hospitality.${DOMAIN}"
   "https://orbitone.${DOMAIN}"

@@ -11,6 +11,18 @@ import { Public } from "../common/decorators/public.decorator";
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
+  @Get("live")
+  @Public()
+  @ApiOperation({ summary: "Liveness check" })
+  live() {
+    return {
+      status: "ok",
+      service: "touchorbit-api",
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+    };
+  }
+
   @Get()
   @Public()
   @ApiOperation({ summary: "Health check" })

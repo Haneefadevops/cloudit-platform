@@ -10,6 +10,17 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
+  @Get('live')
+  @ApiOperation({ summary: 'Liveness check' })
+  live() {
+    return {
+      status: 'ok',
+      service: 'platform-api',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+    };
+  }
+
   @Get()
   @ApiOperation({ summary: 'Health check' })
   async check(@Res() response: Response) {

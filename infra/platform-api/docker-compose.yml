@@ -27,7 +27,7 @@ services:
       - "traefik.http.routers.platform-api.tls.domains[0].sans=*.${DOMAIN:-cloudit.lk}"
       - "traefik.http.services.platform-api.loadbalancer.server.port=3001"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:3001/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3001/api/health/live || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
