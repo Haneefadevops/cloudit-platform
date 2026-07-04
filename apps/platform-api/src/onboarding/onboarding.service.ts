@@ -384,18 +384,23 @@ export class OnboardingService {
       );
     }
 
-    const response = await axios.post<ProductProvisionResponse>(
-      `${baseUrl.replace(/\/$/, '')}/internal/provision-tenant`,
-      input,
-      {
-        headers: {
-          'x-internal-token': token,
-          Authorization: `Bearer ${token}`,
-        },
-        timeout: 15000,
+    const response = await axios.post<{
+      success?: boolean;
+      data?: ProductProvisionResponse;
+    }>(`${baseUrl.replace(/\/$/, '')}/internal/provision-tenant`, input, {
+      headers: {
+        'x-internal-token': token,
+        Authorization: `Bearer ${token}`,
       },
-    );
-    return response.data;
+      timeout: 15000,
+    });
+    const payload = (response.data?.data ?? response.data) as
+      | ProductProvisionResponse
+      | undefined;
+    if (!payload || !payload.tenantId || !payload.inviteToken) {
+      throw new BadRequestException('Product provisioning returned an invalid response');
+    }
+    return payload;
   }
 
   private productApiUrl(product: string): string | undefined {

@@ -54,10 +54,10 @@ export class EmailService {
     template: string;
     data: Record<string, unknown>;
   }): Promise<void> {
-    const webhookUrl = this.configService.get<string>('EMAIL_WEBHOOK_URL');
-    const apiKey = this.configService.get<string>('EMAIL_WEBHOOK_API_KEY');
+    const webhookUrl = (this.configService.get<string>('EMAIL_WEBHOOK_URL') || '').trim();
+    const apiKey = (this.configService.get<string>('EMAIL_WEBHOOK_API_KEY') || '').trim();
 
-    if (!webhookUrl) {
+    if (!webhookUrl || webhookUrl.startsWith('#')) {
       this.logger.log(
         `[EMAIL:${payload.template}] ${payload.subject} -> ${payload.to}`,
       );
