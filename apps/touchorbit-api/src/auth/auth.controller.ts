@@ -29,6 +29,11 @@ const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
+const setPasswordSchema = z.object({
+  token: z.string().trim().min(1),
+  password: z.string().min(8).max(128),
+});
+
 @Controller("auth")
 export class AuthController {
   constructor(
@@ -48,6 +53,29 @@ export class AuthController {
     }
     try {
       const user = await this.authService.register(input.data, res);
+      return { ok: true, data: user };
+    } catch (error) {
+      if (error instanceof AuthError) {
+        res.status(error.statusCode);
+        return { ok: false, error: error.message };
+      }
+      throw error;
+    }
+  }
+
+  @Public()
+  @Post("set-password")
+  @HttpCode(HttpStatus.OK)
+  async setPassword(
+    @Body() body: unknown,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const input = setPasswordSchema.safeParse(body);
+    if (!input.success) {
+      return { ok: false, error: "Invalid set-password details." };
+    }
+    try {
+      const user = await this.authService.setPassword(input.data, res);
       return { ok: true, data: user };
     } catch (error) {
       if (error instanceof AuthError) {

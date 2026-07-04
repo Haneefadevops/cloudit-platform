@@ -2,6 +2,8 @@ export interface ProductModuleDefinition {
   key: string;
   label: string;
   description: string;
+  clientOnly?: boolean;
+  clientOrgIds?: string[];
 }
 
 export interface ProductDefinition {

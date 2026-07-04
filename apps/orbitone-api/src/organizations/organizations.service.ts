@@ -1,5 +1,7 @@
 import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { randomBytes } from "node:crypto";
+import axios from "axios";
 import bcrypt from "bcryptjs";
 import { DatabaseService } from "../database/database.service";
 import { SlugService } from "../common/lib/slug.service";
@@ -19,6 +21,7 @@ export class OrganizationsService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly slugService: SlugService,
+    private readonly configService: ConfigService,
   ) {}
 
   async createOrganization(
@@ -300,7 +303,10 @@ export class OrganizationsService {
       await client.query("BEGIN");
 
       const inviteResult = await client.query(
-        "SELECT * FROM organization_invites WHERE token = $1 AND expires_at > now()",
+        `SELECT i.*, o.platform_org_id
+         FROM organization_invites i
+         JOIN organizations o ON o.id = i.organization_id
+         WHERE i.token = $1 AND i.expires_at > now()`,
         [token],
       );
       if (inviteResult.rowCount === 0) {
@@ -309,10 +315,15 @@ export class OrganizationsService {
       const invite = inviteResult.rows[0];
 
       const existingUser = await client.query(
-        "SELECT id FROM users WHERE email = $1",
+        "SELECT id, organization_id FROM users WHERE email = $1",
         [invite.email],
       );
-      if (existingUser.rowCount !== 0) {
+      const existing = existingUser.rows[0];
+      const isPlatformProvisionedUser =
+        existing &&
+        existing.organization_id === invite.organization_id &&
+        invite.source === "platform";
+      if (existing && !isPlatformProvisionedUser) {
         throw new OrganizationError(
           "An account with this email already exists.",
           409,
@@ -323,17 +334,46 @@ export class OrganizationsService {
       const name = fullName || (invite.email as string);
       const slug = await this.slugService.makeUniqueProfileSlug(name);
 
-      const userResult = await client.query(
-        `INSERT INTO users (email, password_hash, full_name, role, organization_id, plan)
-         VALUES ($1, $2, $3, $4, $5, 'pro_business_starter')
-         RETURNING *`,
-        [invite.email, passwordHash, name, invite.role, invite.organization_id],
-      );
+      const userResult = isPlatformProvisionedUser
+        ? await client.query(
+            `UPDATE users
+             SET password_hash = $1,
+                 full_name = $2,
+                 role = $3,
+                 organization_id = $4,
+                 plan = 'pro_business_starter',
+                 updated_at = now()
+             WHERE id = $5
+             RETURNING *`,
+            [
+              passwordHash,
+              name,
+              invite.role,
+              invite.organization_id,
+              existing.id,
+            ],
+          )
+        : await client.query(
+            `INSERT INTO users (email, password_hash, full_name, role, organization_id, plan)
+             VALUES ($1, $2, $3, $4, $5, 'pro_business_starter')
+             RETURNING *`,
+            [
+              invite.email,
+              passwordHash,
+              name,
+              invite.role,
+              invite.organization_id,
+            ],
+          );
       const user = mapUser(userResult.rows[0]);
 
       await client.query(
         `INSERT INTO profiles (user_id, slug, full_name, email, type, is_published)
-         VALUES ($1, $2, $3, $4, 'staff', false)`,
+         VALUES ($1, $2, $3, $4, 'staff', false)
+         ON CONFLICT (user_id)
+         DO UPDATE SET full_name = EXCLUDED.full_name,
+                       email = EXCLUDED.email,
+                       updated_at = now()`,
         [user.id, slug, name, invite.email],
       );
 
@@ -342,6 +382,12 @@ export class OrganizationsService {
       ]);
 
       await client.query("COMMIT");
+      await this.notifyPlatformInviteAccepted({
+        platformOrgId: invite.platform_org_id,
+        tenantId: invite.organization_id,
+        userId: user.id,
+        email: user.email,
+      });
       return user;
     } catch (error) {
       await client.query("ROLLBACK");
@@ -362,6 +408,37 @@ export class OrganizationsService {
       expiresAt: (row.expires_at as Date).toISOString(),
       createdAt: (row.created_at as Date).toISOString(),
     };
+  }
+
+  private async notifyPlatformInviteAccepted(input: {
+    platformOrgId?: string;
+    tenantId: string;
+    userId: string;
+    email: string;
+  }): Promise<void> {
+    const platformApiUrl = this.configService.get<string>("PLATFORM_API_URL");
+    const internalToken = this.configService.get<string>("INTERNAL_API_TOKEN");
+    if (!platformApiUrl || !internalToken || !input.platformOrgId) return;
+
+    await axios
+      .post(
+        `${platformApiUrl.replace(/\/$/, "")}/onboarding/internal/invite-accepted`,
+        {
+          platformOrgId: input.platformOrgId,
+          product: "orbitone",
+          tenantId: input.tenantId,
+          userId: input.userId,
+          email: input.email,
+        },
+        {
+          headers: {
+            "x-internal-token": internalToken,
+            Authorization: `Bearer ${internalToken}`,
+          },
+          timeout: 10000,
+        },
+      )
+      .catch(() => undefined);
   }
 }
 

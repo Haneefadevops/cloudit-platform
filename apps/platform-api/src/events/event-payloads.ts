@@ -70,6 +70,26 @@ export interface UserLoginPayload {
   timestamp: string;
 }
 
+export interface OrganizationCreatedPayload {
+  organizationId: string;
+  organizationName: string;
+  product: string;
+}
+
+export interface InviteSentPayload {
+  organizationId: string;
+  product: string;
+  email: string;
+}
+
+export interface InviteAcceptedPayload {
+  organizationId: string;
+  product: string;
+  email?: string;
+  tenantId?: string;
+  userId?: string;
+}
+
 export type EventPayload =
   | BookingCreatedPayload
   | BookingUpdatedPayload
@@ -78,4 +98,7 @@ export type EventPayload =
   | BookingCheckedOutPayload
   | InvoiceGeneratedPayload
   | UserCreatedPayload
-  | UserLoginPayload;
+  | UserLoginPayload
+  | OrganizationCreatedPayload
+  | InviteSentPayload
+  | InviteAcceptedPayload;

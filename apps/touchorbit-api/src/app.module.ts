@@ -34,6 +34,7 @@ import { DashboardModule } from "./dashboard/dashboard.module";
 import { MeModule } from "./me/me.module";
 import { KioskModule } from "./kiosk/kiosk.module";
 import { PerformanceModule } from "./performance/performance.module";
+import { InternalModule } from "./internal/internal.module";
 import { SessionAuthGuard } from "./common/guards/session-auth.guard";
 import { ModuleGuard } from "./common/guards/module.guard";
 import { RequestLoggingInterceptor } from "./common/interceptors/request-logging.interceptor";
@@ -97,6 +98,7 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
     MeModule,
     KioskModule,
     PerformanceModule,
+    InternalModule,
   ],
   controllers: [AppController],
   providers: [
