@@ -451,11 +451,15 @@ export class OnboardingService {
 
   private getErrorMessage(error: unknown): string {
     if (axios.isAxiosError(error)) {
-      return (
-        (error.response?.data as { message?: string; error?: string })?.message ||
-        (error.response?.data as { message?: string; error?: string })?.error ||
-        error.message
-      );
+      const data = error.response?.data as Record<string, unknown> | undefined;
+      const msg =
+        (typeof data?.message === 'string' && data.message) ||
+        (typeof (data?.error as Record<string, unknown>)?.message === 'string'
+          ? ((data?.error as Record<string, unknown>).message as string)
+          : undefined) ||
+        (typeof data?.error === 'string' && data.error) ||
+        error.message;
+      return msg || 'Product provisioning failed';
     }
     return error instanceof Error ? error.message : 'Unknown provisioning error';
   }
