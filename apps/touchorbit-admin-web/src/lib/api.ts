@@ -37,7 +37,8 @@ async function apiCall<T>(method: string, path: string, body?: unknown): Promise
         const alreadyAuthPage =
           pathname.startsWith('/login') ||
           pathname.startsWith('/signup') ||
-          pathname.startsWith('/reset-password')
+          pathname.startsWith('/reset-password') ||
+          pathname.startsWith('/set-password')
         if (!alreadyAuthPage) {
           window.location.href = '/login'
         }

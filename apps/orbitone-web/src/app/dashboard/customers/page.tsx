@@ -16,8 +16,11 @@ import {
   useDefaultPipeline,
   useBulkAction,
   useImportCustomers,
+  useCustomFields,
   type CustomerFilters,
 } from "@/hooks/useCRM";
+import { CustomFieldInputs } from "@/components/crm/custom-field-inputs";
+import type { CustomFieldValue } from "@/lib/contracts";
 import type { Customer, LifecycleStage, Priority, CustomerImportRow } from "@/lib/contracts";
 import { Search, Plus, Zap, SlidersHorizontal, Kanban, Trash2, Download, Upload, Copy, Users } from "lucide-react";
 
@@ -53,7 +56,9 @@ export default function CustomersPage() {
   const [open, setOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [filters, setFilters] = useState<CustomerFilters>({});
+  const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValue[]>([]);
   const { data = [], isLoading, error } = useCustomers(filters);
+  const { data: customFieldDefinitions = [] } = useCustomFields();
   const { data: pipeline } = useDefaultPipeline();
   const create = useCreateCustomer();
   const bulkAction = useBulkAction();
@@ -73,9 +78,11 @@ export default function CustomersPage() {
       lifecycleStage: (fd.get("lifecycleStage") as LifecycleStage) || "new",
       priority: (fd.get("priority") as Priority) || "medium",
       source: "manual",
+      customFieldValues,
     });
     setOpen(false);
     form.reset();
+    setCustomFieldValues([]);
   };
 
   return (
@@ -165,6 +172,13 @@ export default function CustomersPage() {
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea id="notes" name="notes" />
               </div>
+              {customFieldDefinitions.length > 0 && (
+                <CustomFieldInputs
+                  definitions={customFieldDefinitions}
+                  values={customFieldValues}
+                  onChange={setCustomFieldValues}
+                />
+              )}
               <Button type="submit" className="w-full" disabled={create.isPending}>
                 {create.isPending ? "Saving..." : "Save customer"}
               </Button>

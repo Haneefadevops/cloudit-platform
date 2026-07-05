@@ -18,6 +18,7 @@ import {
   Puzzle,
   ChevronLeft,
   ChevronRight,
+  Rocket,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -27,6 +28,7 @@ interface SidebarProps {
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/onboarding", label: "Onboarding", icon: Rocket },
   { href: "/dashboard/users", label: "Users", icon: Users },
   { href: "/dashboard/organizations", label: "Organizations", icon: Building2 },
   { href: "/dashboard/events", label: "Event Logs", icon: Activity },

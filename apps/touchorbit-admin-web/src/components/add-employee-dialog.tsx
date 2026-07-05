@@ -3,9 +3,12 @@
 import { useEffect, useState } from 'react'
 import { RefreshCcw, X } from 'lucide-react'
 import { useCreateEmployee } from '@/hooks/use-employees'
+import { useCustomFields } from '@/hooks/useOrganizationConfig'
 import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth'
+import { CustomFieldInputs } from './custom-fields/custom-field-inputs'
+import type { CustomFieldValue } from '@/hooks/useOrganizationConfig'
 
 interface AddEmployeeDialogProps {
   open: boolean
@@ -36,6 +39,8 @@ export function AddEmployeeDialog({ open, onClose }: AddEmployeeDialogProps) {
     hire_date: new Date().toISOString().split('T')[0],
     basic_salary: '',
   })
+  const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValue[]>([])
+  const { data: customFieldDefinitions = [] } = useCustomFields('employee')
 
   useEffect(() => {
     if (open && organizationId) {
@@ -84,6 +89,7 @@ export function AddEmployeeDialog({ open, onClose }: AddEmployeeDialogProps) {
       branch_id: formData.branch_id || undefined,
       hire_date: formData.hire_date || undefined,
       basic_salary: formData.basic_salary ? parseFloat(formData.basic_salary) : undefined,
+      custom_field_values: customFieldValues,
     })
 
     if (enableAppAccess) {
@@ -115,6 +121,7 @@ export function AddEmployeeDialog({ open, onClose }: AddEmployeeDialogProps) {
     setSelectedGroupIds([])
     setScopeType('organization')
     setScopeId('')
+    setCustomFieldValues([])
     onClose()
   }
 
@@ -376,6 +383,17 @@ export function AddEmployeeDialog({ open, onClose }: AddEmployeeDialogProps) {
                 </div>
               )}
             </div>
+
+            {customFieldDefinitions.length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-gray-900">Custom Fields</h3>
+                <CustomFieldInputs
+                  definitions={customFieldDefinitions}
+                  values={customFieldValues}
+                  onChange={setCustomFieldValues}
+                />
+              </div>
+            )}
 
             {/* Footer */}
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">

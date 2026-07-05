@@ -48,6 +48,7 @@ export interface CreateEmployeeData {
   branch_id?: string
   hire_date?: string
   basic_salary?: number
+  custom_field_values?: { fieldKey: string; value: unknown }[]
 }
 
 function normalizeEmployee(row: any): Employee {

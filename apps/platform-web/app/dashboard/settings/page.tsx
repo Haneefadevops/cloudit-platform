@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, handleApiError } from "@/lib/api-client";
 import { useAuth } from "@/hooks/use-auth";
+import { WhiteLabelForm } from "@/components/settings/white-label-form";
 
 const orgSettingsSchema = z.object({
   name: z.string().min(1, "Organization name is required"),
@@ -57,6 +58,7 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="organization">Organization</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
+          <TabsTrigger value="white-label">White-Label</TabsTrigger>
         </TabsList>
 
         <TabsContent value="organization">
@@ -123,6 +125,10 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="white-label">
+          <WhiteLabelForm orgId={organization?.id || ""} />
         </TabsContent>
       </Tabs>
     </div>

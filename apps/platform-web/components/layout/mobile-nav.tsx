@@ -12,6 +12,7 @@ import {
   Settings,
   FileText,
   X,
+  Rocket,
 } from "lucide-react";
 
 interface MobileNavProps {
@@ -21,6 +22,7 @@ interface MobileNavProps {
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/onboarding", label: "Onboarding", icon: Rocket },
   { href: "/dashboard/users", label: "Users", icon: Users },
   { href: "/dashboard/organizations", label: "Organizations", icon: Building2 },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
