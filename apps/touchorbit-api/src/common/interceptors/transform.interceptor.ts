@@ -8,6 +8,15 @@ import { Observable } from "rxjs";
 import { map } from "rxjs/operators";
 import { Request } from "express";
 
+function isEnvelope(data: unknown): data is { ok: boolean } {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "ok" in data &&
+    typeof (data as { ok: unknown }).ok === "boolean"
+  );
+}
+
 @Injectable()
 export class TransformInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
@@ -20,10 +29,17 @@ export class TransformInterceptor implements NestInterceptor {
     }
 
     return next.handle().pipe(
-      map((data) => ({
-        success: true,
-        data,
-      })),
+      map((data) => {
+        // Controllers that already return { ok, data } or { ok, error }
+        // should not be double-wrapped.
+        if (isEnvelope(data)) {
+          return data;
+        }
+        return {
+          success: true,
+          data,
+        };
+      }),
     );
   }
 }

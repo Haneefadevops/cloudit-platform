@@ -98,6 +98,7 @@ export class InternalProvisioningService {
 
   private setPasswordUrl(token: string): string {
     const base =
+      this.configService.get<string>("TOUCHORBIT_ADMIN_WEB_URL") ||
       this.configService.get<string>("TOUCHORBIT_WEB_URL") ||
       this.configService.get<string>("FRONTEND_ORIGIN") ||
       "http://localhost:3000";
