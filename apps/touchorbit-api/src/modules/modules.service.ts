@@ -27,11 +27,22 @@ export class ProductModulesService {
   ): Promise<boolean> {
     const modules = await this.fetchModules(orgId);
     const productEntry = modules.find((p: CachedProduct) => p.key === product);
-    if (!productEntry) return false;
+    if (!productEntry) {
+      // Platform returned no product entry (unreachable / unconfigured).
+      // Allow access rather than locking the tenant out.
+      return true;
+    }
     const moduleEntry = productEntry.modules.find(
       (m: { key: string; enabled: boolean }) => m.key === moduleKey,
     );
-    return moduleEntry?.enabled ?? false;
+    if (!moduleEntry) return true;
+
+    // If none of the product's modules are enabled, the tenant was likely
+    // never explicitly configured. Default to allowing all modules.
+    const anyEnabled = productEntry.modules.some((m) => m.enabled);
+    if (!anyEnabled) return true;
+
+    return moduleEntry.enabled;
   }
 
   private async fetchModules(orgId: string): Promise<CachedProduct[]> {
