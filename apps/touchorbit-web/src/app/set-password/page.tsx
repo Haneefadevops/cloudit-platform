@@ -44,7 +44,7 @@ function SetPasswordForm() {
         setStatus("success");
         setMessage("Password set successfully. Redirecting...");
         setTimeout(() => {
-          window.location.href = "/";
+          window.location.href = "/dashboard";
         }, 1500);
       } else {
         setStatus("error");

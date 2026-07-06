@@ -1,3 +1,4 @@
+"use client";
 export { cn } from "./lib/utils.js";
 
 export { Button, buttonVariants } from "./components/button.js";
