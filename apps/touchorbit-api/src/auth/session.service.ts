@@ -28,6 +28,10 @@ export class SessionService {
     return this.configService.get<string>("NODE_ENV") === "production";
   }
 
+  private get cookieDomain(): string | undefined {
+    return this.configService.get<string>("SESSION_COOKIE_DOMAIN") || undefined;
+  }
+
   private sessionKey(sid: string): string {
     return `touchorbit:session:${sid}`;
   }
@@ -65,6 +69,7 @@ export class SessionService {
       secure: this.isProduction(),
       maxAge: SESSION_TTL_SECONDS * 1000,
       path: "/",
+      domain: this.cookieDomain,
     });
   }
 
@@ -74,6 +79,7 @@ export class SessionService {
       sameSite: "lax",
       secure: this.isProduction(),
       path: "/",
+      domain: this.cookieDomain,
     });
   }
 

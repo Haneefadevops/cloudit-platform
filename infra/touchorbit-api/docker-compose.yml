@@ -20,6 +20,7 @@ services:
       - TOUCHORBIT_ADMIN_WEB_URL=https://to-admin.${DOMAIN:-cloudit.lk}
       - TOUCHORBIT_EMPLOYEE_WEB_URL=https://to-employee.${DOMAIN:-cloudit.lk}
       - TOUCHORBIT_KIOSK_URL=https://to-kiosk.${DOMAIN:-cloudit.lk}
+      - SESSION_COOKIE_DOMAIN=${DOMAIN:-cloudit.lk}
     networks:
       - cloudit
     labels:
