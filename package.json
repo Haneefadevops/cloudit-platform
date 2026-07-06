@@ -7,15 +7,20 @@
     "build": "npm run build --workspaces",
     "dev": "npm run dev --workspaces",
     "lint": "npm run lint --workspaces",
-    "clean": "rm -rf node_modules apps/**/node_modules packages/**/node_modules apps/**/dist packages/**/dist apps/**/.next"
+    "clean": "rm -rf node_modules apps/**/node_modules packages/**/node_modules apps/**/dist packages/**/dist apps/**/.next",
+    "e2e:install": "npx playwright install chromium",
+    "e2e:test": "cd e2e && npx playwright test",
+    "e2e:report": "cd e2e && npx playwright show-report"
   },
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "dotenv": "16.4.5",
     "typescript": "^5.4.5"
   },
   "engines": {

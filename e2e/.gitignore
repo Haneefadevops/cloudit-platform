@@ -1,0 +1,6 @@
+# Playwright E2E secrets and artifacts
+.env
+.auth/
+test-results/
+playwright-report/
+playwright/.cache/
