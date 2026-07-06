@@ -1,0 +1,5 @@
+# Keep shell scripts and CI workflow files with LF line endings so they run
+# correctly on the Ubuntu server even when checked out on Windows.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
