@@ -66,7 +66,8 @@ jobs:
           ssh "${SERVER_USER}@${SERVER_IP}" "DOMAIN='${DOMAIN}' bash -s" <<'REMOTE'
             set -euo pipefail
             cd /opt/cloudit/cloudit-platform
-            ./infra/scripts/health-check.sh
+            chmod +x infra/scripts/*.sh
+            bash infra/scripts/health-check.sh
           REMOTE
 
       - name: Rollback on failure
@@ -79,7 +80,8 @@ jobs:
           ssh "${SERVER_USER}@${SERVER_IP}" "DOMAIN='${DOMAIN}' bash -s" <<'REMOTE'
             set -euo pipefail
             cd /opt/cloudit/cloudit-platform
-            ./infra/scripts/rollback.sh
+            chmod +x infra/scripts/*.sh
+            bash infra/scripts/rollback.sh
           REMOTE
 
       - name: Notify deployment result
