@@ -34,11 +34,13 @@ let adminClient: SupabaseClient | null = null
 
 export function getSupabaseAdmin(): SupabaseClient {
   if (!adminClient) {
-    adminClient = isPlaceholder(url)
-      ? createStubClient()
-      : createClient(url!, serviceKey!, {
-          auth: { autoRefreshToken: false, persistSession: false },
-        })
+    adminClient = (
+      isPlaceholder(url)
+        ? createStubClient()
+        : createClient(url!, serviceKey!, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+    ) as SupabaseClient
   }
   return adminClient as SupabaseClient
 }

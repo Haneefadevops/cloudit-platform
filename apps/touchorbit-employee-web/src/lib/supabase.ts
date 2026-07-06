@@ -30,4 +30,6 @@ function createStubClient(): any {
   return proxy
 }
 
-export const supabase = isPlaceholder(url) ? createStubClient() : createBrowserClient(url!, key!)
+export const supabase = (
+  isPlaceholder(url) ? createStubClient() : createBrowserClient(url!, key!)
+) as ReturnType<typeof createBrowserClient>
