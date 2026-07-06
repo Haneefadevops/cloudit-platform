@@ -23,18 +23,24 @@ export class ModulesService {
     if (!org) throw new NotFoundException('Organization not found');
 
     const enabledRows = await this.prisma.organizationProductModule.findMany({
-      where: { orgId, enabled: true },
+      where: { orgId },
     });
 
+    // If the organization has never had modules configured, default to enabling
+    // every valid module so the product is usable immediately.
+    const hasAnyConfig = enabledRows.length > 0;
+
     const enabledSet = new Set(
-      enabledRows.map((r) => `${r.product}:${r.moduleKey}`),
+      enabledRows.filter((r) => r.enabled).map((r) => `${r.product}:${r.moduleKey}`),
     );
 
     return getProductRegistry().map((product) => ({
       ...product,
       modules: product.modules.map((module) => ({
         ...module,
-        enabled: enabledSet.has(`${product.key}:${module.key}`),
+        enabled: hasAnyConfig
+          ? enabledSet.has(`${product.key}:${module.key}`)
+          : true,
       })),
     }));
   }
