@@ -15,7 +15,17 @@ export class DashboardService {
          (SELECT COUNT(*)::int FROM employees WHERE organization_id = $1::uuid AND COALESCE(employment_status, 'active') = 'active' AND termination_date IS NULL) AS active_employees,
          (SELECT COUNT(*)::int FROM employees WHERE organization_id = $1::uuid AND created_at >= now() - INTERVAL '30 days') AS new_hires_30d,
          (SELECT COUNT(*)::int FROM leave_records WHERE organization_id = $1::uuid AND status IN ('pending', 'awaiting_level1', 'awaiting_level2', 'awaiting_level3')) AS pending_leave,
-         (SELECT COUNT(*)::int FROM overtime_records WHERE organization_id = $1::uuid AND status IN ('pending', 'awaiting_level1', 'awaiting_level2', 'awaiting_level3')) AS pending_overtime`,
+         (SELECT COUNT(*)::int FROM overtime_records WHERE organization_id = $1::uuid AND status IN ('pending', 'awaiting_level1', 'awaiting_level2', 'awaiting_level3')) AS pending_overtime,
+         (SELECT COUNT(*)::int FROM comp_off_records WHERE organization_id = $1::uuid AND status = 'pending') AS pending_comp_off,
+         (SELECT COUNT(*)::int FROM leave_encashment_requests WHERE organization_id = $1::uuid AND status = 'pending') AS pending_encashment_count,
+         (SELECT COALESCE(SUM(amount), 0)::numeric FROM leave_encashment_requests WHERE organization_id = $1::uuid AND status = 'pending') AS pending_encashment_amount,
+         (SELECT COUNT(*)::int FROM performance_review_cycles WHERE organization_id = $1::uuid AND status = 'active') AS active_performance_cycles,
+         (SELECT COUNT(*)::int FROM performance_reviews WHERE organization_id = $1::uuid AND status = 'pending_self') AS pending_performance_self,
+         (SELECT COUNT(*)::int FROM performance_reviews WHERE organization_id = $1::uuid AND status = 'pending_manager') AS pending_performance_manager,
+         (SELECT COUNT(*)::int FROM training_assignments WHERE organization_id = $1::uuid AND status = 'assigned') AS training_assigned,
+         (SELECT COUNT(*)::int FROM training_assignments WHERE organization_id = $1::uuid AND status = 'in_progress') AS training_in_progress,
+         (SELECT COUNT(*)::int FROM training_assignments WHERE organization_id = $1::uuid AND status = 'completed') AS training_completed,
+         (SELECT COUNT(*)::int FROM training_assignments WHERE organization_id = $1::uuid AND reschedule_requested = true AND status NOT IN ('cancelled')) AS training_reschedule_requests`,
       [organizationId],
     );
 
@@ -46,6 +56,15 @@ export class DashboardService {
       [organizationId],
     );
 
+    const announcementsResult = await this.databaseService.query(
+      `SELECT id, title, priority, created_at
+       FROM announcements
+       WHERE organization_id = $1::uuid
+       ORDER BY created_at DESC
+       LIMIT 3`,
+      [organizationId],
+    );
+
     const row = result.rows[0] ?? {};
     const today = todayResult.rows[0] ?? {};
     return {
@@ -64,6 +83,22 @@ export class DashboardService {
                 100,
             )
           : 0,
+      pendingCompOff: Number(row.pending_comp_off ?? 0),
+      pendingEncashmentCount: Number(row.pending_encashment_count ?? 0),
+      pendingEncashmentAmount: Number(row.pending_encashment_amount ?? 0),
+      activePerformanceCycles: Number(row.active_performance_cycles ?? 0),
+      pendingPerformanceSelf: Number(row.pending_performance_self ?? 0),
+      pendingPerformanceManager: Number(row.pending_performance_manager ?? 0),
+      trainingAssigned: Number(row.training_assigned ?? 0),
+      trainingInProgress: Number(row.training_in_progress ?? 0),
+      trainingCompleted: Number(row.training_completed ?? 0),
+      trainingRescheduleRequests: Number(row.training_reschedule_requests ?? 0),
+      latestAnnouncements: announcementsResult.rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        priority: r.priority,
+        created_at: r.created_at,
+      })),
     };
   }
 

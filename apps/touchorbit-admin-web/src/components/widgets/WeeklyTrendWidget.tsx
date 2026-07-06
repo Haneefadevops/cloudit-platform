@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useDashboard } from '@/lib/dashboard/dashboard-context'
 import { api } from '@/lib/api'
 import { WidgetShell } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
@@ -15,6 +15,7 @@ interface DayData {
 }
 
 export function WeeklyTrendWidget({ organizationId, editMode, onRemove }: WidgetProps) {
+  const { summary } = useDashboard()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [data, setData] = useState<{
@@ -29,14 +30,7 @@ export function WeeklyTrendWidget({ organizationId, editMode, onRemove }: Widget
     setLoading(true)
     setError(false)
     try {
-      // Get total active employees first for percentage calculation
-      const { count: totalActive } = await supabase
-        .from('employees')
-        .select('id', { count: 'exact', head: true })
-        .eq('organization_id', organizationId)
-        .eq('employment_status', 'active')
-      
-      const total = totalActive || 0
+      const total = summary.activeEmployees || 0
 
       const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
       const dayDates = Array.from({ length: 7 }, (_, i) => {
@@ -53,7 +47,6 @@ export function WeeklyTrendWidget({ organizationId, editMode, onRemove }: Widget
 
       const events = result.data || []
 
-      // Fetch unique absolute counts for sparkline and daily data
       const results = dayDates.map((day) => {
         const dayEvents = events.filter((e: any) => {
           const ts = e.timestamp as string
@@ -82,7 +75,7 @@ export function WeeklyTrendWidget({ organizationId, editMode, onRemove }: Widget
 
   useEffect(() => {
     if (organizationId) loadData()
-  }, [organizationId])
+  }, [organizationId, summary.activeEmployees])
 
   const average = data.days.length > 0
     ? Math.round(data.days.reduce((sum, day) => sum + day.pct, 0) / data.days.length)

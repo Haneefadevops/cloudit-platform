@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useDashboard } from '@/lib/dashboard/dashboard-context'
 import { WidgetShell } from './WidgetShell'
 import type { WidgetProps } from '@/lib/widgets/types'
 import { registerWidget } from '@/lib/widgets/registry'
@@ -10,44 +9,9 @@ import Link from 'next/link'
 import { useWidgetSize } from './WidgetShell'
 import { SoftBadge, WidgetEmpty, WidgetError, WidgetIcon } from './_shared/WidgetPrimitives'
 
-export function TrainingOverviewWidget({ organizationId, editMode, onRemove }: WidgetProps) {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-  const [data, setData] = useState({ assigned: 0, inProgress: 0, completed: 0, rescheduleRequests: 0 })
-
-  async function loadData() {
-    setLoading(true)
-    setError(false)
-    try {
-      const { data: rows } = await supabase
-        .from('training_assignments')
-        .select('status, reschedule_requested')
-        .eq('organization_id', organizationId)
-        .neq('status', 'cancelled')
-
-      if (rows) {
-        let assigned = 0, inProgress = 0, completed = 0, rescheduleRequests = 0
-        for (const r of rows) {
-          if (r.status === 'assigned') assigned++
-          else if (r.status === 'in_progress') inProgress++
-          else if (r.status === 'completed') completed++
-          if (r.reschedule_requested) rescheduleRequests++
-        }
-        setData({ assigned, inProgress, completed, rescheduleRequests })
-      }
-    } catch (e) {
-      console.error('Error loading training overview widget data:', e)
-      setError(true)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (organizationId) loadData()
-  }, [organizationId])
-
-  const total = data.assigned + data.inProgress + data.completed
+export function TrainingOverviewWidget({ editMode, onRemove }: WidgetProps) {
+  const { summary, loading, error, refresh } = useDashboard()
+  const total = summary.trainingAssigned + summary.trainingInProgress + summary.trainingCompleted
   const widgetSize = useWidgetSize()
 
   return (
@@ -58,10 +22,9 @@ export function TrainingOverviewWidget({ organizationId, editMode, onRemove }: W
       editMode={editMode}
       onRemove={onRemove}
       loading={loading}
-      onRefresh={loadData}
     >
       {error ? (
-        <WidgetError onRetry={loadData} />
+        <WidgetError onRetry={refresh} />
       ) : total === 0 ? (
         <WidgetEmpty icon={GraduationCap} label="No training assignments" />
       ) : (
@@ -72,8 +35,8 @@ export function TrainingOverviewWidget({ organizationId, editMode, onRemove }: W
               <span className="text-[11px] font-black text-[#9994A8] uppercase tracking-wider">Training Status</span>
             </div>
             <div className="flex items-center gap-2">
-              {data.rescheduleRequests > 0 && (
-                <SoftBadge tone="amber">{data.rescheduleRequests} Reschedule</SoftBadge>
+              {summary.trainingRescheduleRequests > 0 && (
+                <SoftBadge tone="amber">{summary.trainingRescheduleRequests} Reschedule</SoftBadge>
               )}
               <ArrowRight size={16} className="text-[#D1D5DB] group-hover:text-[#534AB7] group-hover:translate-x-1 transition-all" />
             </div>
@@ -85,7 +48,7 @@ export function TrainingOverviewWidget({ organizationId, editMode, onRemove }: W
                 <div className="w-2 h-2 rounded-full bg-blue-400" />
                 <span className="text-[12px] font-semibold text-[#6B6578]">Assigned</span>
               </div>
-              <span className="text-[13px] font-black text-[#1A1727]">{data.assigned}</span>
+              <span className="text-[13px] font-black text-[#1A1727]">{summary.trainingAssigned}</span>
             </div>
             {widgetSize !== 'xs' && (
               <>
@@ -94,14 +57,14 @@ export function TrainingOverviewWidget({ organizationId, editMode, onRemove }: W
                     <div className="w-2 h-2 rounded-full bg-amber-400" />
                     <span className="text-[12px] font-semibold text-[#6B6578]">In Progress</span>
                   </div>
-                  <span className="text-[13px] font-black text-[#1A1727]">{data.inProgress}</span>
+                  <span className="text-[13px] font-black text-[#1A1727]">{summary.trainingInProgress}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-green-400" />
                     <span className="text-[12px] font-semibold text-[#6B6578]">Completed</span>
                   </div>
-                  <span className="text-[13px] font-black text-[#1A1727]">{data.completed}</span>
+                  <span className="text-[13px] font-black text-[#1A1727]">{summary.trainingCompleted}</span>
                 </div>
               </>
             )}

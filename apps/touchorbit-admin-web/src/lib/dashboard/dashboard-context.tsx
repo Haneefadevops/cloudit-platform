@@ -12,6 +12,17 @@ export interface DashboardSummary {
   scheduledToday: number
   clockedInToday: number
   attendanceRateToday: number
+  pendingCompOff: number
+  pendingEncashmentCount: number
+  pendingEncashmentAmount: number
+  activePerformanceCycles: number
+  pendingPerformanceSelf: number
+  pendingPerformanceManager: number
+  trainingAssigned: number
+  trainingInProgress: number
+  trainingCompleted: number
+  trainingRescheduleRequests: number
+  latestAnnouncements: { id: string; title: string; priority: string; created_at: string }[]
 }
 
 export interface DashboardWidget {
@@ -73,6 +84,17 @@ const EMPTY_SUMMARY: DashboardSummary = {
   scheduledToday: 0,
   clockedInToday: 0,
   attendanceRateToday: 0,
+  pendingCompOff: 0,
+  pendingEncashmentCount: 0,
+  pendingEncashmentAmount: 0,
+  activePerformanceCycles: 0,
+  pendingPerformanceSelf: 0,
+  pendingPerformanceManager: 0,
+  trainingAssigned: 0,
+  trainingInProgress: 0,
+  trainingCompleted: 0,
+  trainingRescheduleRequests: 0,
+  latestAnnouncements: [],
 }
 
 const DashboardContext = createContext<DashboardData>({
