@@ -23,7 +23,10 @@ interface MeData {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/signup')
+  const isAuthPage =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
+    pathname.startsWith('/set-password')
 
   let me: MeData | null = null
 

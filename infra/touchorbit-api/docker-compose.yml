@@ -16,6 +16,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3006
+      - CORS_ORIGIN=https://touchorbit.${DOMAIN:-cloudit.lk},https://to-admin.${DOMAIN:-cloudit.lk},https://to-employee.${DOMAIN:-cloudit.lk},https://to-kiosk.${DOMAIN:-cloudit.lk},http://localhost:3007,http://localhost:3008,http://localhost:3009,http://localhost:3010
+      - TOUCHORBIT_ADMIN_WEB_URL=https://to-admin.${DOMAIN:-cloudit.lk}
+      - TOUCHORBIT_EMPLOYEE_WEB_URL=https://to-employee.${DOMAIN:-cloudit.lk}
+      - TOUCHORBIT_KIOSK_URL=https://to-kiosk.${DOMAIN:-cloudit.lk}
     networks:
       - cloudit
     labels:
