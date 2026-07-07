@@ -92,14 +92,15 @@ export class AuthController {
   async login(
     @Body() body: unknown,
     @Res({ passthrough: true }) res: Response,
+    @Req() req: Request,
   ) {
     const input = loginSchema.safeParse(body);
     if (!input.success) {
       return { ok: false, error: "Invalid login details." };
     }
     try {
-      const user = await this.authService.login(input.data, res);
-      return { ok: true, data: user };
+      const { token, user } = await this.authService.login(input.data, res, req);
+      return { ok: true, data: { token, user } };
     } catch (error) {
       if (error instanceof AuthError) {
         res.status(error.statusCode);

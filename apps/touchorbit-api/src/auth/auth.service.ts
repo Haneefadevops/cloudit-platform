@@ -96,7 +96,20 @@ export class AuthService {
     }
   }
 
-  async login(input: LoginInput, res: Response) {
+  async login(
+    input: LoginInput,
+    res: Response,
+    req: Request,
+  ): Promise<{
+    token: string;
+    user: {
+      id: string;
+      email: string;
+      fullName: string;
+      role: string;
+      organizationId: string;
+    };
+  }> {
     const result = await this.databaseService.query(
       `SELECT id, email, first_name, last_name, role, password_hash, organization_id, is_active
        FROM users
@@ -113,6 +126,14 @@ export class AuthService {
       throw new AuthError("Invalid email or password.", 401);
     }
 
+    // Remove any stale session cookies that could conflict with the new one.
+    // This is important when the cookie domain has changed between deployments.
+    const host = req.headers.host || "";
+    this.sessionService.clearSessionCookiesForDomains(res, [
+      this.sessionService.cookieDomain,
+      host,
+    ]);
+
     const sessionToken = await this.sessionService.signSession({
       id: row.id,
       email: row.email,
@@ -126,11 +147,14 @@ export class AuthService {
     }
 
     return {
-      id: row.id,
-      email: row.email,
-      fullName: `${row.first_name} ${row.last_name}`.trim(),
-      role: row.role,
-      organizationId: row.organization_id,
+      token: sessionToken,
+      user: {
+        id: row.id,
+        email: row.email,
+        fullName: `${row.first_name} ${row.last_name}`.trim(),
+        role: row.role,
+        organizationId: row.organization_id,
+      },
     };
   }
 

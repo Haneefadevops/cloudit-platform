@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { Users, TrendingUp, Shield, Eye, EyeOff, Mail, Lock } from 'lucide-react'
@@ -36,11 +35,22 @@ export default function LoginPage() {
     }
     setIsLoading(true)
     try {
-      const result = await api.post('/auth/login', { email, password })
-      if (!result.ok) {
-        toast.error(result.error || 'Failed to sign in')
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const loginBody = (await loginRes.json()) as {
+        ok: boolean
+        data?: MeData
+        error?: string
+      }
+
+      if (!loginRes.ok || !loginBody.ok) {
+        toast.error(loginBody.error || 'Failed to sign in')
         return
       }
+
       if (rememberMe) {
         localStorage.setItem('touchorbit_remember_me', 'true')
       } else {
@@ -53,15 +63,24 @@ export default function LoginPage() {
         if (waitMs > 0) {
           await delay(waitMs)
         }
-        const me = await api.get<MeData>('/auth/me')
-        if (me.ok && me.data) {
+        const meRes = await fetch('/api/auth/me', {
+          credentials: 'include',
+        })
+        const meBody = (await meRes.json()) as {
+          ok: boolean
+          data?: MeData
+          error?: string
+        }
+        if (meRes.ok && meBody.ok && meBody.data) {
           sessionReady = true
           break
         }
       }
 
       if (!sessionReady) {
-        toast.error('Signed in, but your session was not ready. Please try again.')
+        toast.error(
+          'Signed in, but your session cookie was not saved. Try clearing cookies for cloudit.lk and try again.',
+        )
         return
       }
 

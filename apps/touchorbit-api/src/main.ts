@@ -8,14 +8,40 @@ import { AppModule } from "./app.module";
 import { JsonLogger } from "./common/logger/json.logger";
 import { XssSanitizationPipe } from "./common/pipes/xss-sanitization.pipe";
 
+const DEFAULT_CORS_ORIGINS = [
+  "https://touchorbit.cloudit.lk",
+  "https://to-admin.cloudit.lk",
+  "https://to-employee.cloudit.lk",
+  "https://to-kiosk.cloudit.lk",
+  "https://api-touchorbit.cloudit.lk",
+  "http://localhost:3007",
+  "http://localhost:3008",
+  "http://localhost:3009",
+  "http://localhost:3010",
+];
+
 function buildCorsOrigin(raw?: string): CorsOptions["origin"] {
-  if (!raw || raw === "*") {
-    return true;
+  let whitelist: string[];
+  const rawValue = raw?.trim();
+
+  if (!rawValue || rawValue === "*" || rawValue.includes("${")) {
+    if (rawValue === "*") {
+      console.warn(
+        "CORS_ORIGIN is '*'. When credentials are enabled this is not allowed. Falling back to default whitelist.",
+      );
+    } else if (rawValue?.includes("${")) {
+      console.warn(
+        `CORS_ORIGIN contains unexpanded variable: ${rawValue}. Falling back to default whitelist.`,
+      );
+    }
+    whitelist = DEFAULT_CORS_ORIGINS;
+  } else {
+    whitelist = rawValue
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean);
   }
-  const whitelist = raw
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean);
+
   return (
     requestOrigin: string | undefined,
     callback: (err: Error | null, allow?: boolean) => void,

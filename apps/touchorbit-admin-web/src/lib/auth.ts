@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { api } from './api'
 
 interface MeData {
   id: string
@@ -54,14 +53,27 @@ export function useAuth(): AuthState {
     let mounted = true
 
     async function fetchMe() {
-      const result = await api.get<MeData>('/auth/me')
-      if (!mounted) return
-      if (result.ok && result.data) {
-        setProfile(result.data)
-      } else {
+      try {
+        const res = await fetch('/api/auth/me', {
+          credentials: 'include',
+        })
+        const body = (await res.json()) as {
+          ok: boolean
+          data?: MeData
+          error?: string
+        }
+        if (!mounted) return
+        if (res.ok && body.ok && body.data) {
+          setProfile(body.data)
+        } else {
+          setProfile(null)
+        }
+      } catch {
+        if (!mounted) return
         setProfile(null)
+      } finally {
+        if (mounted) setIsLoaded(true)
       }
-      setIsLoaded(true)
     }
 
     fetchMe()
@@ -111,7 +123,16 @@ export function useAuth(): AuthState {
     userProfile,
     userRole: role,
     signOut: async () => {
-      await api.post('/auth/logout', {})
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+      } catch {
+        // ignore
+      }
       window.location.href = '/login'
     },
   }

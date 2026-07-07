@@ -28,14 +28,24 @@ export class SessionService {
     return this.configService.get<string>("NODE_ENV") === "production";
   }
 
-  private get cookieDomain(): string | undefined {
-    const configuredDomain = this.configService
-      .get<string>("SESSION_COOKIE_DOMAIN")
-      ?.trim();
+  get cookieDomain(): string | undefined {
+    const raw = this.configService.get<string>("SESSION_COOKIE_DOMAIN")?.trim();
+    let configuredDomain = raw;
+
+    // Guard against unexpanded shell variable syntax like ${DOMAIN:-cloudit.lk}
+    // which dotenv / Node will not expand.
+    if (configuredDomain && configuredDomain.includes("${")) {
+      this.logger.error(
+        `SESSION_COOKIE_DOMAIN contains unexpanded variable: ${configuredDomain}. Falling back to .cloudit.lk`,
+      );
+      configuredDomain = undefined;
+    }
+
     if (configuredDomain) {
-      return configuredDomain.startsWith(".")
+      const domain = configuredDomain.startsWith(".")
         ? configuredDomain
         : `.${configuredDomain}`;
+      return domain;
     }
     return this.isProduction() ? ".cloudit.lk" : undefined;
   }
@@ -105,6 +115,22 @@ export class SessionService {
       path: "/",
       domain: this.cookieDomain,
     });
+  }
+
+  clearSessionCookiesForDomains(
+    res: Response,
+    domains: (string | undefined)[],
+  ): void {
+    for (const domain of domains) {
+      if (!domain) continue;
+      res.clearCookie(authCookieName, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: this.isProduction(),
+        path: "/",
+        domain,
+      });
+    }
   }
 
   async revokeSessionByCookie(req: Request, res: Response): Promise<void> {
