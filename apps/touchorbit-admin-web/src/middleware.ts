@@ -21,10 +21,6 @@ interface MeData {
   organizationId: string
 }
 
-async function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 async function fetchMe(cookie: string): Promise<{ me: MeData | null; status: number | null }> {
   if (!API_URL) {
     return { me: null, status: null }
@@ -55,24 +51,24 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/set-password')
 
   let me: MeData | null = null
+  let lastStatus: number | null = null
 
   if (API_URL) {
     try {
       const cookie = request.headers.get('cookie') || ''
-      const firstCheck = await fetchMe(cookie)
-      me = firstCheck.me
-
-      if (!me && (firstCheck.status === 401 || firstCheck.status === 403)) {
-        await delay(200)
-        const secondCheck = await fetchMe(cookie)
-        me = secondCheck.me
-      }
+      const check = await fetchMe(cookie)
+      me = check.me
+      lastStatus = check.status
     } catch (error) {
       console.error('Auth middleware check failed:', error)
     }
   }
 
-  if (!me && !isAuthPage) {
+  // Rate-limiting is transient; do not redirect to login because that creates
+  // a redirect loop and shows the misleading "session cookie not saved" toast.
+  const isRateLimited = lastStatus === 429
+
+  if (!me && !isAuthPage && !isRateLimited) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 

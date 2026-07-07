@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import { useState } from 'react'
+import { AuthProvider } from '@/components/auth-provider'
 import { WhiteLabelInjector } from '@/components/brand/white-label-injector'
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -20,16 +21,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <WhiteLabelInjector />
-      {children}
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          className: 'font-sans',
-          duration: 4000,
-        }}
-        richColors
-      />
+      <AuthProvider>
+        <WhiteLabelInjector />
+        {children}
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            className: 'font-sans',
+            duration: 4000,
+          }}
+          richColors
+        />
+      </AuthProvider>
     </QueryClientProvider>
   )
 }

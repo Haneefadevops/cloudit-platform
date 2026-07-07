@@ -18,6 +18,23 @@ async function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+async function checkSession(): Promise<
+  { ok: true; data: MeData } | { ok: false; status: number | null }
+> {
+  const res = await fetch('/api/auth/me', {
+    credentials: 'include',
+  })
+  const body = (await res.json()) as {
+    ok: boolean
+    data?: MeData
+    error?: string
+  }
+  if (res.ok && body.ok && body.data) {
+    return { ok: true, data: body.data }
+  }
+  return { ok: false, status: res.status }
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -58,29 +75,43 @@ export default function LoginPage() {
         sessionStorage.setItem('touchorbit_session_active', 'true')
       }
 
+      // Verify the session cookie is accepted by the API with backoff.
+      // 429 = rate limited: keep retrying. 401/403 = cookie issue: fail fast.
       let sessionReady = false
-      for (const waitMs of [0, 150, 300]) {
-        if (waitMs > 0) {
-          await delay(waitMs)
-        }
-        const meRes = await fetch('/api/auth/me', {
-          credentials: 'include',
-        })
-        const meBody = (await meRes.json()) as {
-          ok: boolean
-          data?: MeData
-          error?: string
-        }
-        if (meRes.ok && meBody.ok && meBody.data) {
+      let lastStatus: number | null = null
+      let waitMs = 250
+      const maxWaitMs = 5000
+      const startTime = Date.now()
+
+      while (Date.now() - startTime < maxWaitMs) {
+        const result = await checkSession()
+        if (result.ok) {
           sessionReady = true
           break
         }
+
+        lastStatus = result.status
+
+        if (result.status === 401 || result.status === 403) {
+          // Cookie was not accepted; no point retrying.
+          break
+        }
+
+        // 429 or transient error: wait and retry with exponential backoff.
+        await delay(waitMs)
+        waitMs = Math.min(waitMs * 2, 1500)
       }
 
       if (!sessionReady) {
-        toast.error(
-          'Signed in, but your session cookie was not saved. Try clearing cookies for cloudit.lk and try again.',
-        )
+        if (lastStatus === 429) {
+          toast.error(
+            'The server is busy. Please wait a moment and try signing in again.',
+          )
+        } else {
+          toast.error(
+            'Signed in, but your session cookie was not saved. Try clearing cookies for cloudit.lk and try again.',
+          )
+        }
         return
       }
 
