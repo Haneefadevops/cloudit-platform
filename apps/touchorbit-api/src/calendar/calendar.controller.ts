@@ -84,13 +84,36 @@ export class CalendarEventsController {
   @ApiOperation({ summary: "Calendar hub data" })
   async findHub(
     @CurrentOrganization() organizationId: string,
-    @Query() query: { startDate?: string; endDate?: string },
+    @Query() query: { start?: string; end?: string },
   ) {
     const { start, end } = dateRangeSchema.parse({
-      start: query.startDate,
-      end: query.endDate,
+      start: query.start,
+      end: query.end,
     });
     const data = await this.calendarService.findHub(organizationId, start, end);
+    return { ok: true, data };
+  }
+
+  @Get("analytics")
+  @RequireModule("touchorbit", "calendar")
+  @ApiOperation({ summary: "Calendar analytics" })
+  async findAnalytics(
+    @CurrentOrganization() organizationId: string,
+    @CurrentUser("id") userId: string,
+    @Query() query: { startDate?: string; endDate?: string; start?: string; end?: string },
+  ) {
+    const start = query.startDate || query.start;
+    const end = query.endDate || query.end;
+    const { start: parsedStart, end: parsedEnd } = dateRangeSchema.parse({
+      start,
+      end,
+    });
+    const data = await this.calendarService.findAnalytics(
+      organizationId,
+      userId,
+      parsedStart,
+      parsedEnd,
+    );
     return { ok: true, data };
   }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyAdmin } from '@/lib/admin-auth'
+import { API_URL, parseJsonBody } from '../../../auth/_lib'
 
 function parseFilters(searchParams: URLSearchParams) {
   return {
@@ -11,26 +11,64 @@ function parseFilters(searchParams: URLSearchParams) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await verifyAdmin(request)
-  if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  if (!API_URL) {
+    return NextResponse.json(
+      { error: 'API_URL is not configured' },
+      { status: 500 },
+    )
+  }
 
   const filters = parseFilters(new URL(request.url).searchParams)
   if (!filters.startDate || !filters.endDate) {
-    return NextResponse.json({ error: 'startDate and endDate are required' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'startDate and endDate are required' },
+      { status: 400 },
+    )
   }
 
-  const { data, error } = await auth.supabase.rpc('get_calendar_analytics', {
-    p_org_id: auth.profile.organization_id,
-    p_start_date: filters.startDate,
-    p_end_date: filters.endDate,
-    p_department_id: filters.departmentId,
-    p_branch_id: filters.branchId,
-  })
+  const cookie = request.headers.get('cookie') || ''
+  const searchParams = new URLSearchParams()
+  searchParams.set('startDate', filters.startDate)
+  searchParams.set('endDate', filters.endDate)
+  if (filters.departmentId) searchParams.set('departmentId', filters.departmentId)
+  if (filters.branchId) searchParams.set('branchId', filters.branchId)
 
-  if (error) {
-    console.error('[reports/calendar/analytics]', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  try {
+    const upstream = await fetch(
+      `${API_URL}/api/calendar-events/analytics?${searchParams.toString()}`,
+      {
+        headers: { Cookie: cookie },
+      },
+    )
+
+    const upstreamText = await upstream.text()
+    const payload = parseJsonBody(upstreamText) as
+      | { ok?: boolean; data?: unknown; error?: string; message?: string }
+      | null
+
+    if (!upstream.ok) {
+      return NextResponse.json(
+        {
+          error:
+            payload?.error || payload?.message || 'Unauthorized',
+        },
+        { status: upstream.status },
+      )
+    }
+
+    const data = payload && typeof payload === 'object' && 'data' in payload
+      ? (payload as { data: unknown }).data
+      : payload
+
+    return NextResponse.json(
+      { data: data ?? {}, meta: { filters } },
+      { status: 200 },
+    )
+  } catch (error) {
+    console.error('[reports/calendar/analytics] proxy error:', error)
+    return NextResponse.json(
+      { error: 'Internal error' },
+      { status: 500 },
+    )
   }
-
-  return NextResponse.json({ data: data ?? {}, meta: { filters } })
 }

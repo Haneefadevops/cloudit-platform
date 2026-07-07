@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from "@nestjs/common";
@@ -54,6 +55,8 @@ export interface HolidayInput {
 
 @Injectable()
 export class CalendarEventsService {
+  private readonly logger = new Logger(CalendarEventsService.name);
+
   constructor(private readonly databaseService: DatabaseService) {}
 
   async findAll(organizationId: string) {
@@ -74,14 +77,28 @@ export class CalendarEventsService {
     start: string,
     end: string,
   ): Promise<UnifiedCalendarEvent[]> {
-    const [calendarRows, leaveRows, holidayRows, trainingRows, birthdayRows] =
-      await Promise.all([
-        this.queryCalendarEvents(actorUserId, start, end),
-        this.queryLeaveEvents(organizationId, start, end),
-        this.queryHolidays(organizationId, start, end),
-        this.queryTrainingEvents(organizationId, start, end),
-        this.queryBirthdays(actorUserId, organizationId, start, end),
-      ]);
+    let calendarRows: any[] = [];
+    let leaveRows: any[] = [];
+    let holidayRows: any[] = [];
+    let trainingRows: any[] = [];
+    let birthdayRows: any[] = [];
+
+    try {
+      [calendarRows, leaveRows, holidayRows, trainingRows, birthdayRows] =
+        await Promise.all([
+          this.queryCalendarEvents(actorUserId, start, end),
+          this.queryLeaveEvents(organizationId, start, end),
+          this.queryHolidays(organizationId, start, end),
+          this.queryTrainingEvents(organizationId, start, end),
+          this.queryBirthdays(actorUserId, organizationId, start, end),
+        ]);
+    } catch (error) {
+      this.logger.error(
+        `findUnified failed for org=${organizationId} user=${actorUserId} range=${start}:${end}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw error;
+    }
 
     const calendar = calendarRows.map((e: any): UnifiedCalendarEvent => {
       const typeMap: Record<string, string> = {
@@ -230,13 +247,21 @@ export class CalendarEventsService {
     actorUserId: string,
     limit: number,
   ) {
-    return this.withUser(actorUserId, async (client) => {
-      const result = await client.query(
-        `SELECT * FROM get_upcoming_birthdays($1::uuid, $2::int)`,
-        [organizationId, limit],
+    try {
+      return await this.withUser(actorUserId, async (client) => {
+        const result = await client.query(
+          `SELECT * FROM get_upcoming_birthdays($1::uuid, $2::int)`,
+          [organizationId, limit],
+        );
+        return result.rows;
+      });
+    } catch (error) {
+      this.logger.error(
+        `findUpcomingBirthdays failed for org=${organizationId} user=${actorUserId} limit=${limit}`,
+        error instanceof Error ? error.stack : String(error),
       );
-      return result.rows;
-    });
+      throw error;
+    }
   }
 
   async findHub(organizationId: string, start: string, end: string) {
@@ -252,6 +277,21 @@ export class CalendarEventsService {
         potential_shift_days: 0,
       },
     };
+  }
+
+  async findAnalytics(
+    organizationId: string,
+    actorUserId: string,
+    start: string,
+    end: string,
+  ): Promise<Record<string, unknown>> {
+    return this.withUser(actorUserId, async (client) => {
+      const result = await client.query(
+        `SELECT get_calendar_analytics($1::uuid, $2::date, $3::date) AS data`,
+        [organizationId, start, end],
+      );
+      return (result.rows[0]?.data as Record<string, unknown>) ?? {};
+    });
   }
 
   async createEvent(actorUserId: string, input: CalendarEventInput) {
