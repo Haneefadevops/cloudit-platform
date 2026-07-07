@@ -152,25 +152,29 @@ export class SessionService {
   }
 
   async getAuthUser(req: Request): Promise<SessionUser | null> {
-    const token = this.getCookie(req.headers.cookie, authCookieName);
-    if (!token) return null;
+    const tokens = this.getCookieValues(req.headers.cookie, authCookieName);
+    if (tokens.length === 0) return null;
 
-    try {
-      const payload = jwt.verify(token, this.jwtSecret) as JwtPayload;
-      const sessionData = await this.redisService.client.get(
-        this.sessionKey(payload.sid),
-      );
-      if (!sessionData) return null;
+    for (const token of tokens) {
+      try {
+        const payload = jwt.verify(token, this.jwtSecret) as JwtPayload;
+        const sessionData = await this.redisService.client.get(
+          this.sessionKey(payload.sid),
+        );
+        if (!sessionData) continue;
 
-      const user = JSON.parse(sessionData) as SessionUser;
-      await this.redisService.client.expire(
-        this.sessionKey(payload.sid),
-        SESSION_TTL_SECONDS,
-      );
-      return user;
-    } catch {
-      return null;
+        const user = JSON.parse(sessionData) as SessionUser;
+        await this.redisService.client.expire(
+          this.sessionKey(payload.sid),
+          SESSION_TTL_SECONDS,
+        );
+        return user;
+      } catch {
+        // Try the next cookie value if this one is invalid/expired.
+      }
     }
+
+    return null;
   }
 
   async getAuthUserWithOrg(req: Request): Promise<AuthContext | null> {
@@ -212,5 +216,15 @@ export class SessionService {
     const cookies = cookieHeader.split(";").map((cookie) => cookie.trim());
     const match = cookies.find((cookie) => cookie.startsWith(`${name}=`));
     return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
+  }
+
+  getCookieValues(cookieHeader: string | undefined, name: string): string[] {
+    if (!cookieHeader) return [];
+    const prefix = `${name}=`;
+    return cookieHeader
+      .split(";")
+      .map((cookie) => cookie.trim())
+      .filter((cookie) => cookie.startsWith(prefix))
+      .map((cookie) => decodeURIComponent(cookie.slice(prefix.length)));
   }
 }
