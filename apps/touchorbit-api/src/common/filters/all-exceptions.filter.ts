@@ -23,10 +23,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
+    const internalMessage =
+      exception instanceof Error ? exception.message : "Unknown error";
+
     const message =
       exception instanceof HttpException
         ? exception.message
-        : "Internal server error";
+        : internalMessage;
 
     const stack =
       exception instanceof Error ? exception.stack : "No stack trace available";
