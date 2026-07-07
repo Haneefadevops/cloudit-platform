@@ -21,6 +21,32 @@ interface MeData {
   organizationId: string
 }
 
+async function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchMe(cookie: string): Promise<{ me: MeData | null; status: number | null }> {
+  if (!API_URL) {
+    return { me: null, status: null }
+  }
+
+  const response = await fetch(`${API_URL}/api/auth/me`, {
+    headers: { Cookie: cookie },
+    credentials: 'include',
+  })
+
+  if (!response.ok) {
+    return { me: null, status: response.status }
+  }
+
+  const body = await response.json()
+  if (body?.ok && body.data) {
+    return { me: body.data as MeData, status: response.status }
+  }
+
+  return { me: null, status: response.status }
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isAuthPage =
@@ -33,16 +59,13 @@ export async function middleware(request: NextRequest) {
   if (API_URL) {
     try {
       const cookie = request.headers.get('cookie') || ''
-      const response = await fetch(`${API_URL}/api/auth/me`, {
-        headers: { Cookie: cookie },
-        credentials: 'include',
-      })
+      const firstCheck = await fetchMe(cookie)
+      me = firstCheck.me
 
-      if (response.ok) {
-        const body = await response.json()
-        if (body?.ok && body.data) {
-          me = body.data as MeData
-        }
+      if (!me && (firstCheck.status === 401 || firstCheck.status === 403)) {
+        await delay(200)
+        const secondCheck = await fetchMe(cookie)
+        me = secondCheck.me
       }
     } catch (error) {
       console.error('Auth middleware check failed:', error)

@@ -29,7 +29,15 @@ export class SessionService {
   }
 
   private get cookieDomain(): string | undefined {
-    return this.configService.get<string>("SESSION_COOKIE_DOMAIN") || undefined;
+    const configuredDomain = this.configService
+      .get<string>("SESSION_COOKIE_DOMAIN")
+      ?.trim();
+    if (configuredDomain) {
+      return configuredDomain.startsWith(".")
+        ? configuredDomain
+        : `.${configuredDomain}`;
+    }
+    return this.isProduction() ? ".cloudit.lk" : undefined;
   }
 
   private sessionKey(sid: string): string {
@@ -60,6 +68,22 @@ export class SessionService {
     await pipeline.exec();
 
     return token;
+  }
+
+  async canReadSessionToken(token: string): Promise<boolean> {
+    try {
+      const payload = jwt.verify(token, this.jwtSecret) as JwtPayload;
+      const sessionData = await this.redisService.client.get(
+        this.sessionKey(payload.sid),
+      );
+      return !!sessionData;
+    } catch (error) {
+      this.logger.error(
+        "Session read-back verification failed",
+        error instanceof Error ? error.stack : undefined,
+      );
+      return false;
+    }
   }
 
   setSessionCookie(res: Response, token: string): void {

@@ -7,6 +7,18 @@ import { toast } from 'sonner'
 import Link from 'next/link'
 import { Users, TrendingUp, Shield, Eye, EyeOff, Mail, Lock } from 'lucide-react'
 
+interface MeData {
+  id: string
+  email: string
+  fullName: string
+  role: string
+  organizationId: string
+}
+
+async function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -17,6 +29,7 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isLoading) return
     if (!email || !password) {
       toast.error('Please enter both email and password')
       return
@@ -34,8 +47,26 @@ export default function LoginPage() {
         localStorage.setItem('touchorbit_remember_me', 'false')
         sessionStorage.setItem('touchorbit_session_active', 'true')
       }
+
+      let sessionReady = false
+      for (const waitMs of [0, 150, 300]) {
+        if (waitMs > 0) {
+          await delay(waitMs)
+        }
+        const me = await api.get<MeData>('/auth/me')
+        if (me.ok && me.data) {
+          sessionReady = true
+          break
+        }
+      }
+
+      if (!sessionReady) {
+        toast.error('Signed in, but your session was not ready. Please try again.')
+        return
+      }
+
       toast.success('Signed in successfully!')
-      router.push('/')
+      router.replace('/')
       router.refresh()
     } catch {
       toast.error('An unexpected error occurred')

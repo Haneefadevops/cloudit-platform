@@ -113,14 +113,17 @@ export class AuthService {
       throw new AuthError("Invalid email or password.", 401);
     }
 
-    this.sessionService.setSessionCookie(
-      res,
-      await this.sessionService.signSession({
-        id: row.id,
-        email: row.email,
-        fullName: `${row.first_name} ${row.last_name}`.trim(),
-      }),
-    );
+    const sessionToken = await this.sessionService.signSession({
+      id: row.id,
+      email: row.email,
+      fullName: `${row.first_name} ${row.last_name}`.trim(),
+    });
+    this.sessionService.setSessionCookie(res, sessionToken);
+
+    if (!(await this.sessionService.canReadSessionToken(sessionToken))) {
+      this.sessionService.clearSessionCookie(res);
+      throw new AuthError("Session could not be established.", 500);
+    }
 
     return {
       id: row.id,

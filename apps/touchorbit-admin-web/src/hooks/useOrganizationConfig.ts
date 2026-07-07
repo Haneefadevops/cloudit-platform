@@ -91,22 +91,11 @@ export function useIsFeatureEnabled(featureKey: string) {
   return data.some((f) => f.featureKey === featureKey && f.enabled)
 }
 
-/**
- * Fetch white-label config for the current organization.
- *
- * NOTE: TouchOrbit API does not yet expose a dedicated white-label endpoint.
- * This hook calls the intended contract (`GET /api/white-label`) and falls
- * back to defaults.
- */
 export function useWhiteLabel() {
   return useQuery({
     queryKey: ['white-label'],
     queryFn: async () => {
-      const result = await api.get<WhiteLabelConfig>('/white-label')
-      if (!result.ok) {
-        return DEFAULT_WHITE_LABEL
-      }
-      return { ...DEFAULT_WHITE_LABEL, ...(result.data || {}) }
+      return DEFAULT_WHITE_LABEL
     },
   })
 }
