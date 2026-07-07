@@ -709,7 +709,7 @@ export class CalendarEventsService {
     const client = await this.databaseService.connect();
     try {
       await client.query("BEGIN");
-      await client.query(`SET LOCAL touchorbit.current_user_id = $1`, [userId]);
+      await client.query(`SET LOCAL touchorbit.current_user_id = '${userId}'`);
       const result = await fn(client);
       await client.query("COMMIT");
       return result;

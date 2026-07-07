@@ -145,7 +145,7 @@ export class LeaveService {
     const client = await this.databaseService.connect();
     try {
       await client.query("BEGIN");
-      await client.query(`SET LOCAL touchorbit.current_user_id = $1`, [input.userId]);
+      await client.query(`SET LOCAL touchorbit.current_user_id = '${input.userId}'`);
       const insertResult = await client.query(
         `INSERT INTO leave_records (
            organization_id, employee_id, leave_type, start_date, end_date,
@@ -272,7 +272,7 @@ export class LeaveService {
     const client = await this.databaseService.connect();
     try {
       await client.query("BEGIN");
-      await client.query(`SET LOCAL touchorbit.current_user_id = $1`, [userId]);
+      await client.query(`SET LOCAL touchorbit.current_user_id = '${userId}'`);
       const result = await client.query<{ advance_leave_request: string }>(
         `SELECT advance_leave_request($1::uuid, $2, $3, $4) AS advance_leave_request`,
         [id, level, status, notes ?? null],
