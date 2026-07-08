@@ -128,7 +128,7 @@ function ExpensePolicyRow({ category, policy, inheritedPolicy, onSave, isSaving 
 }
 
 export default function SettingsPage() {
-  const { organizationId, userId, isOwner, role } = useAuth()
+  const { organizationId, userId, isOwner, role, isLoaded } = useAuth()
   const { can: canCurrentUser, loading: permissionLoading } = usePermissions(['settings.manage_roles'])
   const canManageSecurity = permissionLoading ? (isOwner || role === 'super_admin') : canCurrentUser('settings.manage_roles')
   const [loading, setLoading] = useState(true)
@@ -235,6 +235,12 @@ export default function SettingsPage() {
     timezone_tolerance_minutes: 60,
     strict_location_mode: false,
   })
+
+  useEffect(() => {
+    if (isLoaded && !organizationId) {
+      setLoading(false)
+    }
+  }, [isLoaded, organizationId])
 
   useEffect(() => {
     if (organizationId) {
@@ -930,6 +936,20 @@ export default function SettingsPage() {
       <DashboardLayout>
         <div className="flex items-center justify-center h-full">
           <div className="text-[10px] font-black text-[#D1D5DB] animate-pulse uppercase tracking-widest">Loading Settings...</div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (!organizationId) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+          <Building2 className="w-12 h-12 text-[#D1D5DB] mb-4" />
+          <h2 className="text-lg font-black text-[#1A1727] mb-2">No Organization Found</h2>
+          <p className="text-sm text-[#6B6578] max-w-md">
+            Your account is not linked to an organization. Please contact your administrator or log in with a different account.
+          </p>
         </div>
       </DashboardLayout>
     )
