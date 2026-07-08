@@ -5,20 +5,12 @@ import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { usePermissions } from '@/hooks/use-permissions'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { Building2, Clock, Calendar, MapPin, Camera, Save, Shield, DollarSign, Plus, Edit2, X, RefreshCw, Users, Video, Bell, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { OvertimePolicySettingsComponent } from '@/components/overtime-policy-settings'
 import { MeetingProvidersSettings } from '@/components/settings/MeetingProvidersSettings'
 import { NotificationPreferences } from '@/components/settings/NotificationPreferences'
-
-function withTimeout<T>(promise: PromiseLike<T>, label: string, ms = 8000): Promise<T> {
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-    ),
-  ])
-}
 
 interface OrganizationSettings {
   name: string
@@ -657,24 +649,13 @@ export default function SettingsPage() {
   }
 
   async function loadBranches() {
-    const { data } = await supabase
-      .from('branches')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .order('name')
-    setBranches(data || [])
+    const result = await api.get<any[]>('/organizations/branches')
+    setBranches(result.ok ? (result.data || []) : [])
   }
 
   async function loadDepartments() {
-    const { data } = await supabase
-      .from('departments')
-      .select(`
-        *,
-        branch:branches(name)
-      `)
-      .eq('organization_id', organizationId)
-      .order('name')
-    setDepartments(data || [])
+    const result = await api.get<any[]>('/organizations/departments')
+    setDepartments(result.ok ? (result.data || []) : [])
   }
 
   async function handleSaveBranch(e: React.FormEvent) {
@@ -728,17 +709,16 @@ export default function SettingsPage() {
   async function loadSettings() {
     setLoading(true)
     try {
-      console.log('[settings] loading organizations row...')
-      const { data: org, error: orgError } = await withTimeout(
-        supabase
-          .from('organizations')
-          .select('*')
-          .eq('id', organizationId)
-          .single(),
-        'organizations',
-        8000,
-      )
-      console.log('[settings] organizations result:', { org, orgError })
+      const result = await api.get<{
+        organization: any
+        overtimePolicy: any
+      }>('/organizations/settings')
+
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to load settings')
+      }
+
+      const { organization: org, overtimePolicy: otPolicy } = result.data || {}
 
       if (org) {
         setSettings({
@@ -764,19 +744,6 @@ export default function SettingsPage() {
         })
       }
 
-      // Load overtime policy
-      console.log('[settings] loading overtime policy...')
-      const { data: otPolicy, error: otError } = await withTimeout(
-        supabase
-          .from('overtime_policies')
-          .select('*')
-          .eq('organization_id', organizationId)
-          .single(),
-        'overtime_policies',
-        8000,
-      )
-      console.log('[settings] overtime policy result:', { otPolicy, otError })
-
       if (otPolicy) {
         setOvertimePolicy({
           max_daily_hours: otPolicy.max_daily_hours || 4.0,
@@ -788,11 +755,10 @@ export default function SettingsPage() {
           auto_detect: otPolicy.auto_detect !== false,
         })
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading settings:', error)
-      toast.error('Failed to load settings')
+      toast.error(error.message || 'Failed to load settings')
     } finally {
-      console.log('[settings] loadSettings finished')
       setLoading(false)
     }
   }
@@ -800,49 +766,14 @@ export default function SettingsPage() {
   async function handleSave() {
     setSaving(true)
     try {
-      // Save organization settings
-      const { error: orgError } = await supabase
-        .from('organizations')
-        .update({
-          name: settings.name,
-          timezone: settings.timezone,
-          work_hours_start: settings.work_hours_start,
-          work_hours_end: settings.work_hours_end,
-          grace_period_minutes: settings.grace_period_minutes,
-          require_selfie: settings.require_selfie,
-          require_geofence: settings.require_geofence,
-          late_threshold_minutes: settings.late_threshold_minutes,
-          expected_timezone_offset: settings.expected_timezone_offset,
-          timezone_tolerance_minutes: settings.timezone_tolerance_minutes,
-          strict_location_mode: settings.strict_location_mode,
-          carry_forward_enabled: settings.carry_forward_enabled,
-          carry_forward_limit: settings.carry_forward_limit,
-          encashment_allowed: settings.encashment_allowed,
-          encashment_max_days: settings.encashment_max_days,
-          comp_off_expiry_months: settings.comp_off_expiry_months,
-        })
-        .eq('id', organizationId)
+      const result = await api.patch('/organizations/settings', {
+        ...settings,
+        overtimePolicy,
+      })
 
-      if (orgError) throw orgError
-
-      // Save or create overtime policy (explicitly handling conflict on organization_id)
-      const { error: otError } = await supabase
-        .from('overtime_policies')
-        .upsert({
-          organization_id: organizationId,
-          max_daily_hours: overtimePolicy.max_daily_hours,
-          max_weekly_hours: overtimePolicy.max_weekly_hours,
-          weekday_rate: overtimePolicy.weekday_rate,
-          weekend_rate: overtimePolicy.weekend_rate,
-          holiday_rate: overtimePolicy.holiday_rate,
-          requires_approval: overtimePolicy.requires_approval,
-          auto_detect: overtimePolicy.auto_detect,
-          updated_at: new Date().toISOString(),
-        }, { 
-          onConflict: 'organization_id' 
-        })
-
-      if (otError) throw otError
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to save settings')
+      }
 
       toast.success('Settings saved successfully!')
 
@@ -850,9 +781,9 @@ export default function SettingsPage() {
       if (activeTab === 'leave') {
         setShowSyncDialog(true)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving settings:', error)
-      toast.error('Failed to save settings')
+      toast.error(error.message || 'Failed to save settings')
     } finally {
       setSaving(false)
     }
