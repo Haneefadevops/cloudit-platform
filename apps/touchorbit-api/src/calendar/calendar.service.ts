@@ -683,7 +683,7 @@ export class CalendarEventsService {
     start: string,
     end: string,
   ) {
-    const rows = await this.findUpcomingBirthdays(actorUserId, organizationId, 100);
+    const rows = await this.findUpcomingBirthdays(organizationId, actorUserId, 100);
     return rows.filter((b: any) => {
       const d = new Date(b.next_occurrence).toISOString().split("T")[0];
       return d >= start && d <= end;
