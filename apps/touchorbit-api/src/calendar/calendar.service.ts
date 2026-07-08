@@ -249,6 +249,14 @@ export class CalendarEventsService {
   ) {
     try {
       return await this.withUser(actorUserId, async (client) => {
+        const debug = await client.query(
+          `SELECT current_setting('touchorbit.current_user_id', true) AS session_user_id,
+                  (SELECT organization_id FROM users WHERE id = current_setting('touchorbit.current_user_id', true)::uuid) AS db_org_id`,
+        );
+        this.logger.log(
+          `findUpcomingBirthdays debug org=${organizationId} user=${actorUserId} session_user=${debug.rows[0]?.session_user_id} db_org=${debug.rows[0]?.db_org_id}`,
+        );
+
         const result = await client.query(
           `SELECT * FROM get_upcoming_birthdays($1::uuid, $2::int)`,
           [organizationId, limit],
@@ -709,7 +717,10 @@ export class CalendarEventsService {
     const client = await this.databaseService.connect();
     try {
       await client.query("BEGIN");
-      await client.query(`SET LOCAL touchorbit.current_user_id = '${userId}'`);
+      await client.query(
+        `SELECT set_config('touchorbit.current_user_id', $1, true)`,
+        [userId],
+      );
       const result = await fn(client);
       await client.query("COMMIT");
       return result;
