@@ -5,7 +5,7 @@ import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { usePermissions } from '@/hooks/use-permissions'
 import { supabase } from '@/lib/supabase'
-import { Building2, Clock, Calendar, MapPin, Camera, Save, Shield, DollarSign, Plus, Edit2, X, RefreshCw, Users, Video, Bell } from 'lucide-react'
+import { Building2, Clock, Calendar, MapPin, Camera, Save, Shield, DollarSign, Plus, Edit2, X, RefreshCw, Users, Video, Bell, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { OvertimePolicySettingsComponent } from '@/components/overtime-policy-settings'
 import { MeetingProvidersSettings } from '@/components/settings/MeetingProvidersSettings'
@@ -132,6 +132,7 @@ export default function SettingsPage() {
   const { can: canCurrentUser, loading: permissionLoading } = usePermissions(['settings.manage_roles'])
   const canManageSecurity = permissionLoading ? (isOwner || role === 'super_admin') : canCurrentUser('settings.manage_roles')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'organization' | 'attendance' | 'leave' | 'overtime' | 'branches' | 'departments' | 'expense_policy' | 'security' | 'integrations' | 'notifications'>('organization')
   
@@ -241,6 +242,18 @@ export default function SettingsPage() {
       setLoading(false)
     }
   }, [isLoaded, organizationId])
+
+  // Fail-safe: never stay on the spinner for more than 10 seconds
+  useEffect(() => {
+    if (!loading) return
+    const timer = setTimeout(() => {
+      console.error('Settings load timed out after 10 seconds')
+      toast.error('Settings took too long to load. Please retry.')
+      setLoadError(true)
+      setLoading(false)
+    }, 10000)
+    return () => clearTimeout(timer)
+  }, [loading])
 
   useEffect(() => {
     if (organizationId) {
@@ -936,6 +949,26 @@ export default function SettingsPage() {
       <DashboardLayout>
         <div className="flex items-center justify-center h-full">
           <div className="text-[10px] font-black text-[#D1D5DB] animate-pulse uppercase tracking-widest">Loading Settings...</div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+          <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
+          <h2 className="text-lg font-black text-[#1A1727] mb-2">Unable to Load Settings</h2>
+          <p className="text-sm text-[#6B6578] max-w-md mb-6">
+            The settings request timed out or failed. Check your connection and try again.
+          </p>
+          <button
+            onClick={() => { setLoadError(false); setLoading(true) }}
+            className="flex items-center gap-2 px-4 py-2 bg-[#534AB7] text-white rounded-lg text-xs font-bold hover:bg-[#1E1854] transition-all"
+          >
+            <RefreshCw className="w-4 h-4" /> Retry
+          </button>
         </div>
       </DashboardLayout>
     )
