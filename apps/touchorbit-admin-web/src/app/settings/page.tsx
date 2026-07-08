@@ -11,6 +11,15 @@ import { OvertimePolicySettingsComponent } from '@/components/overtime-policy-se
 import { MeetingProvidersSettings } from '@/components/settings/MeetingProvidersSettings'
 import { NotificationPreferences } from '@/components/settings/NotificationPreferences'
 
+function withTimeout<T>(promise: PromiseLike<T>, label: string, ms = 8000): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ])
+}
+
 interface OrganizationSettings {
   name: string
   timezone: string
@@ -719,11 +728,17 @@ export default function SettingsPage() {
   async function loadSettings() {
     setLoading(true)
     try {
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('*')
-        .eq('id', organizationId)
-        .single()
+      console.log('[settings] loading organizations row...')
+      const { data: org, error: orgError } = await withTimeout(
+        supabase
+          .from('organizations')
+          .select('*')
+          .eq('id', organizationId)
+          .single(),
+        'organizations',
+        8000,
+      )
+      console.log('[settings] organizations result:', { org, orgError })
 
       if (org) {
         setSettings({
@@ -750,11 +765,17 @@ export default function SettingsPage() {
       }
 
       // Load overtime policy
-      const { data: otPolicy } = await supabase
-        .from('overtime_policies')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .single()
+      console.log('[settings] loading overtime policy...')
+      const { data: otPolicy, error: otError } = await withTimeout(
+        supabase
+          .from('overtime_policies')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .single(),
+        'overtime_policies',
+        8000,
+      )
+      console.log('[settings] overtime policy result:', { otPolicy, otError })
 
       if (otPolicy) {
         setOvertimePolicy({
@@ -771,6 +792,7 @@ export default function SettingsPage() {
       console.error('Error loading settings:', error)
       toast.error('Failed to load settings')
     } finally {
+      console.log('[settings] loadSettings finished')
       setLoading(false)
     }
   }
