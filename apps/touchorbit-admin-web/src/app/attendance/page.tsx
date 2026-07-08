@@ -695,7 +695,7 @@ export default function AttendancePage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col h-full bg-[#ECECF1] font-['Plus_Jakarta_Sans']">
+      <div className="flex flex-col h-full bg-[#ECECF1]">
         
         {/* Compact Command Header */}
         <div className="bg-[#ECECF1] border-b border-[#D8D6DF] px-6 py-4 shrink-0">

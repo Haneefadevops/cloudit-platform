@@ -254,7 +254,7 @@ export default function GeofencesPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col h-full bg-[#ECECF1] font-['Plus_Jakarta_Sans']">
+      <div className="flex flex-col h-full bg-[#ECECF1]">
         {/* KPI Strip */}
         <div className="bg-white border-b border-[#C7C3D0] px-6 py-3 flex items-center gap-3 shrink-0 overflow-x-auto">
           <StatCard icon={MapPin} label="Total Zones" value={geofences.length} />

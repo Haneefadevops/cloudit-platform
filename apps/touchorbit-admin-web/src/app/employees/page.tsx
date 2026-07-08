@@ -176,7 +176,7 @@ export default function EmployeesPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col h-full bg-[#ECECF1] font-['Plus_Jakarta_Sans']">
+      <div className="flex flex-col h-full bg-[#ECECF1]">
 
         {/* ── Command Header ── */}
         <div className="px-6 py-4 shrink-0">

@@ -725,7 +725,7 @@ export default function EmployeeDetailPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col h-full bg-[#ECECF1] font-['Plus_Jakarta_Sans']">
+      <div className="flex flex-col h-full bg-[#ECECF1]">
         <ProfileHeader
           employee={employee}
           isCompact={isCompact}

@@ -567,7 +567,7 @@ export default function CalendarPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col h-full bg-[#F8F7F9] font-['Plus_Jakarta_Sans']">
+      <div className="flex flex-col h-full bg-[#F8F7F9]">
         {/* Page Header */}
         <div className="bg-white border-b border-[#F1F0F4] px-6 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-4">

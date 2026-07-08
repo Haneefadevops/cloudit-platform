@@ -223,7 +223,7 @@ export default function LeavePage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col h-full bg-[#F8F7F9] font-['Plus_Jakarta_Sans']">
+      <div className="flex flex-col h-full bg-[#F8F7F9]">
         
         {/* Header */}
         <div className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between flex-shrink-0">
