@@ -6,8 +6,6 @@ services:
       args:
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://to-employee.${DOMAIN:-cloudit.lk}}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api-touchorbit.${DOMAIN:-cloudit.lk}}
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?NEXT_PUBLIC_SUPABASE_ANON_KEY is required}
     image: cloudit/touchorbit-employee-web:latest
     container_name: touchorbit-employee-web
     restart: unless-stopped

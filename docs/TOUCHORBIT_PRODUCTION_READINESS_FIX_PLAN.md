@@ -40,18 +40,17 @@ Acceptance:
 ### 3. Remove placeholder production defaults
 
 Problem:
-- Admin and employee Docker compose files default Supabase values to placeholders.
-- Placeholder values can be baked into production images and cause runtime failures.
+- Admin and employee web code still contains legacy Supabase paths, even though TouchOrbit is moving to local Docker/Postgres.
+- Placeholder Supabase values can be baked into production images and cause runtime failures.
+- Requiring Supabase env vars blocks the intended local-DB deployment.
 
 Fix:
 - Remove defaults such as `https://placeholder.supabase.co`, `placeholder-anon-key`, and `placeholder-service-role-key`.
-- Require real values for production builds.
+- Do not require Supabase env vars for production TouchOrbit builds.
+- Track the remaining Supabase code paths in `docs/TOUCHORBIT_SUPABASE_REMOVAL_PLAN.md`.
 - Add explicit validation for required build-time and runtime variables.
 
 Required variables to validate:
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
 - `NEXT_PUBLIC_API_URL`
 - `NEXT_PUBLIC_APP_URL`
 - `JWT_SECRET`
@@ -62,6 +61,7 @@ Required variables to validate:
 Acceptance:
 - Missing production env fails fast with a clear message.
 - No production compose or Dockerfile default uses placeholder Supabase values.
+- Production deploy does not require Supabase env vars.
 
 ### 4. Add production env checklist
 
@@ -160,7 +160,7 @@ Acceptance:
 - Fix employee app font build.
 - Fix API lint.
 - Protect Swagger.
-- Remove placeholder env defaults and add fail-fast validation.
+- Remove placeholder env defaults, keep local-DB env validation, and stop requiring Supabase env.
 
 ### Day 2
 
@@ -182,3 +182,4 @@ TouchOrbit can be considered launch-candidate only when:
 - Staging smoke tests pass.
 - `/api/docs` is not publicly exposed by default.
 - Placeholder Supabase values cannot reach production images.
+- Supabase env vars are not required for TouchOrbit production deploys.
