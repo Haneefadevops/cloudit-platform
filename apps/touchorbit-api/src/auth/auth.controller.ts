@@ -99,7 +99,11 @@ export class AuthController {
       return { ok: false, error: "Invalid login details." };
     }
     try {
-      const { token, user } = await this.authService.login(input.data, res, req);
+      const { token, user } = await this.authService.login(
+        input.data,
+        res,
+        req,
+      );
       return { ok: true, data: { token, user } };
     } catch (error) {
       if (error instanceof AuthError) {
@@ -118,7 +122,7 @@ export class AuthController {
   }
 
   @Get("me")
-  async me(@AuthUser() auth: AuthContext) {
+  me(@AuthUser() auth: AuthContext) {
     return {
       ok: true,
       data: auth,

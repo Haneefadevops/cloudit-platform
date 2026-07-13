@@ -53,6 +53,14 @@ export interface HolidayInput {
   branch_id?: string | null;
 }
 
+export interface UpcomingCalendarItem {
+  id: string;
+  title: string;
+  date: string;
+  type: string;
+  source: "holiday" | "event";
+}
+
 @Injectable()
 export class CalendarEventsService {
   private readonly logger = new Logger(CalendarEventsService.name);
@@ -174,7 +182,13 @@ export class CalendarEventsService {
       raw: b,
     }));
 
-    const all = [...calendar, ...leaves, ...holidays, ...trainings, ...birthdays];
+    const all = [
+      ...calendar,
+      ...leaves,
+      ...holidays,
+      ...trainings,
+      ...birthdays,
+    ];
     all.sort((a, b) => {
       const ad = a.startAt ? new Date(a.startAt).getTime() : 0;
       const bd = b.startAt ? new Date(b.startAt).getTime() : 0;
@@ -219,7 +233,7 @@ export class CalendarEventsService {
       ),
     ]);
 
-    const merged: any[] = [];
+    const merged: UpcomingCalendarItem[] = [];
     for (const h of holidaysRes.rows) {
       merged.push({
         id: `h-${h.id}`,
@@ -272,7 +286,7 @@ export class CalendarEventsService {
     }
   }
 
-  async findHub(organizationId: string, start: string, end: string) {
+  findHub(organizationId: string, start: string, end: string) {
     // Stub: returns empty arrays so the UI does not error.
     // A full implementation will aggregate conflicts/requests/coverage later.
     return {
@@ -362,16 +376,16 @@ export class CalendarEventsService {
         input.event_date ?? cur.event_date,
         input.all_day
           ? null
-          : input.start_time ??
-              (cur.all_day ? null : this.timeFromDate(cur.start_time)),
+          : (input.start_time ??
+              (cur.all_day ? null : this.timeFromDate(cur.start_time))),
         true,
       );
       const endAt = this.buildTimestamp(
         input.event_date ?? cur.event_date,
         input.all_day
           ? null
-          : input.end_time ??
-              (cur.all_day ? null : this.timeFromDate(cur.end_time)),
+          : (input.end_time ??
+              (cur.all_day ? null : this.timeFromDate(cur.end_time))),
         false,
       );
 
@@ -470,11 +484,7 @@ export class CalendarEventsService {
     });
   }
 
-  async rescheduleEvent(
-    eventId: string,
-    actorUserId: string,
-    reason?: string,
-  ) {
+  async rescheduleEvent(eventId: string, actorUserId: string, reason?: string) {
     return this.withUser(actorUserId, async (client) => {
       const result = await client.query(
         `UPDATE calendar_events
@@ -683,7 +693,11 @@ export class CalendarEventsService {
     start: string,
     end: string,
   ) {
-    const rows = await this.findUpcomingBirthdays(organizationId, actorUserId, 100);
+    const rows = await this.findUpcomingBirthdays(
+      organizationId,
+      actorUserId,
+      100,
+    );
     return rows.filter((b: any) => {
       const d = new Date(b.next_occurrence).toISOString().split("T")[0];
       return d >= start && d <= end;
@@ -696,9 +710,7 @@ export class CalendarEventsService {
     start: boolean,
   ): string {
     if (!timeStr) {
-      return start
-        ? `${dateStr}T00:00:00Z`
-        : `${dateStr}T23:59:59Z`;
+      return start ? `${dateStr}T00:00:00Z` : `${dateStr}T23:59:59Z`;
     }
     const t = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
     return `${dateStr}T${t}Z`;
@@ -727,7 +739,7 @@ export class CalendarEventsService {
     } catch (error) {
       await client.query("ROLLBACK");
       if (error && typeof error === "object" && "code" in error) {
-        const pgError = error as any;
+        const pgError = error;
         if (pgError.code === "P0001") {
           throw new BadRequestException(pgError.message || "Database error");
         }

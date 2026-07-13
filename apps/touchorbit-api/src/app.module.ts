@@ -62,9 +62,10 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
         ],
         skipIf: (context) => {
           const req = context.switchToHttp().getRequest<{ url: string }>();
-          return (
-            req.url.startsWith("/api/health") || req.url.startsWith("/api/docs")
-          );
+          const isProduction =
+            configService.get<string>("NODE_ENV") === "production";
+          if (req.url.startsWith("/api/health")) return true;
+          return !isProduction && req.url.startsWith("/api/docs");
         },
       }),
     }),

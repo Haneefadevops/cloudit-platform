@@ -14,8 +14,8 @@ export class RequestsController {
   @Get()
   @RequireModule("touchorbit", "requests")
   @ApiOperation({ summary: "List requests" })
-  async findAll(@CurrentOrganization() organizationId: string) {
-    const rows = await this.requestsService.findAll(organizationId);
+  findAll(@CurrentOrganization() organizationId: string) {
+    const rows = this.requestsService.findAll(organizationId);
     return { ok: true, data: rows };
   }
 }

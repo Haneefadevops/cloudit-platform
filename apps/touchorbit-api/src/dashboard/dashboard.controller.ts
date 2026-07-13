@@ -12,8 +12,8 @@ export class DashboardController {
 
   @Get()
   @ApiOperation({ summary: "List dashboard" })
-  async findAll(@CurrentOrganization() organizationId: string) {
-    const rows = await this.dashboardService.findAll(organizationId);
+  findAll(@CurrentOrganization() organizationId: string) {
+    const rows = this.dashboardService.findAll(organizationId);
     return { ok: true, data: rows };
   }
 

@@ -50,7 +50,12 @@ export class CalendarEventsController {
     @Query() query: { start?: string; end?: string },
   ) {
     const { start, end } = dateRangeSchema.parse(query);
-    const rows = await this.calendarService.findUnified(organizationId, userId, start, end);
+    const rows = await this.calendarService.findUnified(
+      organizationId,
+      userId,
+      start,
+      end,
+    );
     return { ok: true, data: rows };
   }
 
@@ -75,14 +80,18 @@ export class CalendarEventsController {
     @Query("limit") limitRaw?: string,
   ) {
     const limit = limitSchema.parse(limitRaw ?? "10");
-    const rows = await this.calendarService.findUpcomingBirthdays(organizationId, userId, limit);
+    const rows = await this.calendarService.findUpcomingBirthdays(
+      organizationId,
+      userId,
+      limit,
+    );
     return { ok: true, data: rows };
   }
 
   @Get("hub")
   @RequireModule("touchorbit", "calendar")
   @ApiOperation({ summary: "Calendar hub data" })
-  async findHub(
+  findHub(
     @CurrentOrganization() organizationId: string,
     @Query() query: { start?: string; end?: string },
   ) {
@@ -90,7 +99,7 @@ export class CalendarEventsController {
       start: query.start,
       end: query.end,
     });
-    const data = await this.calendarService.findHub(organizationId, start, end);
+    const data = this.calendarService.findHub(organizationId, start, end);
     return { ok: true, data };
   }
 
@@ -100,7 +109,13 @@ export class CalendarEventsController {
   async findAnalytics(
     @CurrentOrganization() organizationId: string,
     @CurrentUser("id") userId: string,
-    @Query() query: { startDate?: string; endDate?: string; start?: string; end?: string },
+    @Query()
+    query: {
+      startDate?: string;
+      endDate?: string;
+      start?: string;
+      end?: string;
+    },
   ) {
     const start = query.startDate || query.start;
     const end = query.endDate || query.end;
@@ -126,7 +141,12 @@ export class CalendarEventsController {
     @Query() query: { start?: string; end?: string },
   ) {
     const { start, end } = dateRangeSchema.parse(query);
-    const rows = await this.calendarService.findEmployeeEvents(employeeId, userId, start, end);
+    const rows = await this.calendarService.findEmployeeEvents(
+      employeeId,
+      userId,
+      start,
+      end,
+    );
     return { ok: true, data: rows };
   }
 
@@ -138,7 +158,8 @@ export class CalendarEventsController {
     @Body() body: CalendarEventInput,
   ) {
     if (!body.title) throw new BadRequestException("title is required");
-    if (!body.event_date) throw new BadRequestException("event_date is required");
+    if (!body.event_date)
+      throw new BadRequestException("event_date is required");
     const result = await this.calendarService.createEvent(userId, body);
     return { ok: true, data: result };
   }
@@ -146,7 +167,10 @@ export class CalendarEventsController {
   @Get(":id")
   @RequireModule("touchorbit", "calendar")
   @ApiOperation({ summary: "Get a calendar event" })
-  async findOne(@Param("id") id: string, @CurrentOrganization() organizationId: string) {
+  async findOne(
+    @Param("id") id: string,
+    @CurrentOrganization() organizationId: string,
+  ) {
     const rows = await this.calendarService.findAll(organizationId);
     const row = rows.find((r: any) => r.id === id);
     if (!row) throw new BadRequestException("Event not found");
@@ -189,7 +213,11 @@ export class CalendarEventsController {
     @CurrentUser("id") userId: string,
     @Body() body: { reason?: string },
   ) {
-    const result = await this.calendarService.rescheduleEvent(id, userId, body?.reason);
+    const result = await this.calendarService.rescheduleEvent(
+      id,
+      userId,
+      body?.reason,
+    );
     return { ok: true, data: result };
   }
 }
@@ -237,7 +265,11 @@ export class HolidaysController {
     @Param("id") id: string,
     @Body() body: Partial<HolidayInput>,
   ) {
-    const row = await this.calendarService.updateHoliday(organizationId, id, body);
+    const row = await this.calendarService.updateHoliday(
+      organizationId,
+      id,
+      body,
+    );
     return { ok: true, data: row };
   }
 

@@ -14,8 +14,8 @@ export class OvertimeController {
   @Get()
   @RequireModule("touchorbit", "overtime")
   @ApiOperation({ summary: "List overtime" })
-  async findAll(@CurrentOrganization() organizationId: string) {
-    const rows = await this.overtimeService.findAll(organizationId);
+  findAll(@CurrentOrganization() organizationId: string) {
+    const rows = this.overtimeService.findAll(organizationId);
     return { ok: true, data: rows };
   }
 }

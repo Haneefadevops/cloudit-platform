@@ -26,15 +26,17 @@ const updateSettingsSchema = z.object({
   encashment_allowed: z.boolean().optional(),
   encashment_max_days: z.number().optional(),
   comp_off_expiry_months: z.number().optional(),
-  overtimePolicy: z.object({
-    max_daily_hours: z.number().optional(),
-    max_weekly_hours: z.number().optional(),
-    weekday_rate: z.number().optional(),
-    weekend_rate: z.number().optional(),
-    holiday_rate: z.number().optional(),
-    requires_approval: z.boolean().optional(),
-    auto_detect: z.boolean().optional(),
-  }).optional(),
+  overtimePolicy: z
+    .object({
+      max_daily_hours: z.number().optional(),
+      max_weekly_hours: z.number().optional(),
+      weekday_rate: z.number().optional(),
+      weekend_rate: z.number().optional(),
+      holiday_rate: z.number().optional(),
+      requires_approval: z.boolean().optional(),
+      auto_detect: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 @ApiTags("organizations")
@@ -46,8 +48,8 @@ export class OrganizationsController {
   @Get()
   @RequireModule("touchorbit", "organizations")
   @ApiOperation({ summary: "List organizations" })
-  async findAll(@CurrentOrganization() organizationId: string) {
-    const rows = await this.organizationsService.findAll(organizationId);
+  findAll(@CurrentOrganization() organizationId: string) {
+    const rows = this.organizationsService.findAll(organizationId);
     return { ok: true, data: rows };
   }
 
@@ -63,7 +65,8 @@ export class OrganizationsController {
   @RequireModule("touchorbit", "organizations")
   @ApiOperation({ summary: "List departments for the current organization" })
   async findDepartments(@CurrentOrganization() organizationId: string) {
-    const rows = await this.organizationsService.findDepartments(organizationId);
+    const rows =
+      await this.organizationsService.findDepartments(organizationId);
     return { ok: true, data: rows };
   }
 

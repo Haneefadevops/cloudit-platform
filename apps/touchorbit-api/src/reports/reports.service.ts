@@ -15,7 +15,7 @@ interface ReportFilters {
 export class ReportsService {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  async findAll(_organizationId: string) {
+  findAll(_organizationId: string) {
     return [];
   }
   async attendance(organizationId: string, filters: ReportFilters) {
@@ -332,7 +332,11 @@ export class ReportsService {
     filters: ReportFilters,
     employeeAlias: string,
   ) {
-    const params: unknown[] = [organizationId, filters.startDate, filters.endDate];
+    const params: unknown[] = [
+      organizationId,
+      filters.startDate,
+      filters.endDate,
+    ];
     const employeeConditions: string[] = [];
 
     if (filters.departmentId) {

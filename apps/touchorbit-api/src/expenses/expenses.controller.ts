@@ -14,8 +14,8 @@ export class ExpensesController {
   @Get()
   @RequireModule("touchorbit", "expenses")
   @ApiOperation({ summary: "List expenses" })
-  async findAll(@CurrentOrganization() organizationId: string) {
-    const rows = await this.expensesService.findAll(organizationId);
+  findAll(@CurrentOrganization() organizationId: string) {
+    const rows = this.expensesService.findAll(organizationId);
     return { ok: true, data: rows };
   }
 }

@@ -1,4 +1,10 @@
-import { Controller, Get, Query, UseGuards, BadRequestException } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Query,
+  UseGuards,
+  BadRequestException,
+} from "@nestjs/common";
 import { ApiTags, ApiOperation } from "@nestjs/swagger";
 import { z } from "zod";
 import { SessionAuthGuard } from "../common/guards/session-auth.guard";
@@ -27,8 +33,8 @@ export class ReportsController {
   @Get()
   @RequireModule("touchorbit", "reports")
   @ApiOperation({ summary: "List reports" })
-  async findAll(@CurrentOrganization() organizationId: string) {
-    const rows = await this.reportsService.findAll(organizationId);
+  findAll(@CurrentOrganization() organizationId: string) {
+    const rows = this.reportsService.findAll(organizationId);
     return { ok: true, data: rows };
   }
 

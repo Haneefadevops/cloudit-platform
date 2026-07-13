@@ -54,6 +54,14 @@ function buildCorsOrigin(raw?: string): CorsOptions["origin"] {
   };
 }
 
+function shouldEnableSwagger(configService: ConfigService): boolean {
+  const explicit = configService.get<string>("ENABLE_SWAGGER")?.toLowerCase();
+  if (explicit) {
+    return explicit === "true";
+  }
+  return configService.get<string>("NODE_ENV") !== "production";
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: new JsonLogger(),
@@ -108,17 +116,19 @@ async function bootstrap() {
     new XssSanitizationPipe(),
   );
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle("TouchOrbit HR API")
-    .setDescription("CloudIT TouchOrbit HR API")
-    .setVersion("1.0.0")
-    .addBearerAuth()
-    .build();
-  const document: OpenAPIObject = SwaggerModule.createDocument(
-    app,
-    swaggerConfig,
-  );
-  SwaggerModule.setup("api/docs", app, document);
+  if (shouldEnableSwagger(configService)) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle("TouchOrbit HR API")
+      .setDescription("CloudIT TouchOrbit HR API")
+      .setVersion("1.0.0")
+      .addBearerAuth()
+      .build();
+    const document: OpenAPIObject = SwaggerModule.createDocument(
+      app,
+      swaggerConfig,
+    );
+    SwaggerModule.setup("api/docs", app, document);
+  }
 
   const port = Number(configService.get("PORT")) || 3006;
   await app.listen(port);

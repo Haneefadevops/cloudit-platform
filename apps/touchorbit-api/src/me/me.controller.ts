@@ -13,8 +13,8 @@ export class MeController {
 
   @Get()
   @ApiOperation({ summary: "List me" })
-  async findAll(@CurrentOrganization() organizationId: string) {
-    const rows = await this.meService.findAll(organizationId);
+  findAll(@CurrentOrganization() organizationId: string) {
+    const rows = this.meService.findAll(organizationId);
     return { ok: true, data: rows };
   }
 }

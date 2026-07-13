@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
 import { Providers } from "./providers";
 import { OfflineSyncStatus } from "@/components/offline-sync-status";
 import { UnregisterServiceWorkers } from "@/components/unregister-service-workers";
 import "./globals.css";
-
-const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["300","400","500","600","700","800"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "TouchOrbit Employee",
@@ -19,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={plusJakartaSans.variable} suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <Providers>
           <UnregisterServiceWorkers />
           <div>

@@ -104,7 +104,7 @@ export class OrganizationsService {
     }
   }
 
-  async findAll(_organizationId: string) {
+  findAll(_organizationId: string) {
     return [];
   }
 

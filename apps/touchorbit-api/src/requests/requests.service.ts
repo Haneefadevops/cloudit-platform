@@ -5,7 +5,7 @@ import { DatabaseService } from "../database/database.service";
 export class RequestsService {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  async findAll(_organizationId: string) {
+  findAll(_organizationId: string) {
     return [];
   }
 }
