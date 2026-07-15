@@ -71,6 +71,8 @@ export default function ProfilePage() {
       if (empData) {
         setEmployee({ ...empData, department: empData.department_name || empData.department || null })
         setEditPhone(empData.phone || '')
+        setLoading(false)
+        void loadLocalProfileData(empData.id)
 
         const now = new Date()
         const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
@@ -93,16 +95,60 @@ export default function ProfilePage() {
         const totalOt = (otRes.data || []).reduce((sum: number, r: any) => sum + (r.hours || 0), 0)
         setOtHours(`${totalOt}h`)
         setCompOff(`${coRes.count ?? 0}d`)
-        setEmergencyContacts(contactsRes.ok ? (contactsRes.data || []) : [])
-        setAssignedAssets(assetsRes.data || [])
-        setTrainings(trainingsRes.data || [])
-        setActiveReview(reviewRes.data || null)
+        // Local API section loaders update contacts, assets, training, and reviews independently.
       }
     } catch (error) {
       console.error(error)
     } finally {
       setLoading(false)
     }
+  }
+
+  async function loadLocalProfileData(employeeId: string) {
+    const now = new Date()
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    const requests = await Promise.allSettled([
+      api.get<any[]>(`/attendance?employee_id=${employeeId}&event_type=clock_in&from=${monthStart}&limit=100`),
+      api.get<any[]>(`/leave/balances/${employeeId}`),
+      api.get<any[]>('/overtime'),
+      api.get<any[]>(`/leave/comp-off?employee_id=${employeeId}`),
+      api.get<any[]>(`/employees/${employeeId}/emergency-contacts`),
+      api.get<any[]>('/asset-assignments'),
+      api.get<{ assigned?: any[] }>(`/training/employee/${employeeId}`),
+      api.get<any[]>(`/performance/reviews/employee/${employeeId}`),
+    ])
+
+    const dataAt = (index: number, fallback: any) => {
+      const result = requests[index]
+      return result.status === 'fulfilled' && result.value.ok
+        ? (result.value.data ?? fallback)
+        : fallback
+    }
+
+    const clockEvents = dataAt(0, []) as any[]
+    const workDays = new Set(clockEvents.map(row => String(row.timestamp || row.created_at || '').slice(0, 10))).size
+    const workingDaysElapsed = Math.max(1, Math.floor((now.getTime() - new Date(monthStart).getTime()) / 86400000) + 1)
+    setAttendancePct(`${Math.round((workDays / workingDaysElapsed) * 100)}%`)
+
+    const balances = dataAt(1, []) as any[]
+    const annualBalance = balances.find(row => row.leave_type === 'annual' && Number(row.year) === now.getFullYear())
+    if (annualBalance) setLeaveLeft(`${annualBalance.remaining_days ?? 0}d`)
+
+    const overtime = (dataAt(2, []) as any[]).filter(row =>
+      row.employee_id === employeeId && row.status === 'approved' && (!row.date || row.date >= monthStart),
+    )
+    setOtHours(`${overtime.reduce((sum, row) => sum + Number(row.hours || 0), 0)}h`)
+
+    const compOffRecords = (dataAt(3, []) as any[]).filter(row => row.status === 'approved')
+    setCompOff(`${compOffRecords.length}d`)
+    setEmergencyContacts(dataAt(4, []) as any[])
+    setAssignedAssets((dataAt(5, []) as any[]).filter(row => row.employee_id === employeeId && row.status === 'active'))
+
+    const trainingData = dataAt(6, { assigned: [] }) as { assigned?: any[] }
+    setTrainings((trainingData.assigned || []).filter(row => ['assigned', 'in_progress'].includes(row.status)).slice(0, 3))
+
+    const reviews = dataAt(7, []) as any[]
+    setActiveReview(reviews.find(row => row.status === 'pending_self') || null)
   }
 
   async function handleSave() {
@@ -124,13 +170,11 @@ export default function ProfilePage() {
     if (!activeReview) return
     setSaving(true)
     try {
-      const { error } = await supabase.from('performance_reviews').update({
+      const result = await api.post(`/performance/reviews/${activeReview.id}/self`, {
         self_rating: reviewRating,
         self_comments: reviewComments,
-        status: 'pending_manager',
-        self_submitted_at: new Date().toISOString(),
-      }).eq('id', activeReview.id)
-      if (error) throw error
+      })
+      if (!result.ok) throw new Error(result.error || 'Failed to submit review')
       toast.success('Self review submitted')
       setShowReviewDialog(false)
       setActiveReview(null)

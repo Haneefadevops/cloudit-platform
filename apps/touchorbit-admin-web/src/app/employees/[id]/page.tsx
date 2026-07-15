@@ -170,6 +170,7 @@ export default function EmployeeDetailPage() {
 
   async function loadEmployee() {
     setLoading(true)
+    let coreLoaded = false
     try {
       const result = await api.get<any>(`/employees/${employeeId}`)
       if (!result.ok) throw new Error(result.error || 'Failed to load employee')
@@ -186,6 +187,8 @@ export default function EmployeeDetailPage() {
       })
       setEmploymentForm({ employee_number: data.employee_number || '', hire_date: data.hire_date || '', employment_status: data.employment_status || '' })
       setBankForm({ bank_name: data.bank_name || '', bank_account_number: data.bank_account_number || '', bank_branch: data.bank_branch || '' })
+      coreLoaded = true
+      setLoading(false)
 
       // Fetch user metadata if user_id exists
       if (data.user_id) {
@@ -226,7 +229,11 @@ export default function EmployeeDetailPage() {
       // Load activity feed data from multiple tables
       await loadActivityFeed(data.id)
     } catch (error) {
-      toast.error('Failed to load employee')
+      if (coreLoaded) {
+        console.error('Error loading optional employee data:', error)
+      } else {
+        toast.error('Failed to load employee')
+      }
     } finally {
       setLoading(false)
     }

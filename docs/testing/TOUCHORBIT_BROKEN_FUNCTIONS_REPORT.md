@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 41 | 0 | 0 | 1 | 0 |
+| High | 36 | 0 | 4 | 2 | 0 |
 | Medium | 7 | 0 | 0 | 1 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -80,7 +80,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0003 - Admin Logout Flow Blocked Because UI Login Does Not Reach Dashboard
 
-- **Status:** Open
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Authentication and onboarding
@@ -96,7 +96,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/login.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** The deployed BF-0002 fix unblocked the logout action. Redacted browser diagnostics confirmed the logout response domain did not match the live cookie; a canonical-domain deletion is implemented locally and pending deployment.
+- **Notes:** Fixed by emitting one deletion using the same canonical cookie domain as login. The deployed logout retest passed and confirmed the session cookie is removed.
 
 ### BF-0004 - Dashboard Widget Remove Does Not Persist Or Hide Removed Widget
 
@@ -120,7 +120,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0005 - Employee Detail Page Stays On Loading Profile
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Employees
@@ -136,7 +136,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/employees.spec.ts`
 - **Last tested:** 2026-07-14
-- **Notes:** Employees list, search, filters, dialog validation, import, export, KPI status chip, and preview drawer passed after correcting test assertions to match visible UI.
+- **Notes:** Core employee data now releases the full-page loader before optional legacy stats/activity reads. TypeScript validation passed; deployment retest is pending.
 
 ### BF-0006 - Employee Documents Route Redirects To Login
 
@@ -948,7 +948,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0045 - Employee Profile Phone Update Cannot Start
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Profile
@@ -964,11 +964,11 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/profile-functional.spec.ts --grep "EF24\\.1"`
 - **Last tested:** 2026-07-14
-- **Notes:** The test restored the original phone through the local API cleanup path.
+- **Notes:** Employee identity now uses `/employees/me`, and core profile content renders before optional sections. TypeScript validation passed; deployment retest is pending.
 
 ### BF-0046 - Employee Profile Emergency Contacts Do Not Render
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Profile
@@ -984,7 +984,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/profile-functional.spec.ts --grep "EF24\\.2"`
 - **Last tested:** 2026-07-14
-- **Notes:** The test restores the original emergency-contact list through the local API cleanup path.
+- **Notes:** Emergency contacts now load independently from the local employee API after core profile render. TypeScript validation passed; deployment retest is pending.
 
 ### BF-0047 - Employee Calendar Task Create Crashes Page
 
@@ -1068,7 +1068,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0051 - Employee Self Performance Review Cannot Be Submitted
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Performance
@@ -1084,7 +1084,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/performance-functional.spec.ts`
 - **Last tested:** 2026-07-14
-- **Notes:** The test seeds the pending review through the local API before opening the employee profile.
+- **Notes:** Pending reviews now load from the local performance API and submit through `POST /performance/reviews/:id/self`. TypeScript validation passed; deployment retest is pending.
 
 ### BF-0052 - Employee Attendance Page Is Flaky And Renders No Content
 
@@ -1182,12 +1182,12 @@ Add every failed/skipped/unverified function below using this template.
 | 2026-07-15 | Production TouchOrbit | `npx playwright test --config=e2e/playwright.config.ts tests/admin/login.spec.ts tests/admin/auth.spec.ts` | Failed | `e2e/test-results/admin-login-Authentication-bf307-ogin-redirects-to-dashboard-chromium-no-auth-retry2/`, `e2e/test-results/admin-login-Authentication-cfa71-to-login-and-clears-session-chromium-no-auth-retry2/` | Pre-deployment Phase 1 retest: 11 passed, 2 failed on the unchanged production deployment. Local admin and employee auth patches pass TypeScript checks and production builds; BF-0002/BF-0003 remain open pending deployment. |
 | 2026-07-15 | Production TouchOrbit | `npx playwright test --config=e2e/playwright.config.ts tests/admin/login.spec.ts tests/admin/auth.spec.ts` | Failed | `e2e/test-results/admin-login-Authentication-cfa71-to-login-and-clears-session-chromium-no-auth-retry2/` | Post-deployment Phase 1 admin retest: 12 passed, 1 failed. BF-0002 is fixed; BF-0003 now reaches logout but leaves a host-only session cookie. |
 | 2026-07-15 | Production TouchOrbit | `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/pages.spec.ts` | Failed | `e2e/test-results/employee-pages-Employee-pr-4dcd0-ges-E2-page-loads-org-chart-employee-chromium-retry2/`, `e2e/test-results/employee-pages-Employee-pr-d46f0-es-E2-page-loads-attendance-employee-chromium/` | Phase 1 targets `/documents` and `/payslips` passed without retry, fixing BF-0006/BF-0008. BF-0007 remains open; attendance was flaky and is tracked as BF-0052. |
+| 2026-07-15 | Production TouchOrbit | `npx playwright test --config=e2e/playwright.config.ts tests/admin/login.spec.ts --grep 1.5` | Passed | Playwright list output | Canonical-domain logout fix passed; BF-0003 is fixed and Phase 1 exit criteria are complete. |
 
 ## Open Items By Portal
 
 ### Admin Portal
 
-- BF-0003 - Admin logout flow blocked because UI login does not reach dashboard.
 - BF-0004 - Dashboard widget remove does not persist or hide removed widget.
 - BF-0005 - Employee detail page stays on Loading Profile.
 - BF-0009 - Admin Add Employee submit does not complete.
