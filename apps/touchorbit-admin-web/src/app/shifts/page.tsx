@@ -168,7 +168,7 @@ export default function ShiftsPage() {
            ) : (
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
                 {shifts.map(shift => (
-                  <div key={shift.id} className="bg-white rounded-[24px] border border-[#F1F0F4] shadow-sm hover:shadow-xl hover:shadow-purple-900/5 transition-all group overflow-hidden">
+                  <div key={shift.id} data-testid={`shift-card-${shift.id}`} className="bg-white rounded-[24px] border border-[#F1F0F4] shadow-sm hover:shadow-xl hover:shadow-purple-900/5 transition-all group overflow-hidden">
                      <div className="h-1.5 w-full" style={{ backgroundColor: shift.color }} />
                      <div className="p-6">
                         <div className="flex justify-between items-start mb-6">
@@ -199,10 +199,10 @@ export default function ShiftsPage() {
                            <button onClick={() => handleEdit(shift)} className="flex-1 py-2.5 bg-[#F8F7F9] hover:bg-[#F3E8FF] text-[#1A1727] hover:text-[#534AB7] rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
                               <Edit2 size={12} /> Edit
                            </button>
-                           <button onClick={() => toggleStatus(shift.id, shift.status)} className="p-2.5 bg-[#F8F7F9] hover:bg-gray-100 text-[#9CA3AF] rounded-xl transition-all">
+                           <button aria-label={`${shift.status === 'active' ? 'Deactivate' : 'Activate'} ${shift.name}`} onClick={() => toggleStatus(shift.id, shift.status)} className="p-2.5 bg-[#F8F7F9] hover:bg-gray-100 text-[#9CA3AF] rounded-xl transition-all">
                               {shift.status === 'active' ? <X size={16} /> : <Check size={16} />}
                            </button>
-                           <button onClick={() => handleDelete(shift.id)} className="p-2.5 bg-red-50 hover:bg-red-500 text-red-400 hover:text-white rounded-xl transition-all">
+                           <button aria-label={`Delete ${shift.name}`} onClick={() => handleDelete(shift.id)} className="p-2.5 bg-red-50 hover:bg-red-500 text-red-400 hover:text-white rounded-xl transition-all">
                               <Trash2 size={16} />
                            </button>
                         </div>

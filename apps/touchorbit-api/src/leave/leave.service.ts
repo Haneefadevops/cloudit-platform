@@ -244,8 +244,16 @@ export class LeaveService {
     id: string,
     userId: string,
     notes?: string,
+    approveAllLevels = false,
   ) {
-    return this.advanceRequest(organizationId, id, userId, "approved", notes);
+    return this.advanceRequest(
+      organizationId,
+      id,
+      userId,
+      "approved",
+      notes,
+      approveAllLevels,
+    );
   }
 
   async rejectRequest(
@@ -263,14 +271,19 @@ export class LeaveService {
     userId: string,
     status: "approved" | "rejected",
     notes?: string,
+    approveAllLevels = false,
   ) {
-    const pendingLevel = await this.databaseService.query<{ level: number }>(
+    const pendingLevels = await this.databaseService.query<{ level: number }>(
       `SELECT level FROM leave_request_approvals
        WHERE request_id = $1::uuid AND status = 'pending'
-       ORDER BY level LIMIT 1`,
+       ORDER BY level`,
       [id],
     );
-    const level = pendingLevel.rows[0]?.level ?? 1;
+    const levels =
+      status === "approved" && approveAllLevels
+        ? pendingLevels.rows.map((row) => row.level)
+        : [pendingLevels.rows[0]?.level ?? 1];
+    if (levels.length === 0) levels.push(1);
 
     const client = await this.databaseService.connect();
     try {
@@ -279,12 +292,16 @@ export class LeaveService {
         `SELECT set_config('touchorbit.current_user_id', $1, true)`,
         [userId],
       );
-      const result = await client.query<{ advance_leave_request: string }>(
-        `SELECT advance_leave_request($1::uuid, $2, $3, $4) AS advance_leave_request`,
-        [id, level, status, notes ?? null],
-      );
+      let finalStatus: string = status;
+      for (const level of levels) {
+        const result = await client.query<{ advance_leave_request: string }>(
+          `SELECT advance_leave_request($1::uuid, $2, $3, $4) AS advance_leave_request`,
+          [id, level, status, notes ?? null],
+        );
+        finalStatus = result.rows[0].advance_leave_request;
+      }
       await client.query("COMMIT");
-      return { id, status: result.rows[0].advance_leave_request };
+      return { id, status: finalStatus };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

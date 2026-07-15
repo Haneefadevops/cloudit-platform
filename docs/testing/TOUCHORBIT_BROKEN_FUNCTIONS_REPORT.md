@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 32 | 0 | 4 | 6 | 0 |
+| High | 32 | 0 | 1 | 9 | 0 |
 | Medium | 6 | 0 | 1 | 1 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -260,7 +260,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0012 - Admin Leave Reject Calls Missing Endpoint
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Leave
@@ -276,7 +276,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/leave-functional.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** The admin decision handler now maps the `rejected` UI state to the backend `/reject` action. TypeScript validation passed; deployment retest is pending.
+- **Notes:** Deployed F6.2 retest passed. The admin decision handler maps the `rejected` UI state to `/reject`, and the request persists as rejected.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -390,7 +390,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0018 - Leave Balance Adjustment API Fails With Parameter Type Error
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin/API
 - **Module:** Leave / Encashment
@@ -406,7 +406,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/encashment-functional.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** Nullable values passed to `jsonb_build_object` now have explicit text/numeric SQL casts. API TypeScript validation passed; deployment retest is pending.
+- **Notes:** Deployed encashment setup successfully adjusted balances and seeded approval/rejection requests, confirming the SQL parameter error is resolved. Later UI assertions were blocked by an ambiguous test selector unrelated to balance adjustment.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -868,7 +868,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0041 - Core Settings Save Does Not Persist
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Settings
@@ -884,7 +884,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/settings-functional.spec.ts --grep "F24\\.1"`
 - **Last tested:** 2026-07-15
-- **Notes:** Retest isolated numeric overtime-policy strings as the invalid payload source. The UI now normalizes them to numbers, and invalid API payloads return HTTP 400 instead of a false-success 200. Deployment retest is pending.
+- **Notes:** Deployed F24.1 retest passed. Numeric policy values are normalized, the grace-period update persists, and the test restores the original value.
 
 ### BF-0042 - Leave Approval Chain Save Does Not Complete
 

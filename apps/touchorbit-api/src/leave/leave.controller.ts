@@ -169,6 +169,7 @@ export class LeaveController {
       id,
       user.id,
       parsed.data.notes,
+      ["owner", "super_admin", "admin"].includes(user.role),
     );
     return { ok: true, data: row };
   }
