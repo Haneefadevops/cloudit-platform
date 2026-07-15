@@ -746,11 +746,11 @@ export default function SettingsPage() {
 
       if (otPolicy) {
         setOvertimePolicy({
-          max_daily_hours: otPolicy.max_daily_hours || 4.0,
-          max_weekly_hours: otPolicy.max_weekly_hours || 12.0,
-          weekday_rate: otPolicy.weekday_rate || 1.5,
-          weekend_rate: otPolicy.weekend_rate || 2.0,
-          holiday_rate: otPolicy.holiday_rate || 2.5,
+          max_daily_hours: Number(otPolicy.max_daily_hours ?? 4.0),
+          max_weekly_hours: Number(otPolicy.max_weekly_hours ?? 12.0),
+          weekday_rate: Number(otPolicy.weekday_rate ?? 1.5),
+          weekend_rate: Number(otPolicy.weekend_rate ?? 2.0),
+          holiday_rate: Number(otPolicy.holiday_rate ?? 2.5),
           requires_approval: otPolicy.requires_approval !== false,
           auto_detect: otPolicy.auto_detect !== false,
         })

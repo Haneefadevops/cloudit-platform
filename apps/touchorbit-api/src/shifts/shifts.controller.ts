@@ -34,6 +34,7 @@ const updateShiftSchema = z.object({
   break_duration: z.number().int().min(0).optional(),
   color: z.string().max(32).optional(),
   is_night_shift: z.boolean().optional(),
+  status: z.enum(["active", "inactive"]).optional(),
 });
 
 const createTemplateSchema = z.object({
@@ -113,6 +114,7 @@ export class ShiftsController {
       breakDuration: parsed.data.break_duration,
       color: parsed.data.color,
       isNightShift: parsed.data.is_night_shift,
+      status: parsed.data.status,
     });
     return { ok: true, data: row };
   }

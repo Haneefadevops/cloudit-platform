@@ -189,7 +189,8 @@ export default function LeavePage() {
     if (status === 'rejected' && !rejectionNote) { toast.error('Please enter a reason'); return }
 
     setProcessingId(selected.id)
-    const result = await api.post<{ id: string; status: string }>(`/leave/requests/${selected.id}/${status}`, {
+    const decision = status === 'approved' ? 'approve' : 'reject'
+    const result = await api.post<{ id: string; status: string }>(`/leave/requests/${selected.id}/${decision}`, {
       notes: rejectionNote || undefined,
     })
 

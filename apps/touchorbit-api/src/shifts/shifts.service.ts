@@ -75,6 +75,7 @@ export class ShiftsService {
       breakDuration?: number;
       color?: string;
       isNightShift?: boolean;
+      status?: "active" | "inactive";
     },
   ) {
     const result = await this.databaseService.query(
@@ -84,6 +85,7 @@ export class ShiftsService {
            end_time = COALESCE($5::time, end_time),
            break_minutes = COALESCE($6, break_minutes),
            color = COALESCE($7, color),
+           status = COALESCE($8, status),
            updated_at = now()
        WHERE id = $1::uuid AND organization_id = $2::uuid
        RETURNING *`,
@@ -95,6 +97,7 @@ export class ShiftsService {
         input.endTime ?? null,
         input.breakDuration ?? null,
         input.color ?? null,
+        input.status ?? null,
       ],
     );
     if (result.rows.length === 0) {

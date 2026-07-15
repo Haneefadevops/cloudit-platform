@@ -383,7 +383,11 @@ export class LeaveService {
          VALUES (
            $1::uuid, $2::uuid, 'leave_balance_adjusted', now(),
            $3, $4::uuid, $5,
-           jsonb_build_object('leave_type', $6, 'days', $7, 'reason', $8)
+           jsonb_build_object(
+             'leave_type', $6::text,
+             'days', $7::numeric,
+             'reason', $8::text
+           )
          )`,
         [
           employeeId,

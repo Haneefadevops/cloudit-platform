@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
 import { api } from '@/lib/api'
 import { Plus, Edit2, Trash2, Clock, Users, RefreshCw, X, ChevronRight, Check } from 'lucide-react'
 import { toast } from 'sonner'
@@ -97,9 +96,16 @@ export default function ShiftsPage() {
   }
 
   async function toggleStatus(shiftId: string, currentStatus: string) {
-    // TODO: backend PATCH /shifts/:id does not yet support status
-    const { error } = await supabase.from('shifts').update({ status: currentStatus === 'active' ? 'inactive' : 'active' }).eq('id', shiftId)
-    if (!error) { toast.success('Status updated'); loadShifts() }
+    try {
+      const result = await api.patch<Shift>(`/shifts/${shiftId}`, {
+        status: currentStatus === 'active' ? 'inactive' : 'active',
+      })
+      if (!result.ok) throw new Error(result.error || 'Failed to update status')
+      toast.success('Status updated')
+      loadShifts()
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update status')
+    }
   }
 
   function handleEdit(shift: Shift) {

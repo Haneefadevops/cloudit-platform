@@ -30,8 +30,8 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 36 | 0 | 2 | 4 | 0 |
-| Medium | 7 | 0 | 0 | 1 | 0 |
+| High | 32 | 0 | 4 | 6 | 0 |
+| Medium | 6 | 0 | 1 | 1 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
 ## Broken Function Entries
@@ -120,7 +120,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0005 - Employee Detail Page Stays On Loading Profile
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Employees
@@ -136,7 +136,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/employees.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** Deployed retest confirmed the employee profile and section navigation render. The remaining test mismatch is missing semantic tab roles; the accessibility markup fix is implemented and awaiting deployment.
+- **Notes:** Deployed `3.13 employee detail page loads` retest passed. Core profile content renders and the semantic tab/tab-panel contract is present.
 
 ### BF-0006 - Employee Documents Route Redirects To Login
 
@@ -240,7 +240,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0011 - Admin Leave Approve Calls Missing Endpoint
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Leave
@@ -255,12 +255,12 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Change the admin leave decision handler to call `/approve` for approved decisions, rerun the admin Leave functional module, and verify persisted backend status.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/leave-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** The backend route exists; the UI path is the broken part.
+- **Last tested:** 2026-07-15
+- **Notes:** The admin decision handler now maps the `approved` UI state to the backend `/approve` action. TypeScript validation passed; deployment retest is pending.
 
 ### BF-0012 - Admin Leave Reject Calls Missing Endpoint
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Leave
@@ -275,8 +275,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Change the admin leave decision handler to call `/reject` for rejected decisions, rerun the admin Leave functional module, and verify persisted backend status.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/leave-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This is separate from BF-0011 so approve and reject can be tracked independently.
+- **Last tested:** 2026-07-15
+- **Notes:** The admin decision handler now maps the `rejected` UI state to the backend `/reject` action. TypeScript validation passed; deployment retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -390,7 +390,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0018 - Leave Balance Adjustment API Fails With Parameter Type Error
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin/API
 - **Module:** Leave / Encashment
@@ -405,8 +405,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Inspect `leave.service.adjustBalance`, add explicit SQL casts for nullable parameters, verify API adjustment succeeds, then rerun admin encashment functional tests.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/encashment-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This also affects the admin Leave balance adjustment UI because it uses the same endpoint.
+- **Last tested:** 2026-07-15
+- **Notes:** Nullable values passed to `jsonb_build_object` now have explicit text/numeric SQL casts. API TypeScript validation passed; deployment retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -520,7 +520,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0024 - Admin Shift Template Status Toggle Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** Medium
 - **Portal:** Admin
 - **Module:** Roster / Shift Templates
@@ -535,8 +535,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Replace the Supabase status toggle with a local API endpoint, either by extending `PATCH /api/shifts/:id` to accept `status` or wiring to the existing roster shift status endpoint, then rerun the shift functional module.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/shifts-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** Shift create, edit, and delete passed in the same module. Only active/inactive status management failed.
+- **Last tested:** 2026-07-15
+- **Notes:** `PATCH /shifts/:id` now accepts active/inactive status, and the admin toggle uses the local API with visible error handling. TypeScript validation passed; deployment retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -868,7 +868,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0041 - Core Settings Save Does Not Persist
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Settings
@@ -883,8 +883,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Assert and surface API envelope errors in the UI, normalize settings payload types, and retest persistence through a follow-up GET.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/settings-functional.spec.ts --grep "F24\\.1"`
-- **Last tested:** 2026-07-14
-- **Notes:** The test restores the original value through the API after each run.
+- **Last tested:** 2026-07-15
+- **Notes:** Retest isolated numeric overtime-policy strings as the invalid payload source. The UI now normalizes them to numbers, and invalid API payloads return HTTP 400 instead of a false-success 200. Deployment retest is pending.
 
 ### BF-0042 - Leave Approval Chain Save Does Not Complete
 
@@ -1068,7 +1068,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0051 - Employee Self Performance Review Cannot Be Submitted
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Performance
@@ -1084,7 +1084,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/performance-functional.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** Deployed retest confirms pending reviews load and the self-review dialog opens. Submission was blocked because the fixed mobile navigation shared the dialog's stacking level and intercepted the button; the dialog now renders above navigation and awaits deployment retest.
+- **Notes:** Deployed EF27.1 retest passed. Pending reviews load, the dialog stays above mobile navigation, submission succeeds, and the review advances to `pending_manager`.
 
 ### BF-0052 - Employee Attendance Page Is Flaky And Renders No Content
 

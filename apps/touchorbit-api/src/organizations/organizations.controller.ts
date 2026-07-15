@@ -1,4 +1,11 @@
-import { Controller, Get, Patch, Body, UseGuards } from "@nestjs/common";
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Patch,
+  Body,
+  UseGuards,
+} from "@nestjs/common";
 import { ApiTags, ApiOperation } from "@nestjs/swagger";
 import { SessionAuthGuard } from "../common/guards/session-auth.guard";
 import { RequireModule } from "../common/decorators/require-module.decorator";
@@ -87,7 +94,7 @@ export class OrganizationsController {
   ) {
     const parsed = updateSettingsSchema.safeParse(body);
     if (!parsed.success) {
-      return { ok: false, error: "Invalid settings payload" };
+      throw new BadRequestException("Invalid settings payload");
     }
     await this.organizationsService.updateSettings(organizationId, parsed.data);
     return { ok: true, data: { updated: true } };
