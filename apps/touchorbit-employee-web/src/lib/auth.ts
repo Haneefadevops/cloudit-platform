@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { createContext, createElement, useContext, useEffect, useRef, useState } from 'react'
 import { api } from './api'
 
 interface MeData {
@@ -31,6 +31,16 @@ interface AuthState {
   signOut: () => Promise<void>
 }
 
+interface AuthContextState {
+  profile: MeData | null
+  isLoaded: boolean
+  signOut: () => Promise<void>
+}
+
+const AuthContext = createContext<AuthContextState | undefined>(undefined)
+const POLL_INTERVAL_MS = 30_000
+const RETRY_INTERVALS_MS = [500, 1_000, 2_000, 5_000]
+
 function splitName(fullName?: string) {
   const parts = (fullName || '').trim().split(/\s+/)
   return {
@@ -39,32 +49,69 @@ function splitName(fullName?: string) {
   }
 }
 
-export function useAuth(): AuthState {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<MeData | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasLoadedRef = useRef(false)
 
   useEffect(() => {
     let mounted = true
 
-    async function fetchMe() {
+    function schedule(delay: number, attempt = 0) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      timeoutRef.current = setTimeout(() => fetchMe(attempt), delay)
+    }
+
+    async function fetchMe(attempt = 0) {
       const result = await api.get<MeData>('/auth/me')
       if (!mounted) return
       if (result.ok && result.data) {
         setProfile(result.data)
-      } else {
+        setIsLoaded(true)
+        hasLoadedRef.current = true
+        schedule(POLL_INTERVAL_MS)
+      } else if (result.status === 401 || result.status === 403) {
         setProfile(null)
+        setIsLoaded(true)
+        hasLoadedRef.current = true
+      } else {
+        const retryIndex = Math.min(attempt, RETRY_INTERVALS_MS.length - 1)
+        schedule(
+          hasLoadedRef.current ? POLL_INTERVAL_MS : RETRY_INTERVALS_MS[retryIndex],
+          attempt + 1,
+        )
       }
-      setIsLoaded(true)
     }
 
     fetchMe()
-    const interval = setInterval(fetchMe, 30000)
 
     return () => {
       mounted = false
-      clearInterval(interval)
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
   }, [])
+
+  async function signOut() {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    await api.post('/auth/logout', {})
+    setProfile(null)
+    window.location.href = '/login'
+  }
+
+  return createElement(
+    AuthContext.Provider,
+    { value: { profile, isLoaded, signOut } },
+    children,
+  )
+}
+
+export function useAuth(): AuthState {
+  const context = useContext(AuthContext)
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider')
+  }
+  const { profile, isLoaded, signOut } = context
 
   const role = profile?.role
   const names = splitName(profile?.fullName)
@@ -96,10 +143,7 @@ export function useAuth(): AuthState {
         }
       : null,
     userProfile,
-    signOut: async () => {
-      await api.post('/auth/logout', {})
-      window.location.href = '/login'
-    },
+    signOut,
   }
 }
 

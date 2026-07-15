@@ -4,6 +4,7 @@ export interface ApiResult<T> {
   ok: boolean
   data?: T
   error?: string
+  status?: number
 }
 
 async function apiCall<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
@@ -31,7 +32,7 @@ async function apiCall<T>(method: string, path: string, body?: unknown): Promise
       }
     }
 
-    if (response.status === 401) {
+    if (response.status === 401 && path === '/auth/me') {
       if (typeof window !== 'undefined') {
         const pathname = window.location.pathname
         const alreadyAuthPage =
@@ -46,7 +47,7 @@ async function apiCall<T>(method: string, path: string, body?: unknown): Promise
         (payload && typeof payload === 'object' && (payload as any).message) ||
         (payload && typeof payload === 'object' && (payload as any).error) ||
         'Unauthorized'
-      return { ok: false, error: message }
+      return { ok: false, error: message, status: response.status }
     }
 
     if (!response.ok) {
@@ -54,19 +55,19 @@ async function apiCall<T>(method: string, path: string, body?: unknown): Promise
         (payload && typeof payload === 'object' && (payload as any).message) ||
         (payload && typeof payload === 'object' && (payload as any).error) ||
         response.statusText
-      return { ok: false, error: message }
+      return { ok: false, error: message, status: response.status }
     }
 
     // Normalize backend envelope `{ ok: true, data: ... }`
     if (payload && typeof payload === 'object' && 'ok' in payload) {
       const envelope = payload as { ok: boolean; data?: T; message?: string; error?: string }
       if (envelope.ok) {
-        return { ok: true, data: envelope.data }
+        return { ok: true, data: envelope.data, status: response.status }
       }
-      return { ok: false, error: envelope.message || envelope.error || 'Request failed' }
+      return { ok: false, error: envelope.message || envelope.error || 'Request failed', status: response.status }
     }
 
-    return { ok: true, data: payload as T }
+    return { ok: true, data: payload as T, status: response.status }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Network error' }
   }

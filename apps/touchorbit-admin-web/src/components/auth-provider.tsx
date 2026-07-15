@@ -26,7 +26,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 const POLL_INTERVAL_MS = 60_000
-const BACKOFF_INTERVAL_MS = 120_000
+const RETRY_INTERVALS_MS = [500, 1_000, 2_000, 5_000]
 
 async function fetchMe(): Promise<{
   data: MeData | null
@@ -60,72 +60,66 @@ async function fetchMe(): Promise<{
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<MeData | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const isBackingOffRef = useRef(false)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasLoadedRef = useRef(false)
 
   useEffect(() => {
     let mounted = true
 
-    function clearAuthInterval() {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
+    function clearAuthTimeout() {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
       }
     }
 
-    function scheduleInterval(backoff: boolean) {
-      clearAuthInterval()
-      isBackingOffRef.current = backoff
-      intervalRef.current = setInterval(
-        checkSession,
-        backoff ? BACKOFF_INTERVAL_MS : POLL_INTERVAL_MS,
-      )
+    function scheduleCheck(delay: number, attempt = 0) {
+      clearAuthTimeout()
+      timeoutRef.current = setTimeout(() => checkSession(attempt), delay)
     }
 
-    async function checkSession() {
+    async function checkSession(attempt = 0) {
       const { data, status } = await fetchMe()
 
       if (!mounted) return
 
-      setProfile(data)
-      setIsLoaded(true)
-
       if (data) {
-        // Authenticated: normal poll interval.
-        if (isBackingOffRef.current) {
-          scheduleInterval(false)
-        }
+        setProfile(data)
+        setIsLoaded(true)
+        hasLoadedRef.current = true
+        scheduleCheck(POLL_INTERVAL_MS)
         return
       }
 
       if (status === 401 || status === 403) {
-        // Unauthenticated: stop polling. The user must log in again.
-        clearAuthInterval()
+        setProfile(null)
+        setIsLoaded(true)
+        hasLoadedRef.current = true
+        clearAuthTimeout()
         return
       }
 
-      if (status === 429) {
-        // Rate limited: back off.
-        scheduleInterval(true)
-        return
-      }
-
-      // Other errors (network, 500, etc.): keep current interval.
+      // A rate limit, network failure, or server error is not proof that the
+      // session ended. Preserve known-good auth and retry quickly on startup.
+      const retryIndex = Math.min(attempt, RETRY_INTERVALS_MS.length - 1)
+      scheduleCheck(
+        hasLoadedRef.current ? POLL_INTERVAL_MS : RETRY_INTERVALS_MS[retryIndex],
+        attempt + 1,
+      )
     }
 
     checkSession()
-    intervalRef.current = setInterval(checkSession, POLL_INTERVAL_MS)
 
     return () => {
       mounted = false
-      clearAuthInterval()
+      clearAuthTimeout()
     }
   }, [])
 
   async function signOut() {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
     }
     try {
       await fetch('/api/auth/logout', {

@@ -66,9 +66,11 @@ export async function middleware(request: NextRequest) {
 
   // Rate-limiting is transient; do not redirect to login because that creates
   // a redirect loop and shows the misleading "session cookie not saved" toast.
-  const isRateLimited = lastStatus === 429
+  const hasSessionCookie = request.cookies.has('touchorbit_session')
+  const isDefinitelyUnauthenticated = lastStatus === 401 || lastStatus === 403
+  const shouldRedirectToLogin = !hasSessionCookie || isDefinitelyUnauthenticated || !API_URL
 
-  if (!me && !isAuthPage && !isRateLimited) {
+  if (!me && !isAuthPage && shouldRedirectToLogin) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 

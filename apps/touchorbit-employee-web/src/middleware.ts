@@ -16,6 +16,7 @@ export async function middleware(request: NextRequest) {
   const isResetPage = pathname.startsWith('/reset-password')
 
   let me: MeData | null = null
+  let lastStatus: number | null = null
 
   if (API_URL) {
     try {
@@ -24,6 +25,7 @@ export async function middleware(request: NextRequest) {
         headers: { Cookie: cookie },
         credentials: 'include',
       })
+      lastStatus = response.status
 
       if (response.ok) {
         const body = await response.json()
@@ -36,7 +38,11 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (!me && !isAuthPage && !isResetPage) {
+  const hasSessionCookie = request.cookies.has('touchorbit_session')
+  const isDefinitelyUnauthenticated = lastStatus === 401 || lastStatus === 403
+  const shouldRedirectToLogin = !hasSessionCookie || isDefinitelyUnauthenticated || !API_URL
+
+  if (!me && !isAuthPage && !isResetPage && shouldRedirectToLogin) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
