@@ -89,14 +89,14 @@ Add every failed/skipped/unverified function below using this template.
 - **Test file:** `e2e/tests/admin/login.spec.ts`
 - **Test name:** `1.5 logout redirects to login and clears session`
 - **Expected:** A valid login should render the dashboard, clicking logout should redirect to `/login`, and the session cookie should be cleared.
-- **Actual:** Login and redirect now succeed, but logout leaves a host-only `touchorbit_session` cookie in the browser.
+- **Actual:** Login and redirect now succeed, but logout leaves the parent-domain `touchorbit_session` cookie in the browser.
 - **Evidence:** `e2e/test-results/admin-login-Authentication-cfa71-to-login-and-clears-session-chromium-no-auth-retry2/test-failed-1.png`, `e2e/test-results/admin-login-Authentication-cfa71-to-login-and-clears-session-chromium-no-auth-retry2/error-context.md`.
-- **Likely cause:** The logout proxy clears parent-domain and explicit-domain cookies but does not emit a host-only deletion cookie.
-- **Fix plan:** Clear `touchorbit_session` once without a Domain attribute in addition to the existing domain variants, deploy, and rerun the logout test.
+- **Likely cause:** Multiple same-name cookie deletions collapse to the last response entry. Production emitted only `Domain=to-admin.cloudit.lk`, while the live cookie uses `Domain=.cloudit.lk`.
+- **Fix plan:** Emit exactly one deletion using the same canonical domain computed by login, deploy, and rerun the logout test.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/login.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** The deployed BF-0002 fix unblocked the logout action. A host-only cookie deletion follow-up is implemented locally and pending deployment.
+- **Notes:** The deployed BF-0002 fix unblocked the logout action. Redacted browser diagnostics confirmed the logout response domain did not match the live cookie; a canonical-domain deletion is implemented locally and pending deployment.
 
 ### BF-0004 - Dashboard Widget Remove Does Not Persist Or Hide Removed Widget
 

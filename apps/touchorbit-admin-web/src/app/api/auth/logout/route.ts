@@ -24,35 +24,14 @@ export async function POST(request: NextRequest) {
       { status: 200 },
     )
 
-    // Clear the session cookie on every domain it could have been set on.
-    // Omitting Domain is required to remove a host-only cookie.
+    // ResponseCookies retains only the last same-name Set-Cookie operation.
+    // Emit one deletion using the same canonical domain chosen at login.
     res.cookies.set(SESSION_COOKIE.name, '', {
+      domain,
       path: SESSION_COOKIE.path,
       maxAge: 0,
       sameSite: 'lax',
     })
-    res.cookies.set(SESSION_COOKIE.name, '', {
-      domain: '.cloudit.lk',
-      path: SESSION_COOKIE.path,
-      maxAge: 0,
-      sameSite: 'lax',
-    })
-    if (domain) {
-      res.cookies.set(SESSION_COOKIE.name, '', {
-        domain,
-        path: SESSION_COOKIE.path,
-        maxAge: 0,
-        sameSite: 'lax',
-      })
-    }
-    if (host && host !== domain) {
-      res.cookies.set(SESSION_COOKIE.name, '', {
-        domain: host,
-        path: SESSION_COOKIE.path,
-        maxAge: 0,
-        sameSite: 'lax',
-      })
-    }
 
     return res
   } catch (error) {
