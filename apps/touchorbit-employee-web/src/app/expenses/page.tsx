@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { EmployeeLayout } from '@/components/employee-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { 
   Receipt, 
   ChevronRight, 
@@ -20,7 +20,7 @@ import { toast } from 'sonner'
 
 interface ExpenseClaim {
   id: string
-  amount: number
+  amount: number | string
   currency: string
   claim_date: string
   description: string | null
@@ -31,11 +31,13 @@ interface ExpenseClaim {
 interface ExpenseCategory {
   id: string
   name: string
-  max_claim_amount: number | null
+  max_claim_amount: number | string | null
 }
 
+interface Employee { id: string }
+
 export default function EmployeeExpensesPage() {
-  const { organizationId, userId, isLoaded } = useAuth()
+  const { isLoaded } = useAuth()
   const [claims, setClaims] = useState<ExpenseClaim[]>([])
   const [loading, setLoading] = useState(true)
   const [employeeId, setEmployeeId] = useState<string | null>(null)
@@ -53,44 +55,38 @@ export default function EmployeeExpensesPage() {
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
-    if (isLoaded && organizationId && userId) {
+    if (isLoaded) {
       loadEmployeeAndData()
     }
-  }, [isLoaded, organizationId, userId])
+  }, [isLoaded])
 
   const loadEmployeeAndData = async () => {
     try {
-      const { data: emp } = await supabase.from('employees').select('id').eq('user_id', userId).single()
-      if (emp) {
-        setEmployeeId(emp.id)
-        loadData(emp.id)
-        loadCategories()
-      }
-    } catch (error) {
+      const employeeResult = await api.get<Employee>('/employees/me')
+      if (!employeeResult.ok || !employeeResult.data) throw new Error(employeeResult.error || 'Employee not found')
+      setEmployeeId(employeeResult.data.id)
+      await Promise.all([loadData(employeeResult.data.id), loadCategories()])
+    } catch (error: any) {
       console.error(error)
-      toast.error('Failed to load expense data')
+      toast.error(error.message || 'Failed to load expense data')
+      setLoading(false)
     }
   }
 
   const loadCategories = async () => {
     try {
-      const { data } = await supabase
-        .from('expense_categories')
-        .select('id, name, max_claim_amount')
-        .eq('organization_id', organizationId)
-        .eq('is_active', true)
-        .order('name')
-      setCategories(data || [])
-    } catch (error) {
-      console.error(error)
-    }
+      const result = await api.get<ExpenseCategory[]>('/expenses/categories')
+      if (!result.ok) throw new Error(result.error || 'Failed to load expense categories')
+      setCategories(result.data || [])
+    } catch (error) { throw error }
   }
 
   const loadData = async (empId: string) => {
     setLoading(true)
     try {
-      const { data } = await supabase.from('expense_claims').select('*, category:expense_categories(name)').eq('employee_id', empId).order('claim_date', { ascending: false })
-      setClaims(data || [])
+      const result = await api.get<ExpenseClaim[]>(`/expenses?employee_id=${empId}`)
+      if (!result.ok) throw new Error(result.error || 'Failed to load expense claims')
+      setClaims(result.data || [])
     } finally {
       setLoading(false)
     }
@@ -105,29 +101,28 @@ export default function EmployeeExpensesPage() {
     if (!formData.claim_date) { setFormError('Please select a date'); return }
 
     const selectedCategory = categories.find(c => c.id === formData.category_id)
-    if (selectedCategory?.max_claim_amount && parseFloat(formData.amount) > selectedCategory.max_claim_amount) {
-      setFormError(`Amount exceeds max claim limit of LKR ${selectedCategory.max_claim_amount.toLocaleString()} for ${selectedCategory.name}`)
+    if (selectedCategory?.max_claim_amount && parseFloat(formData.amount) > Number(selectedCategory.max_claim_amount)) {
+      setFormError(`Amount exceeds max claim limit of LKR ${Number(selectedCategory.max_claim_amount).toLocaleString()} for ${selectedCategory.name}`)
       return
     }
 
     setSubmitting(true)
     try {
-      const { error } = await supabase.from('expense_claims').insert({
+      if (!employeeId) throw new Error('Employee not found')
+      const result = await api.post<ExpenseClaim>('/expenses', {
         employee_id: employeeId,
-        organization_id: organizationId,
         category_id: formData.category_id,
         amount: parseFloat(formData.amount),
         currency: 'LKR',
         claim_date: formData.claim_date,
         description: formData.description || null,
-        status: 'pending',
       })
-      if (error) throw error
+      if (!result.ok) throw new Error(result.error || 'Failed to submit claim')
 
       toast.success('Expense claim submitted')
       setShowForm(false)
       setFormData({ category_id: '', amount: '', claim_date: new Date().toISOString().split('T')[0], description: '' })
-      if (employeeId) loadData(employeeId)
+      await loadData(employeeId)
     } catch (error: any) {
       console.error(error)
       toast.error(error.message || 'Failed to submit claim')

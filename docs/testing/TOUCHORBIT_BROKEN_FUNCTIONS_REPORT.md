@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 27 | 0 | 1 | 14 | 0 |
+| High | 26 | 0 | 1 | 15 | 0 |
 | Medium | 6 | 0 | 0 | 2 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -434,7 +434,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0020 - Employee Expense Claim Has No Category Options
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Expenses
@@ -449,8 +449,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Implement local DB expense category APIs, migrate employee expenses page to those APIs, seed at least one active category, then rerun employee expense claim functional testing.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/expenses-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This blocks the employee expense claim creation workflow.
+- **Last tested:** 2026-07-15
+- **Notes:** The local API now lists active categories, lists employee-scoped claims, and creates claims with employee/category ownership validation. The employee page uses `/employees/me` and `/expenses` exclusively, and migration `0010` seeds a General category for organizations without an active category. API and employee TypeScript checks passed; deployment retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -586,7 +586,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0027 - Employee Attendance Correction Submit Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Attendance Corrections
@@ -602,7 +602,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/corrections-functional.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** The employee page now resolves identity through `/employees/me`, lists and creates corrections through the local API, and surfaces API errors. The API scopes employee lists to their own records and rejects creation for another employee. API and employee TypeScript checks passed; deployment retest is pending.
+- **Notes:** The employee page resolves identity through `/employees/me`, lists and creates corrections through the local API, and surfaces API errors. The deployed EF5.1 retest passed: create returned 201 and the refreshed employee-scoped list displayed the new pending correction.
 
 ### BF-0028 - Admin Attendance Correction Approve Does Not Complete
 
