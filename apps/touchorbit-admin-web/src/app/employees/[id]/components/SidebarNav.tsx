@@ -30,7 +30,11 @@ interface SidebarNavProps {
 
 export function SidebarNav({ activeTab, onTabChange }: SidebarNavProps) {
   return (
-    <nav className="w-60 shrink-0 bg-white border-r border-[#C7C3D0] flex flex-col overflow-y-auto">
+    <nav
+      role="tablist"
+      aria-label="Employee profile sections"
+      className="w-60 shrink-0 bg-white border-r border-[#C7C3D0] flex flex-col overflow-y-auto"
+    >
       <div className="p-4 space-y-1">
         {TABS.map((t) => {
           const isActive = activeTab === t.id
@@ -38,6 +42,10 @@ export function SidebarNav({ activeTab, onTabChange }: SidebarNavProps) {
           return (
             <button
               key={t.id}
+              id={`employee-tab-${t.id}`}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`employee-tabpanel-${t.id}`}
               onClick={() => onTabChange(t.id)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[12px] font-black uppercase tracking-wider transition-all text-left ${
                 isActive

@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 36 | 0 | 4 | 2 | 0 |
+| High | 36 | 0 | 2 | 4 | 0 |
 | Medium | 7 | 0 | 0 | 1 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -135,8 +135,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Inspect employee detail page data dependencies, especially any route that still uses legacy Supabase helpers or `/api/check-user-status`; fix loading/error handling and retest Module 3.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/employees.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** Core employee data now releases the full-page loader before optional legacy stats/activity reads. TypeScript validation passed; deployment retest is pending.
+- **Last tested:** 2026-07-15
+- **Notes:** Deployed retest confirmed the employee profile and section navigation render. The remaining test mismatch is missing semantic tab roles; the accessibility markup fix is implemented and awaiting deployment.
 
 ### BF-0006 - Employee Documents Route Redirects To Login
 
@@ -948,7 +948,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0045 - Employee Profile Phone Update Cannot Start
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Profile
@@ -963,12 +963,12 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Migrate profile summary stats, assigned assets, trainings, and pending self-review reads to local API endpoints; add failure-safe empty states so optional sections cannot block the profile shell; then retest phone update persistence.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/profile-functional.spec.ts --grep "EF24\\.1"`
-- **Last tested:** 2026-07-14
-- **Notes:** Employee identity now uses `/employees/me`, and core profile content renders before optional sections. TypeScript validation passed; deployment retest is pending.
+- **Last tested:** 2026-07-15
+- **Notes:** Deployed EF24.1 retest passed. Employee identity resolves through `/employees/me`, the profile renders, and the phone update workflow persists successfully.
 
 ### BF-0046 - Employee Profile Emergency Contacts Do Not Render
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Profile
@@ -983,8 +983,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Fix BF-0045 profile loading first, verify the local emergency contacts endpoint is called from the employee page, and retest seeded contact visibility.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/profile-functional.spec.ts --grep "EF24\\.2"`
-- **Last tested:** 2026-07-14
-- **Notes:** Emergency contacts now load independently from the local employee API after core profile render. TypeScript validation passed; deployment retest is pending.
+- **Last tested:** 2026-07-15
+- **Notes:** Deployed EF24.2 retest passed. Emergency contacts load independently from the local employee API and render after the core profile shell.
 
 ### BF-0047 - Employee Calendar Task Create Crashes Page
 
@@ -1083,8 +1083,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Migrate pending self-review lookup and submit action to the local performance API (`POST /performance/reviews/:id/self`), ensure profile loads with optional review data, and retest self-review status transition.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/performance-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** Pending reviews now load from the local performance API and submit through `POST /performance/reviews/:id/self`. TypeScript validation passed; deployment retest is pending.
+- **Last tested:** 2026-07-15
+- **Notes:** Deployed retest confirms pending reviews load and the self-review dialog opens. Submission was blocked because the fixed mobile navigation shared the dialog's stacking level and intercepted the button; the dialog now renders above navigation and awaits deployment retest.
 
 ### BF-0052 - Employee Attendance Page Is Flaky And Renders No Content
 

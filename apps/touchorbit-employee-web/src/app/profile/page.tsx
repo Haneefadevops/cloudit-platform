@@ -451,7 +451,7 @@ export default function ProfilePage() {
 
       {/* Performance Review Dialog */}
       {showReviewDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50 pb-safe">
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-[60] pb-safe">
           <div className="bg-white rounded-t-[32px] w-full max-w-lg p-6 animate-in slide-in-from-bottom duration-300">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-[16px] font-black text-[#1A1727]">Self Performance Review</h2>

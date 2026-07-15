@@ -746,7 +746,13 @@ export default function EmployeeDetailPage() {
         <div className="flex-1 flex overflow-hidden">
           <SidebarNav activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab)} />
           
-          <div ref={scrollRef} className="flex-1 overflow-y-auto p-6">
+          <div
+            ref={scrollRef}
+            id={`employee-tabpanel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`employee-tab-${activeTab}`}
+            className="flex-1 overflow-y-auto p-6"
+          >
 
           {/* OVERVIEW TAB */}
           {activeTab === 'overview' && (
