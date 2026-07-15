@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 32 | 0 | 1 | 9 | 0 |
+| High | 31 | 0 | 2 | 9 | 0 |
 | Medium | 6 | 0 | 0 | 2 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -220,7 +220,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0010 - Employee Leave Submit Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Leave
@@ -235,8 +235,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Add network/error diagnostics around the employee leave submit request, inspect the `/api/leave/requests` response and toast state, fix the API payload/backend validation or frontend error handling, then rerun the employee leave functional module.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/leave-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** The leave page component is expected to close the form on success; the failed state proves that success path did not complete.
+- **Last tested:** 2026-07-15
+- **Notes:** Diagnostics confirmed the valid form emitted no POST because `Apply New` could be used before `/employees/me` finished loading, leaving `employee` null. Entry and submission are now disabled until identity is ready; TypeScript validation passed and deployment retest is pending.
 
 ### BF-0011 - Admin Leave Approve Calls Missing Endpoint
 
@@ -256,7 +256,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/leave-functional.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** The admin decision handler now maps the `approved` UI state to the backend `/approve` action. TypeScript validation passed; deployment retest is pending.
+- **Notes:** The endpoint mismatch is fixed. Follow-up retest exposed duplicate approver rows at the same level; final owner/admin approval now iterates distinct levels only. API TypeScript validation passed; deployment retest is pending.
 
 ### BF-0012 - Admin Leave Reject Calls Missing Endpoint
 

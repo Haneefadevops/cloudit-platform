@@ -185,7 +185,8 @@ export default function LeavePage() {
                   <h3 className="text-[14px] font-black text-[#1A1727] uppercase tracking-wider">Leave History</h3>
                   <button 
                     onClick={() => setShowApplyForm(true)}
-                    className="text-[11px] font-black text-[#534AB7] uppercase tracking-widest flex items-center gap-1 bg-purple-50 px-3 py-1.5 rounded-lg"
+                    disabled={loading || !employee}
+                    className="text-[11px] font-black text-[#534AB7] uppercase tracking-widest flex items-center gap-1 bg-purple-50 px-3 py-1.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus size={12} strokeWidth={3} /> Apply New
                   </button>
@@ -308,7 +309,7 @@ export default function LeavePage() {
 
                 <button 
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || !employee}
                   className="w-full h-14 bg-[#534AB7] text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl shadow-purple-900/30 flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {submitting ? 'Applying...' : <>Submit Application <ChevronRight size={16} strokeWidth={3} /></>}
