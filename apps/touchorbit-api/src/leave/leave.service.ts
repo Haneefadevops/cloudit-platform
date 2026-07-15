@@ -274,7 +274,7 @@ export class LeaveService {
     approveAllLevels = false,
   ) {
     const pendingLevels = await this.databaseService.query<{ level: number }>(
-      `SELECT level FROM leave_request_approvals
+      `SELECT DISTINCT level FROM leave_request_approvals
        WHERE request_id = $1::uuid AND status = 'pending'
        ORDER BY level`,
       [id],

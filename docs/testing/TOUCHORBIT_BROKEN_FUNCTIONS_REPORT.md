@@ -31,7 +31,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
 | High | 32 | 0 | 1 | 9 | 0 |
-| Medium | 6 | 0 | 1 | 1 | 0 |
+| Medium | 6 | 0 | 0 | 2 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
 ## Broken Function Entries
@@ -520,7 +520,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0024 - Admin Shift Template Status Toggle Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** Medium
 - **Portal:** Admin
 - **Module:** Roster / Shift Templates
@@ -536,7 +536,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/shifts-functional.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** `PATCH /shifts/:id` now accepts active/inactive status, and the admin toggle uses the local API with visible error handling. TypeScript validation passed; deployment retest is pending.
+- **Notes:** Deployed F12.2 retest passed after targeting the toggle by its accessible name. `PATCH /shifts/:id` persists inactive status and the UI shows `Status updated`.
 
 Add every failed/skipped/unverified function below using this template.
 
