@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 29 | 0 | 2 | 11 | 0 |
+| High | 28 | 0 | 1 | 13 | 0 |
 | Medium | 6 | 0 | 0 | 2 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -326,7 +326,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0015 - Employee Comp-Off Submit Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Comp-Off
@@ -342,11 +342,11 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/requests-functional.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** The failure matches the resolved leave race: the request form could open before `/employees/me` completed, so submit returned without a POST. Form entry and submission now wait for employee identity; TypeScript validation passed and deployment retest is pending.
+- **Notes:** Deployed EF7.1 retest passed. The request waits for employee identity, submits successfully, and appears in history as pending.
 
 ### BF-0016 - Employee Encashment Submit Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Encashment
@@ -362,7 +362,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/requests-functional.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** Employee and organization loading now use `/employees/me` and `/organizations/settings` instead of Supabase. Submit waits for local identity/settings data; TypeScript validation passed and deployment retest is pending.
+- **Notes:** Deployed EF7.2 retest passed after the test temporarily enabled and restored the organization feature flag. The local API submit succeeds and the `0.50 Days` pending record appears in the log.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -498,7 +498,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0023 - Employee Overtime Submit Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Overtime
@@ -513,8 +513,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Add employee-scoped overtime list/create endpoints to the local API, migrate the employee overtime page to those endpoints, surface API errors visibly, and rerun the employee overtime functional module.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/overtime-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This blocks employee overtime request creation.
+- **Last tested:** 2026-07-15
+- **Notes:** Local overtime list/create endpoints now enforce employee ownership, and the employee page uses `/employees/me` plus `/overtime` instead of Supabase. Numeric DB values are normalized for stats; both API and employee TypeScript checks passed and deployment retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 

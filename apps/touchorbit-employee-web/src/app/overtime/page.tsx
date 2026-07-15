@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { EmployeeLayout } from '@/components/employee-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { Clock, Plus, X, Calendar, ChevronRight, Check } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -12,15 +12,20 @@ interface OvertimeRecord {
   date: string
   start_time: string | null
   end_time: string | null
-  hours: number
-  rate: number
+  hours: number | string
+  rate: number | string
   reason: string | null
   status: string
   rejection_reason: string | null
 }
 
+interface Employee {
+  id: string
+}
+
 export default function OvertimePage() {
-  const { userId, isLoaded, organizationId } = useAuth()
+  const { isLoaded } = useAuth()
+  const [employee, setEmployee] = useState<Employee | null>(null)
   const [records, setRecords] = useState<OvertimeRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -35,10 +40,10 @@ export default function OvertimePage() {
   })
 
   useEffect(() => {
-    if (isLoaded && userId) {
+    if (isLoaded) {
       loadRecords()
     }
-  }, [isLoaded, userId])
+  }, [isLoaded])
 
   const calculatedHours = useMemo(() => {
     if (!formData.start_time || !formData.end_time) return 0
@@ -58,13 +63,15 @@ export default function OvertimePage() {
   const loadRecords = async () => {
     setLoading(true)
     try {
-      const { data: employee } = await supabase.from('employees').select('id').eq('user_id', userId).single()
-      if (employee) {
-        const { data } = await supabase.from('overtime_records').select('*').eq('employee_id', employee.id).order('date', { ascending: false })
-        setRecords(data || [])
-      }
-    } catch (error) {
+      const empResult = await api.get<Employee>('/employees/me')
+      if (!empResult.ok || !empResult.data) throw new Error(empResult.error || 'Employee not found')
+      setEmployee(empResult.data)
+      const recordsResult = await api.get<OvertimeRecord[]>(`/overtime?employee_id=${empResult.data.id}`)
+      if (!recordsResult.ok) throw new Error(recordsResult.error || 'Failed to load overtime records')
+      setRecords(recordsResult.data || [])
+    } catch (error: any) {
       console.error(error)
+      toast.error(error.message || 'Failed to load overtime records')
     } finally {
       setLoading(false)
     }
@@ -72,13 +79,10 @@ export default function OvertimePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!employee) { toast.error('Employee not found'); return }
     setSubmitting(true)
     try {
-      const { data: employee } = await supabase.from('employees').select('id, organization_id').eq('user_id', userId).single()
-      if (!employee) throw new Error('Employee not found')
-
-      const { error } = await supabase.from('overtime_records').insert({
-        organization_id: employee.organization_id,
+      const result = await api.post<OvertimeRecord>('/overtime', {
         employee_id: employee.id,
         date: formData.date,
         start_time: formData.start_time,
@@ -86,29 +90,27 @@ export default function OvertimePage() {
         hours: parseFloat(formData.hours),
         rate: 1.5,
         reason: formData.reason,
-        status: 'pending',
       })
-
-      if (error) throw error
+      if (!result.ok) throw new Error(result.error || 'Failed to submit request')
       toast.success('Overtime request submitted')
       setShowForm(false)
-      loadRecords()
-    } catch (error) {
-      toast.error('Failed to submit request')
+      await loadRecords()
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit request')
     } finally {
       setSubmitting(false)
     }
   }
 
   // Real stats from records
-  const totalHours = records.reduce((sum, r) => sum + (r.hours || 0), 0)
+  const totalHours = records.reduce((sum, r) => sum + Number(r.hours || 0), 0)
   const thisMonth = new Date().toISOString().slice(0, 7)
   const monthHours = records
     .filter(r => r.date.startsWith(thisMonth) && r.status === 'approved')
-    .reduce((sum, r) => sum + (r.hours || 0), 0)
+    .reduce((sum, r) => sum + Number(r.hours || 0), 0)
   const pendingHours = records
     .filter(r => r.status === 'pending')
-    .reduce((sum, r) => sum + (r.hours || 0), 0)
+    .reduce((sum, r) => sum + Number(r.hours || 0), 0)
 
   const stats = [
     { label: 'Total OT',   value: `${totalHours.toFixed(1)}h`, color: '#534AB7' },
@@ -148,7 +150,8 @@ export default function OvertimePage() {
                   <h3 className="text-[14px] font-black text-[#1A1727] uppercase tracking-wider">Recent Logs</h3>
                   <button 
                     onClick={() => setShowForm(true)}
-                    className="text-[11px] font-black text-[#534AB7] uppercase tracking-widest flex items-center gap-1 bg-purple-50 px-3 py-1.5 rounded-lg"
+                    disabled={loading || !employee}
+                    className="text-[11px] font-black text-[#534AB7] uppercase tracking-widest flex items-center gap-1 bg-purple-50 px-3 py-1.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus size={12} strokeWidth={3} /> New Request
                   </button>
@@ -250,7 +253,7 @@ export default function OvertimePage() {
 
                 <button 
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || !employee}
                   className="w-full h-14 bg-[#534AB7] text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl shadow-purple-900/30 flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {submitting ? 'Submitting...' : <>Submit Request <ChevronRight size={16} strokeWidth={3} /></>}
