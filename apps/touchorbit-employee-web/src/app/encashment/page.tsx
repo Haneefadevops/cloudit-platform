@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { 
@@ -58,9 +57,15 @@ export default function EmployeeEncashmentPage() {
   async function loadData() {
     setLoading(true)
     try {
-      const { data: emp, error: empError } = await supabase.from('employees').select('*, organization:organizations(*)').eq('user_id', userId).single()
-      if (empError) throw empError
-      setEmployee(emp); setSettings(emp.organization)
+      const [empResult, settingsResult] = await Promise.all([
+        api.get<any>('/employees/me'),
+        api.get<{ organization: any }>('/organizations/settings'),
+      ])
+      if (!empResult.ok || !empResult.data) throw new Error(empResult.error || 'Employee not found')
+      if (!settingsResult.ok) throw new Error(settingsResult.error || 'Failed to load organization settings')
+      const emp = empResult.data
+      setEmployee(emp)
+      setSettings(settingsResult.data?.organization || null)
 
       const year = new Date().getFullYear()
       const [balResult, reqResult] = await Promise.all([
@@ -174,7 +179,7 @@ export default function EmployeeEncashmentPage() {
 
                  <button 
                   type="submit"
-                  disabled={submitting || !daysToEncash}
+                  disabled={loading || submitting || !employee || !daysToEncash}
                   className="w-full py-4 bg-[#534AB7] text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl shadow-purple-900/30 active:scale-95 transition-all disabled:opacity-50"
                  >
                    {submitting ? 'Submitting...' : 'Submit Request'}

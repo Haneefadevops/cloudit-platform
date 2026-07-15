@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 31 | 0 | 2 | 9 | 0 |
+| High | 29 | 0 | 2 | 11 | 0 |
 | Medium | 6 | 0 | 0 | 2 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -220,7 +220,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0010 - Employee Leave Submit Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Leave
@@ -236,11 +236,11 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/leave-functional.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** Diagnostics confirmed the valid form emitted no POST because `Apply New` could be used before `/employees/me` finished loading, leaving `employee` null. Entry and submission are now disabled until identity is ready; TypeScript validation passed and deployment retest is pending.
+- **Notes:** Deployed EF6.1 retest passed. Entry and submission wait for `/employees/me`, the POST succeeds, and the request appears in Leave History.
 
 ### BF-0011 - Admin Leave Approve Calls Missing Endpoint
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Leave
@@ -256,7 +256,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/leave-functional.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** The endpoint mismatch is fixed. Follow-up retest exposed duplicate approver rows at the same level; final owner/admin approval now iterates distinct levels only. API TypeScript validation passed; deployment retest is pending.
+- **Notes:** Deployed F6.1 retest passed. Owner/admin approval advances each distinct pending level once and persists the final `approved` status.
 
 ### BF-0012 - Admin Leave Reject Calls Missing Endpoint
 
@@ -326,7 +326,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0015 - Employee Comp-Off Submit Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Comp-Off
@@ -341,12 +341,12 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Add response diagnostics around `/api/leave/comp-off`, verify payload and backend validation, show the API error in the form, fix submit path, and rerun the employee request functional module.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/requests-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This blocks employee comp-off request creation.
+- **Last tested:** 2026-07-15
+- **Notes:** The failure matches the resolved leave race: the request form could open before `/employees/me` completed, so submit returned without a POST. Form entry and submission now wait for employee identity; TypeScript validation passed and deployment retest is pending.
 
 ### BF-0016 - Employee Encashment Submit Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Encashment
@@ -361,8 +361,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Move encashment employee/org lookup fully to local DB API, add submit response diagnostics and form-level error handling, then rerun the employee request functional module.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/requests-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This blocks employee leave encashment requests.
+- **Last tested:** 2026-07-15
+- **Notes:** Employee and organization loading now use `/employees/me` and `/organizations/settings` instead of Supabase. Submit waits for local identity/settings data; TypeScript validation passed and deployment retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 

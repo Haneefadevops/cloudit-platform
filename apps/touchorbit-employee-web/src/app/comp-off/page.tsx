@@ -155,7 +155,8 @@ export default function EmployeeCompOffPage() {
         {/* Request Button */}
         <button
           onClick={() => setShowRequestForm(true)}
-          className="w-full mb-6 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+          disabled={loading || !employee}
+          className="w-full mb-6 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Request Comp-Off for Holiday Work
         </button>
@@ -224,7 +225,8 @@ export default function EmployeeCompOffPage() {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                    disabled={!employee}
+                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Submit Request
                   </button>
