@@ -25,6 +25,12 @@ export async function POST(request: NextRequest) {
     )
 
     // Clear the session cookie on every domain it could have been set on.
+    // Omitting Domain is required to remove a host-only cookie.
+    res.cookies.set(SESSION_COOKIE.name, '', {
+      path: SESSION_COOKIE.path,
+      maxAge: 0,
+      sameSite: 'lax',
+    })
     res.cookies.set(SESSION_COOKIE.name, '', {
       domain: '.cloudit.lk',
       path: SESSION_COOKIE.path,
