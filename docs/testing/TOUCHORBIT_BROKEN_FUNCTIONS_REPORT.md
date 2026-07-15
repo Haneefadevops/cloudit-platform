@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 28 | 0 | 1 | 13 | 0 |
+| High | 27 | 0 | 1 | 14 | 0 |
 | Medium | 6 | 0 | 0 | 2 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -498,7 +498,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0023 - Employee Overtime Submit Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Overtime
@@ -514,7 +514,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/overtime-functional.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** Local overtime list/create endpoints now enforce employee ownership, and the employee page uses `/employees/me` plus `/overtime` instead of Supabase. Numeric DB values are normalized for stats; both API and employee TypeScript checks passed and deployment retest is pending.
+- **Notes:** Local overtime list/create endpoints enforce employee ownership, and the employee page uses `/employees/me` plus `/overtime` instead of Supabase. After deployment, all four tests in the employee overtime functional module passed, including EF7.3 submission.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -586,7 +586,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0027 - Employee Attendance Correction Submit Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Attendance Corrections
@@ -601,8 +601,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Replace Supabase employee lookup with `/api/employees/me`, submit to `/api/attendance/corrections`, refresh from local API, then rerun the employee corrections functional module.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/corrections-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This blocks employee clock-in/out dispute submission.
+- **Last tested:** 2026-07-15
+- **Notes:** The employee page now resolves identity through `/employees/me`, lists and creates corrections through the local API, and surfaces API errors. The API scopes employee lists to their own records and rejects creation for another employee. API and employee TypeScript checks passed; deployment retest is pending.
 
 ### BF-0028 - Admin Attendance Correction Approve Does Not Complete
 

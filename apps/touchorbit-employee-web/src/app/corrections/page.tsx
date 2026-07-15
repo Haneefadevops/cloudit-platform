@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { EmployeeLayout } from '@/components/employee-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
 import { api } from '@/lib/api'
 import { AlertCircle, Plus, X, Clock, CheckCircle, XCircle, Calendar, RefreshCw, ChevronRight, Fingerprint } from 'lucide-react'
 import { toast } from 'sonner'
@@ -18,6 +17,10 @@ interface AttendanceCorrection {
   created_at: string
 }
 
+interface Employee {
+  id: string
+}
+
 const correctionTypes = [
   { value: 'forgot_in', label: 'Forgot to Clock In' },
   { value: 'forgot_out', label: 'Forgot to Clock Out' },
@@ -26,7 +29,8 @@ const correctionTypes = [
 ]
 
 export default function CorrectionsPage() {
-  const { userId, isLoaded, organizationId } = useAuth()
+  const { isLoaded } = useAuth()
+  const [employee, setEmployee] = useState<Employee | null>(null)
   const [corrections, setCorrections] = useState<AttendanceCorrection[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -39,20 +43,25 @@ export default function CorrectionsPage() {
   })
 
   useEffect(() => {
-    if (isLoaded && userId) {
+    if (isLoaded) {
       loadCorrections()
     }
-  }, [isLoaded, userId])
+  }, [isLoaded])
 
   const loadCorrections = async () => {
     setLoading(true)
     try {
-      const { data: employee } = await supabase.from('employees').select('id').eq('user_id', userId).single()
-      if (!employee) { setLoading(false); return }
-      const result = await api.get<any[]>('/attendance/corrections')
-      if (result.ok) {
-        setCorrections((result.data || []).filter((c: any) => c.employee_id === employee.id))
+      const employeeResult = await api.get<Employee>('/employees/me')
+      if (!employeeResult.ok || !employeeResult.data) {
+        throw new Error(employeeResult.error || 'Employee not found')
       }
+      setEmployee(employeeResult.data)
+      const result = await api.get<AttendanceCorrection[]>('/attendance/corrections')
+      if (!result.ok) throw new Error(result.error || 'Failed to load corrections')
+      setCorrections(result.data || [])
+    } catch (error: any) {
+      console.error(error)
+      toast.error(error.message || 'Failed to load corrections')
     } finally {
       setLoading(false)
     }
@@ -60,11 +69,9 @@ export default function CorrectionsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!employee) { toast.error('Employee not found'); return }
     setSubmitting(true)
     try {
-      const { data: employee } = await supabase.from('employees').select('id, organization_id').eq('user_id', userId).single()
-      if (!employee) throw new Error('Employee not found')
-
       const requestedTime = new Date(`${formData.date}T${formData.time}`)
       const result = await api.post<any>('/attendance/corrections', {
         employeeId: employee.id,
@@ -77,9 +84,10 @@ export default function CorrectionsPage() {
 
       toast.success('Correction request submitted!')
       setFormData({ type: 'forgot_in', date: new Date().toISOString().split('T')[0], time: '09:00', reason: '' })
-      setShowForm(false); loadCorrections()
-    } catch (error) {
-      toast.error('Submission failed')
+      setShowForm(false)
+      await loadCorrections()
+    } catch (error: any) {
+      toast.error(error.message || 'Submission failed')
     } finally {
       setSubmitting(false)
     }

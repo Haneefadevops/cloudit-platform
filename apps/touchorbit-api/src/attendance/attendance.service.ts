@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { DatabaseService } from "../database/database.service";
+import type { AuthContext } from "../auth/types";
 import { IpVerificationService } from "./ip-verification.service";
 
 export interface ListClockEventsFilters {
@@ -245,23 +246,44 @@ export class AttendanceService {
     return result.rows[0];
   }
 
-  async findCorrections(organizationId: string) {
+  async findCorrections(organizationId: string, user: AuthContext) {
+    const values: unknown[] = [organizationId];
+    const employeeScope = user.role === "employee"
+      ? " AND e.user_id = $2::uuid"
+      : "";
+    if (user.role === "employee") values.push(user.id);
     const result = await this.databaseService.query(
       `SELECT ac.*,
               COALESCE(e.first_name || ' ' || e.last_name, '') AS employee_name
        FROM attendance_corrections ac
        LEFT JOIN employees e
          ON e.id = ac.employee_id AND e.organization_id = ac.organization_id
-       WHERE ac.organization_id = $1::uuid
+       WHERE ac.organization_id = $1::uuid${employeeScope}
        ORDER BY ac.created_at DESC
        LIMIT 500`,
-      [organizationId],
+      values,
     );
 
     return result.rows;
   }
 
-  async createCorrection(organizationId: string, input: CreateCorrectionInput) {
+  async createCorrection(
+    organizationId: string,
+    user: AuthContext,
+    input: CreateCorrectionInput,
+  ) {
+    const employee = await this.databaseService.query<{ user_id: string | null }>(
+      `SELECT user_id
+       FROM employees
+       WHERE id = $1::uuid AND organization_id = $2::uuid`,
+      [input.employeeId, organizationId],
+    );
+    if (employee.rows.length === 0) {
+      throw new NotFoundException("Employee not found");
+    }
+    if (user.role === "employee" && employee.rows[0].user_id !== user.id) {
+      throw new ForbiddenException("Cannot create a correction for another employee");
+    }
     const result = await this.databaseService.query(
       `INSERT INTO attendance_corrections (
          organization_id, employee_id, original_event_id,

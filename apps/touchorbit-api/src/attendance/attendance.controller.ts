@@ -17,6 +17,8 @@ import { SessionAuthGuard } from "../common/guards/session-auth.guard";
 import { RequireModule } from "../common/decorators/require-module.decorator";
 import { AuthUser } from "../common/decorators/auth-user.decorator";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { CurrentUser } from "../common/decorators/current-user.decorator";
+import type { AuthContext } from "../auth/types";
 import { AttendanceService } from "./attendance.service";
 
 const listClockEventsQuerySchema = z.object({
@@ -228,8 +230,11 @@ export class AttendanceController {
   @Get("corrections")
   @RequireModule("touchorbit", "attendance")
   @ApiOperation({ summary: "List attendance corrections" })
-  async findCorrections(@CurrentOrganization() organizationId: string) {
-    const rows = await this.attendanceService.findCorrections(organizationId);
+  async findCorrections(
+    @CurrentOrganization() organizationId: string,
+    @CurrentUser() user: AuthContext,
+  ) {
+    const rows = await this.attendanceService.findCorrections(organizationId, user);
     return { ok: true, data: rows };
   }
 
@@ -238,6 +243,7 @@ export class AttendanceController {
   @ApiOperation({ summary: "Create an attendance correction request" })
   async createCorrection(
     @CurrentOrganization() organizationId: string,
+    @CurrentUser() user: AuthContext,
     @Body() body: unknown,
   ) {
     const parsed = correctionSchema.safeParse(body);
@@ -247,6 +253,7 @@ export class AttendanceController {
 
     const row = await this.attendanceService.createCorrection(
       organizationId,
+      user,
       parsed.data,
     );
     return { ok: true, data: row };
