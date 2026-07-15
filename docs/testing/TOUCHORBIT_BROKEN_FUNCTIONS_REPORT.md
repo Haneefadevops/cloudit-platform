@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 26 | 0 | 1 | 15 | 0 |
+| High | 26 | 0 | 0 | 16 | 0 |
 | Medium | 6 | 0 | 0 | 2 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -434,7 +434,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0020 - Employee Expense Claim Has No Category Options
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Expenses
@@ -450,7 +450,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/expenses-functional.spec.ts`
 - **Last tested:** 2026-07-15
-- **Notes:** The local API now lists active categories, lists employee-scoped claims, and creates claims with employee/category ownership validation. The employee page uses `/employees/me` and `/expenses` exclusively, and migration `0010` seeds a General category for organizations without an active category. API and employee TypeScript checks passed; deployment retest is pending.
+- **Notes:** The local API lists active categories, lists employee-scoped claims, and creates claims with employee/category ownership validation. The deployed EF8.1 retest passed after waiting for asynchronous category loading: the claim submitted successfully and appeared as pending.
 
 Add every failed/skipped/unverified function below using this template.
 
