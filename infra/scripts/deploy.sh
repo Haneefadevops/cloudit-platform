@@ -251,6 +251,9 @@ wait_for_service "whatsapp-agent-web"
 
 ensure_chatwoot_env
 
+log "Preparing Chatwoot database..."
+docker compose -f infra/chatwoot/docker-compose.yml run --rm --entrypoint "" chatwoot-rails bundle exec rails db:chatwoot_prepare
+
 log "Starting Chatwoot..."
 docker compose -f infra/chatwoot/docker-compose.yml up -d
 wait_for_service "chatwoot-rails"
