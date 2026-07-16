@@ -235,18 +235,27 @@ export default function ExpensesAdminPage() {
         max_claim_amount: maxClaimAmount ? parseFloat(maxClaimAmount) : null
       }
 
+      let savedCategory: ExpenseCategory | undefined
       if (editingCategory) {
         const result = await api.patch<ExpenseCategory>(
           `/expenses/categories/${editingCategory.id}`,
           categoryData,
         )
         if (!result.ok) throw new Error(result.error || 'Failed to update category')
+        savedCategory = result.data
       } else {
         const result = await api.post<ExpenseCategory>('/expenses/categories', {
           ...categoryData,
           is_active: true,
         })
         if (!result.ok) throw new Error(result.error || 'Failed to create category')
+        savedCategory = result.data
+      }
+      if (savedCategory) {
+        setCategories((current) => {
+          const withoutSaved = current.filter((category) => category.id !== savedCategory.id)
+          return [...withoutSaved, savedCategory].sort((a, b) => a.name.localeCompare(b.name))
+        })
       }
       toast.success(editingCategory ? 'Category updated' : 'Category added')
       setShowCategoryDialog(false)
@@ -254,7 +263,6 @@ export default function ExpensesAdminPage() {
       setCategoryName('')
       setCategoryNameDesc('')
       setMaxClaimAmount('')
-      loadData(managedScopeId, isDeptManager ? 'dept' : isBranchManager ? 'branch' : undefined)
     } catch {
       toast.error('Failed to save category')
     }
