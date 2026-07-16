@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install system dependencies required by Prisma on Alpine
+RUN apk add --no-cache openssl libc6-compat curl
+
 COPY package*.json ./
 COPY tsconfig*.json ./
 COPY nest-cli.json ./
@@ -17,6 +20,9 @@ RUN npm run build
 FROM node:20-alpine
 
 WORKDIR /app
+
+# Runtime deps for Prisma and healthchecks
+RUN apk add --no-cache openssl libc6-compat curl
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules

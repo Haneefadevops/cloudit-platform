@@ -15,6 +15,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# curl is used by the Docker healthcheck
+RUN apk add --no-cache curl
+
 ENV NODE_ENV=production
 ENV PORT=3011
 
