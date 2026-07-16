@@ -461,7 +461,7 @@ export class LeaveService {
        JOIN employees e ON e.id = c.employee_id
        LEFT JOIN holidays h ON h.id = c.holiday_id
        WHERE ${conditions.join(" AND ")}
-       ORDER BY c.worked_date DESC`,
+       ORDER BY c.created_at DESC, c.worked_date DESC`,
       values,
     );
     return result.rows;
