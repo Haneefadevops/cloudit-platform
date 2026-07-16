@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { Plus, Trash2, AlertCircle, Info, AlertTriangle, RefreshCw, X, ChevronRight, Send, Megaphone } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -43,7 +43,7 @@ const priorityConfig = {
 }
 
 export default function AnnouncementsPage() {
-  const { organizationId, userId, isLoaded } = useAuth()
+  const { organizationId, isLoaded } = useAuth()
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -61,18 +61,15 @@ export default function AnnouncementsPage() {
 
   async function loadAnnouncements() {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('announcements')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      toast.error('Failed to load announcements')
-    } else {
-      setAnnouncements(data || [])
+    try {
+      const result = await api.get<Announcement[]>('/announcements')
+      if (!result.ok) throw new Error(result.error || 'Failed to load announcements')
+      setAnnouncements(result.data || [])
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load announcements')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -82,35 +79,31 @@ export default function AnnouncementsPage() {
       return
     }
 
-    const { error } = await supabase
-      .from('announcements')
-      .insert({
-        organization_id: organizationId,
-        author_id: userId,
+    try {
+      const result = await api.post<Announcement>('/announcements', {
         title: formData.title.trim(),
         content: formData.content.trim(),
         priority: formData.priority,
       })
+      if (!result.ok) throw new Error(result.error || 'Failed to create announcement')
 
-    if (error) {
-      toast.error('Failed to create announcement')
-      return
+      toast.success('Announcement posted!')
+      setShowForm(false)
+      setFormData({ title: '', content: '', priority: 'normal' })
+      await loadAnnouncements()
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create announcement')
     }
-
-    toast.success('Announcement posted!')
-    setShowForm(false)
-    setFormData({ title: '', content: '', priority: 'normal' })
-    loadAnnouncements()
   }
 
   async function handleDelete(announcementId: string) {
     if (!confirm('Are you sure?')) return
-    const { error } = await supabase.from('announcements').delete().eq('id', announcementId)
-    if (error) {
-      toast.error('Failed to delete')
-    } else {
+    const result = await api.del<{ id: string }>(`/announcements/${announcementId}`)
+    if (result.ok) {
       toast.success('Announcement removed')
-      loadAnnouncements()
+      await loadAnnouncements()
+    } else {
+      toast.error(result.error || 'Failed to delete')
     }
   }
 

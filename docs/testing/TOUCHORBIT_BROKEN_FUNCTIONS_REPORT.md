@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 25 | 0 | 1 | 16 | 0 |
+| High | 24 | 0 | 1 | 17 | 0 |
 | Medium | 6 | 0 | 0 | 2 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -200,7 +200,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0009 - Admin Add Employee Submit Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Employees
@@ -216,7 +216,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/employees-functional.spec.ts`
 - **Last tested:** 2026-07-16
-- **Notes:** The admin mutation now omits empty optional fields, and the API create schema normalizes legacy `null` optional values before calling the create transaction. Admin and API TypeScript checks passed; deployment retest is pending.
+- **Notes:** The admin mutation omits empty optional fields, and the API normalizes legacy `null` values. The deployed F3.1 retest passed: the dialog closed and the created employee was searchable in the list.
 
 ### BF-0010 - Employee Leave Submit Does Not Complete
 
@@ -282,7 +282,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0013 - Admin Announcement Create Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Announcements
@@ -297,8 +297,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Replace announcement list/create/delete with local DB-backed API endpoints, surface failed submit errors in the modal, then rerun the announcements functional module and cross-portal employee announcement visibility test.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/announcements-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This blocks announcement broadcast and the related cross-portal workflow.
+- **Last tested:** 2026-07-16
+- **Notes:** Organization-scoped local API list/create/delete endpoints are now registered, and the admin page uses them instead of Supabase with visible API errors. API and admin TypeScript checks passed; deployment retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 
