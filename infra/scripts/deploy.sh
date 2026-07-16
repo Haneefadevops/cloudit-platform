@@ -114,6 +114,15 @@ for app_dir in apps/*; do
   fi
 done
 
+# One-time migration: older TheReplyte .env files pointed DATABASE_URL to localhost
+# Inside Docker the API container must reach the shared 'postgres' service.
+if [ -f "$PROJECT_ROOT/apps/whatsapp-agent-api/.env" ]; then
+  if grep -q 'localhost:5432/whatsapp_agent' "$PROJECT_ROOT/apps/whatsapp-agent-api/.env"; then
+    sed -i 's|localhost:5432/whatsapp_agent|postgres:5432/whatsapp_agent|g' "$PROJECT_ROOT/apps/whatsapp-agent-api/.env"
+    log "Patched whatsapp-agent-api/.env to use postgres:5432"
+  fi
+fi
+
 log "Ensuring shared network exists..."
 docker network inspect cloudit >/dev/null 2>&1 || docker network create cloudit --driver bridge --attachable
 
