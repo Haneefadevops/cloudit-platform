@@ -28,6 +28,8 @@ DATABASES=(
   hospitality
   touchorbit
   orbitone
+  chatwoot
+  whatsapp_agent
 )
 
 wait_for_postgres() {

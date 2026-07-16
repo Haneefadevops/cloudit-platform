@@ -130,6 +130,59 @@ sync_whatsapp_agent_db_credentials() {
   log "Synced whatsapp-agent-api/.env DATABASE_URL with shared Postgres credentials"
 }
 
+ensure_chatwoot_env() {
+  local cw_env="$PROJECT_ROOT/infra/chatwoot/.env"
+  local cw_example="$PROJECT_ROOT/infra/chatwoot/.env.example"
+  local pg_env="$PROJECT_ROOT/infra/postgres/.env"
+  local redis_env="$PROJECT_ROOT/infra/redis/.env"
+
+  if [ ! -f "$cw_env" ] && [ -f "$cw_example" ]; then
+    cp "$cw_example" "$cw_env"
+    log "Created infra/chatwoot/.env from .env.example"
+  fi
+
+  if [ ! -f "$cw_env" ]; then
+    log "WARNING: infra/chatwoot/.env not found; Chatwoot will use default/example values"
+    return 0
+  fi
+
+  # Sync shared Postgres credentials
+  local pg_user pg_pass
+  if [ -f "$pg_env" ]; then
+    pg_user=$(grep '^POSTGRES_USER=' "$pg_env" | cut -d= -f2-)
+    pg_pass=$(grep '^POSTGRES_PASSWORD=' "$pg_env" | cut -d= -f2-)
+  fi
+
+  if [ -n "${pg_user:-}" ]; then
+    sed -i "/^POSTGRES_USER=/c\\POSTGRES_USER=$pg_user" "$cw_env" || true
+  fi
+  if [ -n "${pg_pass:-}" ]; then
+    sed -i "/^POSTGRES_PASSWORD=/c\\POSTGRES_PASSWORD=$pg_pass" "$cw_env" || true
+  fi
+
+  # Sync Redis password
+  local redis_pass
+  if [ -f "$redis_env" ]; then
+    redis_pass=$(grep '^REDIS_PASSWORD=' "$redis_env" | cut -d= -f2-)
+  fi
+  if [ -n "${redis_pass:-}" ]; then
+    sed -i "/^REDIS_PASSWORD=/c\\REDIS_PASSWORD=$redis_pass" "$cw_env" || true
+  fi
+
+  # Generate a persistent SECRET_KEY_BASE if it is missing or still the placeholder
+  local secret
+  secret=$(grep '^CHATWOOT_SECRET_KEY_BASE=' "$cw_env" | cut -d= -f2- || true)
+  if [ -z "${secret:-}" ] || [ "$secret" = "change_this_to_a_long_random_string" ]; then
+    secret=$(openssl rand -hex 64 2>/dev/null || head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    if grep -q '^CHATWOOT_SECRET_KEY_BASE=' "$cw_env"; then
+      sed -i "/^CHATWOOT_SECRET_KEY_BASE=/c\\CHATWOOT_SECRET_KEY_BASE=$secret" "$cw_env"
+    else
+      echo "CHATWOOT_SECRET_KEY_BASE=$secret" >> "$cw_env"
+    fi
+    log "Generated CHATWOOT_SECRET_KEY_BASE"
+  fi
+}
+
 cd "$PROJECT_ROOT"
 
 log "Pulling latest code..."
@@ -195,6 +248,8 @@ tag_previous_image "whatsapp-agent-web"
 build_service "whatsapp-agent-web"
 docker compose -f infra/whatsapp-agent-web/docker-compose.yml up -d
 wait_for_service "whatsapp-agent-web"
+
+ensure_chatwoot_env
 
 log "Starting Chatwoot..."
 docker compose -f infra/chatwoot/docker-compose.yml up -d
