@@ -101,6 +101,35 @@ escape_traefik_dashboard_auth() {
   fi
 }
 
+sync_whatsapp_agent_db_credentials() {
+  local api_env="$PROJECT_ROOT/apps/whatsapp-agent-api/.env"
+  local pg_env="$PROJECT_ROOT/infra/postgres/.env"
+
+  if [ ! -f "$api_env" ] || [ ! -f "$pg_env" ]; then
+    return 0
+  fi
+
+  # Load shared Postgres credentials into the current shell
+  load_env_file "$pg_env"
+
+  if [ -z "${POSTGRES_USER:-}" ] || [ -z "${POSTGRES_PASSWORD:-}" ]; then
+    log "WARNING: POSTGRES_USER or POSTGRES_PASSWORD not set in infra/postgres/.env; skipping TheReplyte DB credential sync"
+    return 0
+  fi
+
+  local expected_url="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/whatsapp_agent?schema=public"
+  local tmp_env="${api_env}.tmp"
+
+  awk -v url="$expected_url" '
+    BEGIN { FS=OFS="=" }
+    /^DATABASE_URL=/ { print "DATABASE_URL=" url; replaced=1; next }
+    { print }
+    END { if (!replaced) print "DATABASE_URL=" url }
+  ' "$api_env" > "$tmp_env" && mv "$tmp_env" "$api_env"
+
+  log "Synced whatsapp-agent-api/.env DATABASE_URL with shared Postgres credentials"
+}
+
 cd "$PROJECT_ROOT"
 
 log "Pulling latest code..."
@@ -122,6 +151,9 @@ if [ -f "$PROJECT_ROOT/apps/whatsapp-agent-api/.env" ]; then
     log "Patched whatsapp-agent-api/.env to use postgres:5432"
   fi
 fi
+
+# Keep TheReplyte DB credentials in sync with the shared Postgres server.
+sync_whatsapp_agent_db_credentials
 
 log "Ensuring shared network exists..."
 docker network inspect cloudit >/dev/null 2>&1 || docker network create cloudit --driver bridge --attachable
