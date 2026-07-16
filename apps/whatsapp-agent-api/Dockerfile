@@ -33,4 +33,4 @@ ENV NODE_ENV=production
 
 EXPOSE 3010
 
-CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && node dist/main"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && node dist/src/main"]
