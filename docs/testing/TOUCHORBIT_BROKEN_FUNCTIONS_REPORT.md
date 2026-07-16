@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 24 | 0 | 1 | 17 | 0 |
+| High | 23 | 0 | 2 | 17 | 0 |
 | Medium | 6 | 0 | 0 | 2 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -298,13 +298,13 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/announcements-functional.spec.ts`
 - **Last tested:** 2026-07-16
-- **Notes:** Organization-scoped local API list/create/delete endpoints are now registered, and the admin page uses them instead of Supabase with visible API errors. API and admin TypeScript checks passed; deployment retest is pending.
+- **Notes:** Deployed create and list retest passed. The delete control now has an announcement-specific accessible name so the final create/delete regression can target the correct card after the next deployment.
 
 Add every failed/skipped/unverified function below using this template.
 
 ### BF-0014 - Admin Geofence Create Causes Client-Side Exception
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Geofences
@@ -319,8 +319,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Inspect browser console/trace for the client exception, harden geofence create response mapping and map/list rendering, then rerun the geofences functional module and clean up any E2E zones created during failed attempts.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/geofences-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** The create API appears to reach success, but the frontend crashes immediately afterward.
+- **Last tested:** 2026-07-16
+- **Notes:** The crash was reproduced after the initial geofence API load. PostgreSQL numeric values arrived as strings while the list and detail UI called `.toFixed()` on them. API rows are now normalized to numeric latitude, longitude, and radius values before rendering; admin TypeScript checks passed and deployment retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 

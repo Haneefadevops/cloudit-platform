@@ -176,6 +176,7 @@ export default function AnnouncementsPage() {
                        </div>
                        <button 
                         onClick={() => handleDelete(item.id)}
+                        aria-label={`Delete ${item.title}`}
                         className="p-2 opacity-0 group-hover:opacity-100 hover:bg-red-50 text-[#D1D5DB] hover:text-red-500 rounded-lg transition-all"
                        >
                          <Trash2 size={16} />

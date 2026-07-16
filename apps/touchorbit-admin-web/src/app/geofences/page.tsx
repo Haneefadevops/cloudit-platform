@@ -26,6 +26,15 @@ interface Geofence {
   created_at: string
 }
 
+function normalizeGeofence(row: any): Geofence {
+  return {
+    ...row,
+    latitude: Number(row.latitude),
+    longitude: Number(row.longitude),
+    radius_meters: Number(row.radius_meters),
+  }
+}
+
 /* ─── Stat Card ─── */
 function StatCard({ icon: Icon, label, value, tone = 'default' }: { icon: any; label: string; value: string | number; tone?: 'default' | 'emerald' | 'amber' | 'blue' }) {
   const toneStyles = {
@@ -80,7 +89,7 @@ export default function GeofencesPage() {
     if (!result.ok) {
       toast.error('Failed to load geofences')
     } else {
-      const data = result.data || []
+      const data = (result.data || []).map(normalizeGeofence)
       setGeofences(data)
       if (data.length > 0 && !selected) {
         setSelected(data[0])
