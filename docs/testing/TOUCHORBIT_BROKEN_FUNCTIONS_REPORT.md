@@ -1,6 +1,6 @@
 # TouchOrbit Broken Functions Report
 
-Last updated: 2026-07-15
+Last updated: 2026-07-16
 
 ## Purpose
 
@@ -30,8 +30,8 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 23 | 0 | 0 | 19 | 0 |
-| Medium | 5 | 0 | 1 | 2 | 0 |
+| High | 22 | 0 | 1 | 19 | 0 |
+| Medium | 5 | 0 | 0 | 3 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
 ## Broken Function Entries
@@ -368,7 +368,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0017 - Admin Comp-Off Pending Filter Shows Approved Rows
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** Medium
 - **Portal:** Admin
 - **Module:** Comp-Off
@@ -379,12 +379,12 @@ Add every failed/skipped/unverified function below using this template.
 - **Expected:** Selecting the `Pending` filter should show only pending comp-off requests.
 - **Actual:** The `Pending` tab displayed an `Approved` E2E row above pending rows.
 - **Evidence:** `e2e/test-results/admin-comp-off-functional--2c443-f-request-from-the-admin-UI-chromium-retry2/test-failed-1.png` from the earlier Comp-Off functional run.
-- **Likely cause:** The admin page sends a `status` query parameter, but the backend `findCompOffRecords` controller/service currently accepts only `employee_id` and does not apply a status filter.
+- **Likely cause:** The admin page sent a `status` query parameter, but the backend `findCompOffRecords` controller/service accepted only `employee_id` and did not apply a status filter.
 - **Fix plan:** Add status query support to the comp-off API and service, then add an explicit filter assertion to the Comp-Off functional spec.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/comp-off-functional.spec.ts`
 - **Last tested:** 2026-07-16
-- **Notes:** `GET /leave/comp-off` now accepts and validates the UI's status parameter, and the service applies it together with optional employee scope using safe positional parameters. API TypeScript checks passed; deployment retest is pending.
+- **Notes:** `GET /leave/comp-off` now accepts and validates the UI's status parameter, applies it with optional employee scope, and returns newest records first for deterministic admin actions. Production retests for F7.1 and F7.2 passed on 2026-07-16.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -412,7 +412,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0019 - Admin Expense Category Create Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Expenses
@@ -423,12 +423,12 @@ Add every failed/skipped/unverified function below using this template.
 - **Expected:** Saving a valid new expense category should show success, close the modal, display the category, and allow editing it.
 - **Actual:** After clicking `Save Changes`, the category modal remains open and no `Category added` success state appears.
 - **Evidence:** `e2e/test-results/admin-expenses-functional--56399-its-an-E2E-expense-category-chromium-retry2/test-failed-1.png`, related error context in the same folder.
-- **Likely cause:** The admin expenses page still uses the legacy Supabase client for categories and claims, while the local expenses API is currently only a read stub returning an empty list.
-- **Fix plan:** Implement local DB-backed expense categories/claims APIs, move the admin expenses page off Supabase, then rerun the admin expenses functional module.
+- **Likely cause:** The admin expenses page still used the legacy Supabase client for category create/edit, while the local expenses API only exposed category reads and claim creation.
+- **Fix plan:** Implement local DB-backed expense category create/update APIs, move the admin category UI off Supabase, then rerun the admin expenses functional module.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/expenses-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This also blocks employee expense claim testing unless categories are already present.
+- **Last tested:** 2026-07-16
+- **Notes:** Local API category create/update endpoints are implemented and the admin category UI now uses them. API and admin production builds passed; deployment retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -1183,6 +1183,8 @@ Add every failed/skipped/unverified function below using this template.
 | 2026-07-15 | Production TouchOrbit | `npx playwright test --config=e2e/playwright.config.ts tests/admin/login.spec.ts tests/admin/auth.spec.ts` | Failed | `e2e/test-results/admin-login-Authentication-cfa71-to-login-and-clears-session-chromium-no-auth-retry2/` | Post-deployment Phase 1 admin retest: 12 passed, 1 failed. BF-0002 is fixed; BF-0003 now reaches logout but leaves a host-only session cookie. |
 | 2026-07-15 | Production TouchOrbit | `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/pages.spec.ts` | Failed | `e2e/test-results/employee-pages-Employee-pr-4dcd0-ges-E2-page-loads-org-chart-employee-chromium-retry2/`, `e2e/test-results/employee-pages-Employee-pr-d46f0-es-E2-page-loads-attendance-employee-chromium/` | Phase 1 targets `/documents` and `/payslips` passed without retry, fixing BF-0006/BF-0008. BF-0007 remains open; attendance was flaky and is tracked as BF-0052. |
 | 2026-07-15 | Production TouchOrbit | `npx playwright test --config=e2e/playwright.config.ts tests/admin/login.spec.ts --grep 1.5` | Passed | Playwright list output | Canonical-domain logout fix passed; BF-0003 is fixed and Phase 1 exit criteria are complete. |
+| 2026-07-16 | Production TouchOrbit | `npx playwright test --project=chromium --grep "F7.1"` | Passed | Playwright output | Admin Comp-Off approve flow passed after comp-off status filtering and deterministic ordering fixes. |
+| 2026-07-16 | Production TouchOrbit | `npx playwright test --project=chromium --grep "F7.2"` | Passed | Playwright output | Admin Comp-Off reject flow passed and confirmed BF-0017 is fixed. |
 
 ## Open Items By Portal
 
@@ -1195,7 +1197,6 @@ Add every failed/skipped/unverified function below using this template.
 - BF-0012 - Admin leave reject calls missing endpoint.
 - BF-0013 - Admin announcement create does not complete.
 - BF-0014 - Admin geofence create causes client-side exception.
-- BF-0017 - Admin comp-off pending filter shows approved rows.
 - BF-0018 - Leave balance adjustment API fails with parameter type error.
 - BF-0019 - Admin expense category create does not complete.
 - BF-0021 - Admin calendar task create does not complete.

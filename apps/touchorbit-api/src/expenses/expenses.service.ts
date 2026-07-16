@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { DatabaseService } from "../database/database.service";
 import type { AuthContext } from "../auth/types";
 
@@ -32,15 +37,99 @@ export class ExpensesService {
     return result.rows;
   }
 
-  async findCategories(organizationId: string) {
+  async findCategories(organizationId: string, includeInactive = false) {
     const result = await this.databaseService.query(
-      `SELECT id, name, max_claim_amount
+      `SELECT id, name, description, max_claim_amount::float AS max_claim_amount, is_active
        FROM expense_categories
-       WHERE organization_id = $1::uuid AND is_active = true
+       WHERE organization_id = $1::uuid
+         AND ($2::boolean = true OR is_active = true)
        ORDER BY name`,
-      [organizationId],
+      [organizationId, includeInactive],
     );
     return result.rows;
+  }
+
+  async createCategory(
+    organizationId: string,
+    input: {
+      name: string;
+      description?: string | null;
+      max_claim_amount?: number | null;
+      is_active?: boolean;
+    },
+  ) {
+    try {
+      const result = await this.databaseService.query(
+        `INSERT INTO expense_categories (
+           organization_id, name, description, max_claim_amount, is_active
+         )
+         VALUES ($1::uuid, $2, $3, $4, COALESCE($5::boolean, true))
+         RETURNING id, name, description, max_claim_amount::float AS max_claim_amount, is_active`,
+        [
+          organizationId,
+          input.name,
+          input.description ?? null,
+          input.max_claim_amount ?? null,
+          input.is_active ?? true,
+        ],
+      );
+      return result.rows[0];
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "23505"
+      ) {
+        throw new ConflictException("Expense category already exists");
+      }
+      throw error;
+    }
+  }
+
+  async updateCategory(
+    organizationId: string,
+    id: string,
+    input: {
+      name?: string;
+      description?: string | null;
+      max_claim_amount?: number | null;
+      is_active?: boolean;
+    },
+  ) {
+    try {
+      const result = await this.databaseService.query(
+        `UPDATE expense_categories
+         SET name = COALESCE($3, name),
+             description = CASE WHEN $4::boolean THEN $5 ELSE description END,
+             max_claim_amount = CASE WHEN $6::boolean THEN $7 ELSE max_claim_amount END,
+             is_active = COALESCE($8::boolean, is_active)
+         WHERE id = $1::uuid AND organization_id = $2::uuid
+         RETURNING id, name, description, max_claim_amount::float AS max_claim_amount, is_active`,
+        [
+          id,
+          organizationId,
+          input.name,
+          Object.prototype.hasOwnProperty.call(input, "description"),
+          input.description ?? null,
+          Object.prototype.hasOwnProperty.call(input, "max_claim_amount"),
+          input.max_claim_amount ?? null,
+          input.is_active,
+        ],
+      );
+      if (result.rows.length === 0) throw new NotFoundException("Expense category not found");
+      return result.rows[0];
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "23505"
+      ) {
+        throw new ConflictException("Expense category already exists");
+      }
+      throw error;
+    }
   }
 
   async create(

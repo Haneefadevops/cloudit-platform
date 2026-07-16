@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { usePermissions } from '@/hooks/use-permissions'
 import {
   Wallet,
@@ -138,12 +139,9 @@ export default function ExpensesAdminPage() {
     try {
       // 1. Load Categories (not needed for finance)
       if (!isFinance) {
-        const { data: catData } = await supabase
-          .from('expense_categories')
-          .select('*')
-          .eq('organization_id', organizationId)
-          .order('name')
-        setCategories(catData || [])
+        const result = await api.get<ExpenseCategory[]>('/expenses/categories?include_inactive=true')
+        if (!result.ok) throw new Error(result.error || 'Failed to load expense categories')
+        setCategories(result.data || [])
       }
 
       // 2. Load Claims — scoped by role
@@ -238,20 +236,17 @@ export default function ExpensesAdminPage() {
       }
 
       if (editingCategory) {
-        const { error } = await supabase
-          .from('expense_categories')
-          .update(categoryData)
-          .eq('id', editingCategory.id)
-        if (error) throw error
+        const result = await api.patch<ExpenseCategory>(
+          `/expenses/categories/${editingCategory.id}`,
+          categoryData,
+        )
+        if (!result.ok) throw new Error(result.error || 'Failed to update category')
       } else {
-        const { error } = await supabase
-          .from('expense_categories')
-          .insert({ 
-            ...categoryData,
-            organization_id: organizationId, 
-            is_active: true 
-          })
-        if (error) throw error
+        const result = await api.post<ExpenseCategory>('/expenses/categories', {
+          ...categoryData,
+          is_active: true,
+        })
+        if (!result.ok) throw new Error(result.error || 'Failed to create category')
       }
       toast.success(editingCategory ? 'Category updated' : 'Category added')
       setShowCategoryDialog(false)
