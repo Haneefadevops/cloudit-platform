@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 26 | 0 | 0 | 16 | 0 |
+| High | 25 | 0 | 1 | 16 | 0 |
 | Medium | 6 | 0 | 0 | 2 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -200,7 +200,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0009 - Admin Add Employee Submit Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Employees
@@ -215,8 +215,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Add network/error diagnostics around the create submit, inspect API response and toast/console errors, fix the create flow or visible error handling, then rerun the Employees functional module.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/employees-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This deeper functional test is intentionally separate from the Employees smoke/list module.
+- **Last tested:** 2026-07-16
+- **Notes:** The admin mutation now omits empty optional fields, and the API create schema normalizes legacy `null` optional values before calling the create transaction. Admin and API TypeScript checks passed; deployment retest is pending.
 
 ### BF-0010 - Employee Leave Submit Does Not Complete
 

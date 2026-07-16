@@ -28,20 +28,24 @@ const listQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+const optionalString = z.string().nullish().transform((value) => value ?? undefined);
+const optionalUuid = z.string().uuid().nullish().transform((value) => value ?? undefined);
+const optionalNonnegativeNumber = z.coerce.number().nonnegative().nullish().transform((value) => value ?? undefined);
+
 const createEmployeeSchema = z.object({
   first_name: z.string().min(1),
   last_name: z.string().min(1),
   email: z.string().email(),
-  employee_number: z.string().optional(),
-  phone: z.string().optional(),
-  department: z.string().optional(),
-  department_id: z.string().uuid().optional(),
-  branch_id: z.string().uuid().optional(),
-  job_title: z.string().optional(),
-  hire_date: z.string().optional(),
+  employee_number: optionalString,
+  phone: optionalString,
+  department: optionalString,
+  department_id: optionalUuid,
+  branch_id: optionalUuid,
+  job_title: optionalString,
+  hire_date: optionalString,
   employment_status: z.string().default("active"),
-  manager_id: z.string().uuid().optional(),
-  basic_salary: z.coerce.number().nonnegative().optional(),
+  manager_id: optionalUuid,
+  basic_salary: optionalNonnegativeNumber,
 });
 
 const updateEmployeeSchema = z.object({
