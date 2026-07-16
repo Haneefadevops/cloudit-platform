@@ -429,12 +429,20 @@ export class LeaveService {
     }
   }
 
-  async findCompOffRecords(organizationId: string, employeeId?: string) {
+  async findCompOffRecords(
+    organizationId: string,
+    employeeId?: string,
+    status?: string,
+  ) {
     const conditions = ["c.organization_id = $1::uuid"];
     const values: unknown[] = [organizationId];
     if (employeeId) {
-      conditions.push("c.employee_id = $2::uuid");
       values.push(employeeId);
+      conditions.push(`c.employee_id = $${values.length}::uuid`);
+    }
+    if (status) {
+      values.push(status);
+      conditions.push(`c.status = $${values.length}`);
     }
     const result = await this.databaseService.query(
       `SELECT c.*,

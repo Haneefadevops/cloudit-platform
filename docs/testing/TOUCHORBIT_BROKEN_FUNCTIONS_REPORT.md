@@ -30,8 +30,8 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 23 | 0 | 2 | 17 | 0 |
-| Medium | 6 | 0 | 0 | 2 | 0 |
+| High | 23 | 0 | 0 | 19 | 0 |
+| Medium | 5 | 0 | 1 | 2 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
 ## Broken Function Entries
@@ -282,7 +282,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0013 - Admin Announcement Create Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Announcements
@@ -298,13 +298,13 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/announcements-functional.spec.ts`
 - **Last tested:** 2026-07-16
-- **Notes:** Deployed create and list retest passed. The delete control now has an announcement-specific accessible name so the final create/delete regression can target the correct card after the next deployment.
+- **Notes:** The deployed F18.1 regression passed completely: local API create/list rendered the announcement and the announcement-specific delete control removed it successfully.
 
 Add every failed/skipped/unverified function below using this template.
 
 ### BF-0014 - Admin Geofence Create Causes Client-Side Exception
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Geofences
@@ -320,7 +320,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/geofences-functional.spec.ts`
 - **Last tested:** 2026-07-16
-- **Notes:** The crash was reproduced after the initial geofence API load. PostgreSQL numeric values arrived as strings while the list and detail UI called `.toFixed()` on them. API rows are now normalized to numeric latitude, longitude, and radius values before rendering; admin TypeScript checks passed and deployment retest is pending.
+- **Notes:** The deployed F20.1 regression passed after synchronizing with initial API loading and correcting test selectors. Create, list filtering, inline edit, update, and delete all completed without a client crash.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -368,7 +368,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0017 - Admin Comp-Off Pending Filter Shows Approved Rows
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** Medium
 - **Portal:** Admin
 - **Module:** Comp-Off
@@ -383,8 +383,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Add status query support to the comp-off API and service, then add an explicit filter assertion to the Comp-Off functional spec.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/comp-off-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** Approve and reject actions passed after test targeting was corrected.
+- **Last tested:** 2026-07-16
+- **Notes:** `GET /leave/comp-off` now accepts and validates the UI's status parameter, and the service applies it together with optional employee scope using safe positional parameters. API TypeScript checks passed; deployment retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 

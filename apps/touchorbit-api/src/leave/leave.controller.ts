@@ -258,10 +258,15 @@ export class LeaveController {
   async findCompOffRecords(
     @CurrentOrganization() organizationId: string,
     @Query("employee_id") employeeId?: string,
+    @Query("status") status?: string,
   ) {
+    if (status && !["pending", "approved", "rejected", "used", "expired"].includes(status)) {
+      throw new BadRequestException("Invalid comp-off status");
+    }
     const rows = await this.leaveService.findCompOffRecords(
       organizationId,
       employeeId,
+      status,
     );
     return { ok: true, data: rows };
   }
