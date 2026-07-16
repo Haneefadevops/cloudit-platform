@@ -21,7 +21,13 @@ export class OvertimeService {
       conditions.push(`o.employee_id = $${values.length}::uuid`);
     }
     const result = await this.databaseService.query(
-      `SELECT o.*
+      `SELECT o.*,
+              jsonb_build_object(
+                'id', e.id,
+                'first_name', e.first_name,
+                'last_name', e.last_name,
+                'employee_number', e.employee_number
+              ) AS employees
        FROM overtime_records o
        JOIN employees e ON e.id = o.employee_id
        WHERE ${conditions.join(" AND ")}

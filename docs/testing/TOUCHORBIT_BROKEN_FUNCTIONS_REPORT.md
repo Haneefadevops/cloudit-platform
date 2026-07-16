@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 22 | 0 | 1 | 19 | 0 |
+| High | 19 | 0 | 4 | 19 | 0 |
 | Medium | 5 | 0 | 0 | 3 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -456,7 +456,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0021 - Admin Calendar Task Create Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Calendar / Tasks
@@ -467,18 +467,18 @@ Add every failed/skipped/unverified function below using this template.
 - **Expected:** Filling New Task and clicking `Create Task` should show `Task created`, close the modal, and display the task in the Tasks panel.
 - **Actual:** After submit, the form fields reset but the New Task modal remains open and no `Task created` success state appears.
 - **Evidence:** `e2e/test-results/admin-calendar-functional--72b6e-rom-the-calendar-task-panel-chromium-retry2/test-failed-1.png`, related error context in the same folder.
-- **Likely cause:** The calendar task submit path likely catches an API failure without rethrowing to `TaskForm`, causing the form to reset while the modal remains open. The task sidebar is also not explicitly refreshed after creation.
-- **Fix plan:** Inspect `/api/employee-tasks` response from the submit, surface API errors in the modal, only reset on success, close/refetch the task list after successful create, then rerun the calendar functional module.
+- **Likely cause:** The calendar task submit path allowed admin-created tasks to be sent without an employee id, which can fail for admin users that are not linked to an employee. The task sidebar also owned its own local loader and did not refresh after task creation.
+- **Fix plan:** Default admin-created tasks to a loaded employee when none is selected, keep submit errors visible to the form, and trigger a task-sidebar refresh after successful create/edit.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/calendar-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This blocks admin-created employee task workflows and related notification coverage.
+- **Last tested:** 2026-07-16
+- **Notes:** Calendar task create now supplies an employee id fallback and refreshes the sidebar after successful create/edit. API and admin production builds passed; deployment retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 
 ### BF-0022 - Admin Manual Overtime Entry Has No Employee Options
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Overtime
@@ -489,12 +489,12 @@ Add every failed/skipped/unverified function below using this template.
 - **Expected:** Opening Manual Entry should load active employees, allow selecting the seeded E2E employee, create the overtime record, show `Overtime record created`, and display the new pending record.
 - **Actual:** The Manual Entry dialog opens, but the employee select stays at `Select Employee` and never includes `E2E Employee`.
 - **Evidence:** `e2e/test-results/admin-overtime-functional--282a5-me-record-from-the-admin-UI-chromium-retry2/test-failed-1.png`, related retry trace and error context in the same folder.
-- **Likely cause:** The admin overtime page still loads employees and writes overtime through Supabase client calls; the local API migration only exposes a stubbed `GET /api/overtime` returning an empty array and no create endpoint.
-- **Fix plan:** Replace Supabase employee loading/manual overtime insert with local API endpoints, implement overtime create/list support in `apps/touchorbit-api`, refresh the table after create, and rerun the admin overtime functional module.
+- **Likely cause:** The admin overtime page still loaded employees and wrote manual overtime through Supabase client calls instead of the local API.
+- **Fix plan:** Replace employee loading, comp-off stats, overtime list, and manual overtime creation with local API calls; include employee details in the overtime list response; refresh the table after create.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/overtime-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This blocks admin-side manual overtime creation and prevents downstream approval/rejection testing for overtime records.
+- **Last tested:** 2026-07-16
+- **Notes:** Manual overtime creation now uses `/api/overtime`, employee options come from `/api/employees`, and the local overtime API returns employee display data. API and admin production builds passed; deployment retest is pending.
 
 ### BF-0023 - Employee Overtime Submit Does Not Complete
 
@@ -606,7 +606,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0028 - Admin Attendance Correction Approve Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Attendance Corrections
@@ -617,12 +617,12 @@ Add every failed/skipped/unverified function below using this template.
 - **Expected:** Clicking approve on a pending correction should call the local review endpoint, show `Correction approved`, refresh the list, and update local API status to `approved`.
 - **Actual:** The seeded local API correction appears in the admin list, but clicking approve does not show `Correction approved` and the test never reaches an approved status assertion.
 - **Evidence:** `e2e/test-results/admin-corrections-function-57bc2-orrection-from-the-admin-UI-chromium-retry2/test-failed-1.png`, related retry trace and error context in the same folder.
-- **Likely cause:** The admin corrections page still approves/rejects via Supabase updates even though local API endpoints now exist: `PATCH /api/attendance/corrections/:id/approve` and `/reject`.
-- **Fix plan:** Replace Supabase approve/reject handlers with the local PATCH endpoints, preserve rejection reason handling, refresh from `/api/attendance/corrections`, then rerun admin corrections functional tests.
+- **Likely cause:** The admin corrections page still approved/rejected via Supabase updates even though local API endpoints existed: `PATCH /api/attendance/corrections/:id/approve` and `/reject`.
+- **Fix plan:** Replace Supabase approve/reject handlers with the local PATCH endpoints, preserve rejection reason handling, allow admin users without linked employee records to review corrections, refresh from `/api/attendance/corrections`, then rerun admin corrections functional tests.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/corrections-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** This blocks admin attendance dispute review.
+- **Last tested:** 2026-07-16
+- **Notes:** Admin corrections approve/reject now calls the local API, and the backend no longer fails review if the admin user does not have a linked employee record. API and admin production builds passed; deployment retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -1185,6 +1185,8 @@ Add every failed/skipped/unverified function below using this template.
 | 2026-07-15 | Production TouchOrbit | `npx playwright test --config=e2e/playwright.config.ts tests/admin/login.spec.ts --grep 1.5` | Passed | Playwright list output | Canonical-domain logout fix passed; BF-0003 is fixed and Phase 1 exit criteria are complete. |
 | 2026-07-16 | Production TouchOrbit | `npx playwright test --project=chromium --grep "F7.1"` | Passed | Playwright output | Admin Comp-Off approve flow passed after comp-off status filtering and deterministic ordering fixes. |
 | 2026-07-16 | Production TouchOrbit | `npx playwright test --project=chromium --grep "F7.2"` | Passed | Playwright output | Admin Comp-Off reject flow passed and confirmed BF-0017 is fixed. |
+| 2026-07-16 | Local build | `npm.cmd run build --workspace=apps/touchorbit-api` | Passed | Build output | Phase 5 batch API changes compile: overtime list employee details and attendance correction review fallback. |
+| 2026-07-16 | Local build | `npm.cmd run build --workspace=apps/touchorbit-admin-web` | Passed | Build output | Phase 5 batch admin changes compile: calendar task refresh/fallback, overtime local API path, corrections local API review. |
 
 ## Open Items By Portal
 
@@ -1198,12 +1200,8 @@ Add every failed/skipped/unverified function below using this template.
 - BF-0013 - Admin announcement create does not complete.
 - BF-0014 - Admin geofence create causes client-side exception.
 - BF-0018 - Leave balance adjustment API fails with parameter type error.
-- BF-0019 - Admin expense category create does not complete.
-- BF-0021 - Admin calendar task create does not complete.
-- BF-0022 - Admin manual overtime entry has no employee options.
 - BF-0024 - Admin shift template status toggle does not complete.
 - BF-0026 - Admin roster grid does not show local DB seed employee.
-- BF-0028 - Admin attendance correction approve does not complete.
 - BF-0029 - Admin document template create does not submit.
 - BF-0030 - Admin document template edit does not complete.
 - BF-0031 - Admin document template delete does not complete.

@@ -363,11 +363,7 @@ export class AttendanceService {
       [organizationId, userId],
     );
 
-    if (result.rows.length === 0) {
-      throw new NotFoundException("Approver employee not found");
-    }
-
-    return result.rows[0].id as string;
+    return (result.rows[0]?.id as string | undefined) ?? null;
   }
 
   async findGeofences(organizationId: string) {

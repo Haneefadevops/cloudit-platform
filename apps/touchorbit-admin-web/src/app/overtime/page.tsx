@@ -4,6 +4,7 @@ import { useEffect, useState, Fragment } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { usePermissions } from '@/hooks/use-permissions'
 import { Clock, CheckCircle, XCircle, X, Settings, Filter, Plus, Timer, Users, Download, ChevronRight, ChevronDown, AlertCircle, Calendar, Search, DollarSign, TrendingUp, Shield } from 'lucide-react'
 import { ToBadge } from '@/components/ui/ToBadge'
@@ -129,33 +130,44 @@ export default function OvertimePage() {
   }, [isLoaded, organizationId, userRole])
 
   const loadEmployees = async () => {
-    const { data } = await supabase.from('employees').select('id, first_name, last_name').eq('organization_id', organizationId).eq('employment_status', 'active').order('first_name')
-    setEmployees(data || [])
+    const result = await api.get<any[]>('/employees?status=active&limit=500')
+    if (result.ok) {
+      setEmployees(result.data || [])
+    } else {
+      setEmployees([])
+      toast.error(result.error || 'Failed to load employees')
+    }
   }
 
   const loadCompOffStats = async () => {
-    const { count: earned } = await supabase.from('comp_off_records').select('id',{count:'exact',head:true}).eq('organization_id',organizationId).eq('status','approved')
-    const { count: pending } = await supabase.from('comp_off_records').select('id',{count:'exact',head:true}).eq('organization_id',organizationId).eq('status','pending')
-    setCompOffEarned(earned || 0)
-    setCompOffPending(pending || 0)
+    const [earned, pending] = await Promise.all([
+      api.get<any[]>('/leave/comp-off?status=approved'),
+      api.get<any[]>('/leave/comp-off?status=pending'),
+    ])
+    setCompOffEarned(earned.ok ? earned.data?.length || 0 : 0)
+    setCompOffPending(pending.ok ? pending.data?.length || 0 : 0)
   }
 
   const handleManualEntry = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     try {
-      const { error } = await supabase.from('overtime_records').insert({
-        organization_id: organizationId,
+      const result = await api.post<OvertimeRecord>('/overtime', {
         employee_id: manualForm.employee_id,
         date: manualForm.date,
         hours: parseFloat(manualForm.hours),
         reason: manualForm.reason,
-        status: 'pending',
-        rate: 1.5
+        rate: 1.5,
       })
-      if (error) throw error
+      if (!result.ok) throw new Error(result.error || 'Failed to create record')
       toast.success('Overtime record created')
       setShowManualEntry(false)
+      setManualForm({
+        employee_id: '',
+        date: new Date().toISOString().split('T')[0],
+        hours: '2.0',
+        reason: '',
+      })
       loadData(managedScopeId)
     } catch (error) {
       toast.error('Failed to create record')
@@ -169,54 +181,21 @@ export default function OvertimePage() {
 
     setLoading(true)
     try {
-      // Load overtime records with approvals
-      const { data: recordsData, error: recordsError } = await supabase
-        .from('overtime_records')
-        .select(`
-          id, employee_id, date, start_time, end_time, hours, rate, reason, status, rejection_reason, created_at,
-          approvals:overtime_request_approvals(
-            *,
-            approver:users(first_name, last_name)
-          )
-        `)
-        .eq('organization_id', organizationId)
-        .order('created_at', { ascending: false })
-
-      if (recordsError) throw recordsError
-
-      // Fetch employee details separately
-      if (recordsData && recordsData.length > 0) {
-        const employeeIds = [...new Set(recordsData.map(r => r.employee_id))]
-        
-        let empQuery = supabase
-          .from('employees')
-          .select('id, first_name, last_name, employee_number')
-          .in('id', employeeIds)
-
-        if (isDeptManager && scopeId) {
-          empQuery = empQuery.eq('department_id', scopeId)
-        } else if (isBranchManager && scopeId) {
-          empQuery = empQuery.eq('branch_id', scopeId)
-        }
-
-        const { data: employeesData } = await empQuery
-
-        // Merge employee data with records, filtering out records whose employees weren't in the scope
-        const recordsWithEmployees = recordsData
-          .map(record => {
-            const emp = employeesData?.find(e => e.id === record.employee_id)
-            if (!emp) return null
-            return {
-              ...record,
-              employees: emp
-            }
-          })
-          .filter(Boolean) as OvertimeRecord[]
-
-        setRecords(recordsWithEmployees || [])
-      } else {
-        setRecords([])
+      const recordsResult = await api.get<OvertimeRecord[]>('/overtime')
+      if (!recordsResult.ok) throw new Error(recordsResult.error || 'Failed to load overtime')
+      let recordsData = recordsResult.data || []
+      if ((isDeptManager || isBranchManager) && scopeId) {
+        const scopedEmployees = await api.get<any[]>('/employees?status=active&limit=500')
+        const scopedIds = new Set(
+          (scopedEmployees.data || [])
+            .filter((employee: any) =>
+              isDeptManager ? employee.department_id === scopeId : employee.branch_id === scopeId,
+            )
+            .map((employee: any) => employee.id),
+        )
+        recordsData = recordsData.filter((record) => scopedIds.has(record.employee_id))
       }
+      setRecords(recordsData)
 
       // Load overtime policy
       const { data: policyData, error: policyError } = await supabase

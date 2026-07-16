@@ -258,6 +258,7 @@ export default function CalendarPage() {
   const [editingTask, setEditingTask] = useState<any | null>(null)
   const [taskMode, setTaskMode] = useState<'create' | 'edit'>('create')
   const [taskEmployees, setTaskEmployees] = useState<{ id: string; first_name: string; last_name: string }[]>([])
+  const [taskRefreshKey, setTaskRefreshKey] = useState(0)
 
   useEffect(() => {
     if (isLoaded && organizationId) {
@@ -392,13 +393,17 @@ export default function CalendarPage() {
         is_recurring: formData.is_recurring,
         recurrence_rule: formData.recurrence_rule || null,
       }
-      if (formData.employee_id) payload.employee_id = formData.employee_id
+      payload.employee_id = formData.employee_id || taskEmployees[0]?.id || employees[0]?.id
 
       const result = await api.post('/employee-tasks', payload)
       if (!result.ok) throw new Error(result.error || 'Failed to create task')
       toast.success('Task created')
       setShowTaskDialog(false)
-    } catch (error: any) { toast.error(error.message) }
+      setTaskRefreshKey((key) => key + 1)
+    } catch (error: any) {
+      toast.error(error.message)
+      throw error
+    }
   }
 
   async function handleEditTask(taskId: string, formData: TaskFormData) {
@@ -420,7 +425,11 @@ export default function CalendarPage() {
       toast.success('Task updated')
       setShowTaskDialog(false)
       setEditingTask(null)
-    } catch (error: any) { toast.error(error.message) }
+      setTaskRefreshKey((key) => key + 1)
+    } catch (error: any) {
+      toast.error(error.message)
+      throw error
+    }
   }
 
   async function handleDuplicateEvent(event: UnifiedCalendarEvent) {
@@ -903,6 +912,7 @@ export default function CalendarPage() {
                 <TaskSidebar
                   onCreateTask={() => { setTaskMode('create'); setEditingTask(null); loadTaskEmployees(); setShowTaskDialog(true) }}
                   onEditTask={(task) => { setTaskMode('edit'); setEditingTask(task); loadTaskEmployees(); setShowTaskDialog(true) }}
+                  refreshKey={taskRefreshKey}
                 />
 
                 {/* Reschedule Inbox */}
@@ -1099,5 +1109,3 @@ export default function CalendarPage() {
     </DashboardLayout>
   )
 }
-
-

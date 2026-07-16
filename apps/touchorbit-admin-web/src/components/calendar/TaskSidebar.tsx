@@ -23,10 +23,11 @@ interface Task {
 interface TaskSidebarProps {
   onCreateTask: () => void
   onEditTask: (task: Task) => void
+  refreshKey?: number
   className?: string
 }
 
-export function TaskSidebar({ onCreateTask, onEditTask, className }: TaskSidebarProps) {
+export function TaskSidebar({ onCreateTask, onEditTask, refreshKey = 0, className }: TaskSidebarProps) {
   const { organizationId, isLoaded, isAdmin } = useAuth()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,7 +64,7 @@ export function TaskSidebar({ onCreateTask, onEditTask, className }: TaskSidebar
 
   useEffect(() => {
     loadTasks()
-  }, [loadTasks])
+  }, [loadTasks, refreshKey])
 
   async function handleComplete(taskId: string) {
     try {

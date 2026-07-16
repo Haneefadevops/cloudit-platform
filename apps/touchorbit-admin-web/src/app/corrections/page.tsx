@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
-import { supabase } from '@/lib/supabase'
 import { AlertCircle, CheckCircle, XCircle, RefreshCw, Clock, ShieldAlert, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { ToBadge } from '@/components/ui/ToBadge'
@@ -73,8 +72,8 @@ export default function CorrectionsPage() {
 
   const handleApprove = async (id: string) => {
     try {
-      // TODO: backend attendance corrections review endpoint not implemented yet
-      await supabase.from('attendance_corrections').update({ status: 'approved', approved_at: new Date().toISOString() }).eq('id', id)
+      const result = await api.patch<AttendanceCorrection>(`/attendance/corrections/${id}/approve`, {})
+      if (!result.ok) throw new Error(result.error || 'Approval failed')
       toast.success('Correction approved')
       await loadCorrections()
     } catch (error) { toast.error('Approval failed') }
@@ -83,8 +82,10 @@ export default function CorrectionsPage() {
   const handleReject = async (id: string) => {
     const reason = prompt('Rejection reason (optional):')
     try {
-      // TODO: backend attendance corrections review endpoint not implemented yet
-      await supabase.from('attendance_corrections').update({ status: 'rejected', rejection_reason: reason || null }).eq('id', id)
+      const result = await api.patch<AttendanceCorrection>(`/attendance/corrections/${id}/reject`, {
+        reason: reason || null,
+      })
+      if (!result.ok) throw new Error(result.error || 'Rejection failed')
       toast.success('Correction rejected')
       await loadCorrections()
     } catch (error) { toast.error('Rejection failed') }
