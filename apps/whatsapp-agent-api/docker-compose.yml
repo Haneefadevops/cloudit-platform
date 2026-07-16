@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: whatsapp_agent_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: whatsapp_agent
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - whatsapp_agent_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  whatsapp_agent_postgres_data:

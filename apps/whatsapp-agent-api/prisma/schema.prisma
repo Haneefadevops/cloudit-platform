@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id                  String   @id @default(uuid())
+  name                String
+  whatsappNumber      String   @unique
+  whatsappPhoneNumberId String @unique
+  metaAccessToken       String
+  chatwootAccountId   Int?
+  chatwootInboxId     Int?
+  chatwootApiKey      String?
+  businessProfile     Json?    @default("{}")
+  products            Json?    @default("[]")
+  systemPrompt        String?  @default("You are a helpful AI assistant.")
+  aiTemperature       Float?   @default(0.7)
+  status              String   @default("active") // active, paused, suspended
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  customers     Customer[]
+  conversations Conversation[]
+  users         User[]
+
+  @@map("clients")
+}
+
+model Customer {
+  id          String   @id @default(uuid())
+  phoneNumber String
+  name        String?
+  email       String?
+  address     String?
+  chatwootContactId Int?
+  metadata    Json?    @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clientId      String
+  client        Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@unique([clientId, phoneNumber])
+  @@map("customers")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role            String   @default("agent") // admin, supervisor, agent
+  status          String   @default("active") // active, away, offline
+  chatwootUserId  Int?
+  createdAt       DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clientId      String?
+  client        Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  conversations Conversation[]
+
+  @@map("users")
+}
+
+model Conversation {
+  id                      String    @id @default(uuid())
+  status                  String    @default("bot") // bot, human, resolved, archived
+  handoffReason           String?
+  chatwootConversationId  Int?
+  chatwootContactId       Int?
+  chatwootInboxId         Int?
+  createdAt               DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  resolvedAt      DateTime?
+
+  clientId     String
+  client       Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  customerId   String
+  customer     Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignedToId String?
+  assignedTo   User?      @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  messages     Message[]
+
+  @@index([clientId, status])
+  @@index([assignedToId, status])
+  @@map("conversations")
+}
+
+model Message {
+  id           String   @id @default(uuid())
+  senderType   String   // customer, bot, agent
+  content      String
+  kimiMetadata Json?    @default("{}")
+  createdAt    DateTime @default(now())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model HandoffLog {
+  id                  String    @id @default(uuid())
+  triggeredBy         String    // bot, customer, agent, system
+  reason              String?
+  responseTimeSeconds Int?
+  resolvedAt          DateTime?
+  customerSatisfaction Int?
+  createdAt           DateTime  @default(now())
+
+  conversationId String
+  assignedAgentId String?
+
+  @@index([conversationId])
+  @@map("handoff_logs")
+}

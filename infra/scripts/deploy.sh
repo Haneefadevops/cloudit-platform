@@ -143,6 +143,22 @@ wait_for_service n8n
 docker compose -f infra/uptime-kuma/docker-compose.yml up -d
 wait_for_service uptime-kuma
 
+log "Building TheReplyte API..."
+tag_previous_image "whatsapp-agent-api"
+build_service "whatsapp-agent-api"
+docker compose -f infra/whatsapp-agent-api/docker-compose.yml up -d
+wait_for_service "whatsapp-agent-api"
+
+log "Building TheReplyte web..."
+tag_previous_image "whatsapp-agent-web"
+build_service "whatsapp-agent-web"
+docker compose -f infra/whatsapp-agent-web/docker-compose.yml up -d
+wait_for_service "whatsapp-agent-web"
+
+log "Starting Chatwoot..."
+docker compose -f infra/chatwoot/docker-compose.yml up -d
+wait_for_service "chatwoot-rails"
+
 log "Building frontend images..."
 for svc in "${frontend_services[@]}"; do
   tag_previous_image "$svc"
