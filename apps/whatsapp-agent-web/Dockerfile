@@ -8,7 +8,7 @@ COPY next.config.js ./
 COPY next-env.d.ts ./
 COPY src ./src
 
-RUN npm ci
+RUN npm install && npm cache clean --force
 RUN npm run build
 
 FROM node:20-alpine

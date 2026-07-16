@@ -9,7 +9,7 @@ COPY nest-cli.json ./
 COPY prisma ./prisma
 COPY src ./src
 
-RUN npm ci
+RUN npm install && npm cache clean --force
 RUN npx prisma generate
 RUN npm run build
 
