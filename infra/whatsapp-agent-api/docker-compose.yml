@@ -16,7 +16,6 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3010
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/whatsapp_agent?schema=public
     networks:
       - cloudit
     labels:
