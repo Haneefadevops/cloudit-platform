@@ -8,6 +8,12 @@ COPY next.config.js ./
 COPY next-env.d.ts ./
 COPY src ./src
 
+# These must be available at build time so Next.js can inline them for rewrites
+ARG API_URL=https://api.thereplyte.com/api
+ARG NEXT_PUBLIC_API_URL=https://api.thereplyte.com/api
+ENV API_URL=${API_URL}
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
 RUN npm install && npm cache clean --force
 RUN npm run build
 

@@ -3,6 +3,9 @@ services:
     build:
       context: ../../apps/whatsapp-agent-web
       dockerfile: Dockerfile
+      args:
+        - API_URL=https://api.thereplyte.com/api
+        - NEXT_PUBLIC_API_URL=https://api.thereplyte.com/api
     image: cloudit/whatsapp-agent-web:latest
     container_name: whatsapp-agent-web
     restart: unless-stopped
