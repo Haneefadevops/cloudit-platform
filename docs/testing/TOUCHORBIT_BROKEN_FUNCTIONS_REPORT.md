@@ -1,6 +1,6 @@
 # TouchOrbit Broken Functions Report
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 
 ## Purpose
 
@@ -30,8 +30,8 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 19 | 0 | 4 | 19 | 0 |
-| Medium | 5 | 0 | 0 | 3 | 0 |
+| High | 16 | 0 | 7 | 19 | 0 |
+| Medium | 3 | 0 | 2 | 3 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
 ## Broken Function Entries
@@ -637,18 +637,18 @@ Add every failed/skipped/unverified function below using this template.
 - **Test file:** `e2e/tests/admin/documents-functional.spec.ts`
 - **Test name:** `F21.1 creates a document template from the admin UI`
 - **Expected:** Clicking `Save Template` should POST to `/api/document-templates`, show `Template created`, and add the new template to the list.
-- **Actual:** Clicking `Save Template` does not trigger the POST request; the modal remains open with no success message.
+- **Actual:** Clicking `Save Template` did not trigger the POST request; the modal remained open with no success message.
 - **Evidence:** `e2e/test-results/admin-documents-functional-f4632--template-from-the-admin-UI-chromium-retry2/error-context.md`.
-- **Likely cause:** The submit button is rendered outside the `<form>` and is not associated with the form, so `handleSaveTemplate` is not invoked.
-- **Fix plan:** Move the action buttons into the form or wire `Save Template` to `handleSaveTemplate`, then retest template create and send.
+- **Likely cause:** The submit button was rendered outside the `<form>` and was not associated with the form, so `handleSaveTemplate` was not invoked.
+- **Fix plan:** Wire `Save Template` to the document-template form and keep template creation on the local API path, then retest template create and send.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/documents-functional.spec.ts --grep "F21\\.1"`
-- **Last tested:** 2026-07-14
-- **Notes:** Admin send worked when the template was seeded through the local API.
+- **Last tested:** 2026-07-17 local build
+- **Notes:** The template modal now has a form id and the external save button submits that form; admin web build passed. Deployment E2E retest is pending.
 
 ### BF-0030 - Admin Document Template Edit Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** Medium
 - **Portal:** Admin
 - **Module:** Documents
@@ -657,18 +657,18 @@ Add every failed/skipped/unverified function below using this template.
 - **Test file:** `e2e/tests/admin/documents-functional.spec.ts`
 - **Test name:** `F21.3 edits an existing document template from the admin UI`
 - **Expected:** Editing an existing template and clicking `Save Template` should persist the update and show a success message.
-- **Actual:** The edit modal opens, but clicking `Save Template` shows no success message and does not persist the new template name.
+- **Actual:** The edit modal opened, but clicking `Save Template` showed no success message and did not persist the new template name.
 - **Evidence:** `e2e/test-results/admin-documents-functional-b981c--template-from-the-admin-UI-chromium-retry2/error-context.md`.
-- **Likely cause:** The frontend explicitly reports that template editing is not supported by the backend, and there is no local API update endpoint for document templates.
+- **Likely cause:** The frontend explicitly reported that template editing was not supported by the backend, and there was no local API update endpoint for document templates.
 - **Fix plan:** Add `PATCH /api/document-templates/:id`, update the admin UI to call it, and retest edit persistence.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/documents-functional.spec.ts --grep "F21\\.3"`
-- **Last tested:** 2026-07-14
-- **Notes:** This is visible as an edit button in production UI, so it must either work or be removed/disabled.
+- **Last tested:** 2026-07-17 local build
+- **Notes:** `PATCH /document-templates/:id` is implemented in the API and the admin UI now calls it; API and admin web builds passed. Deployment E2E retest is pending.
 
 ### BF-0031 - Admin Document Template Delete Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** Medium
 - **Portal:** Admin
 - **Module:** Documents
@@ -677,18 +677,18 @@ Add every failed/skipped/unverified function below using this template.
 - **Test file:** `e2e/tests/admin/documents-functional.spec.ts`
 - **Test name:** `F21.4 deletes a document template from the admin UI`
 - **Expected:** Confirming delete should remove the template and show `Template deleted`.
-- **Actual:** The delete action never shows the success message and the template remains visible.
+- **Actual:** The delete action never showed the success message and the template remained visible.
 - **Evidence:** `e2e/test-results/admin-documents-functional-6951e--template-from-the-admin-UI-chromium-retry2/error-context.md`.
-- **Likely cause:** The admin UI still deletes through Supabase directly; the local API has no document-template delete endpoint.
-- **Fix plan:** Add `DELETE /api/document-templates/:id`, switch the UI to the local API, handle templates with sent documents safely, and retest.
+- **Likely cause:** The admin UI still deleted through Supabase directly; the local API had no document-template delete endpoint.
+- **Fix plan:** Add `DELETE /api/document-templates/:id`, switch the UI to the local API, and retest.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/documents-functional.spec.ts --grep "F21\\.4"`
-- **Last tested:** 2026-07-14
-- **Notes:** Production has moved away from Supabase for app data, so direct Supabase delete is not acceptable for go-live.
+- **Last tested:** 2026-07-17 local build
+- **Notes:** `DELETE /document-templates/:id` is implemented in the API and the admin UI now calls it; API and admin web builds passed. Deployment E2E retest is pending.
 
 ### BF-0032 - Employee Assigned Documents Do Not Display
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Documents
@@ -697,18 +697,18 @@ Add every failed/skipped/unverified function below using this template.
 - **Test file:** `e2e/tests/employee/documents-functional.spec.ts`
 - **Test name:** `EF21.1 employee views an assigned document`
 - **Expected:** A document assigned to the logged-in seed employee through the local API should appear in `My Documents` and open in the document viewer.
-- **Actual:** The employee `/documents` page loads without showing the assigned local-DB document.
+- **Actual:** The employee `/documents` page loaded without showing the assigned local-DB document.
 - **Evidence:** `e2e/test-results/employee-documents-functio-b28b9--views-an-assigned-document-employee-chromium-retry2/error-context.md`.
-- **Likely cause:** Employee document loading is gated by employee auto-link/session state or mismatched employee identity, so local API documents are not surfaced to the logged-in employee.
-- **Fix plan:** Align employee auth, `/employees/me`, and document filtering with the local DB employee identity, then retest assigned document visibility.
+- **Likely cause:** Employee document loading was gated by employee auto-link/session state or mismatched employee identity, so local API documents were not surfaced to the logged-in employee.
+- **Fix plan:** Keep assigned-document reads on the local API identity path and retest against the deployed `/employees/me` document filtering behavior.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/documents-functional.spec.ts --grep "EF21\\.1"`
-- **Last tested:** 2026-07-14
-- **Notes:** This supersedes the earlier smoke-level document route issue with deeper assigned-document evidence.
+- **Last tested:** 2026-07-17 local build
+- **Notes:** Employee document page remains on the local API path and employee web build passed after the signing flow was moved fully off Supabase storage. Deployment E2E retest is pending.
 
 ### BF-0033 - Employee Document Signing Cannot Be Completed
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Documents
@@ -717,14 +717,14 @@ Add every failed/skipped/unverified function below using this template.
 - **Test file:** `e2e/tests/employee/documents-functional.spec.ts`
 - **Test name:** `EF21.2 employee signs an assigned document`
 - **Expected:** The employee should open an assigned pending document, draw a signature, submit it, and see a signed/verified state.
-- **Actual:** The assigned document is not visible, so signing cannot start.
+- **Actual:** The assigned document was not visible, so signing could not start.
 - **Evidence:** `e2e/test-results/employee-documents-functio-d54bb--signs-an-assigned-document-employee-chromium-retry2/error-context.md`.
-- **Likely cause:** Same visibility/identity problem as BF-0032; after visibility is fixed, the remaining Supabase storage upload in the signing flow must also be replaced with local storage/API handling.
-- **Fix plan:** Fix employee document visibility first, then replace signature upload with a local API/storage path and retest the full sign flow.
+- **Likely cause:** Same visibility/identity problem as BF-0032; the remaining Supabase storage upload in the signing flow also needed to be replaced with local API handling.
+- **Fix plan:** Fix employee document visibility first, replace signature upload with a local API path, and retest the full sign flow.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/documents-functional.spec.ts --grep "EF21\\.2"`
-- **Last tested:** 2026-07-14
-- **Notes:** Do not mark fixed until the signature is saved and the document status changes to signed.
+- **Last tested:** 2026-07-17 local build
+- **Notes:** Employee signing now stores the canvas signature data URL through the local document PATCH API, updates the open viewer with the signed response, and avoids Supabase storage. Employee web build passed. Deployment E2E retest is pending.
 
 ### BF-0034 - Attendance Report Crashes After Generate
 
@@ -1187,6 +1187,9 @@ Add every failed/skipped/unverified function below using this template.
 | 2026-07-16 | Production TouchOrbit | `npx playwright test --project=chromium --grep "F7.2"` | Passed | Playwright output | Admin Comp-Off reject flow passed and confirmed BF-0017 is fixed. |
 | 2026-07-16 | Local build | `npm.cmd run build --workspace=apps/touchorbit-api` | Passed | Build output | Phase 5 batch API changes compile: overtime list employee details and attendance correction review fallback. |
 | 2026-07-16 | Local build | `npm.cmd run build --workspace=apps/touchorbit-admin-web` | Passed | Build output | Phase 5 batch admin changes compile: calendar task refresh/fallback, overtime local API path, corrections local API review. |
+| 2026-07-17 | Local build | `npm.cmd run build --workspace=apps/touchorbit-api` | Passed | Build output | Phase 6 API changes compile: document-template PATCH/DELETE and document signing metadata. |
+| 2026-07-17 | Local build | `npm.cmd run build --workspace=apps/touchorbit-admin-web` | Passed | Build output | Phase 6 admin document template create/edit/delete UI compiles. |
+| 2026-07-17 | Local build | `npm.cmd run build --workspace=apps/touchorbit-employee-web` | Passed | Build output | Phase 6 employee assigned-document/signing UI compiles. |
 
 ## Open Items By Portal
 
@@ -1202,9 +1205,6 @@ Add every failed/skipped/unverified function below using this template.
 - BF-0018 - Leave balance adjustment API fails with parameter type error.
 - BF-0024 - Admin shift template status toggle does not complete.
 - BF-0026 - Admin roster grid does not show local DB seed employee.
-- BF-0029 - Admin document template create does not submit.
-- BF-0030 - Admin document template edit does not complete.
-- BF-0031 - Admin document template delete does not complete.
 - BF-0034 - Attendance report crashes after generate.
 - BF-0035 - Leave report crashes after generate.
 - BF-0036 - Payroll report crashes after generate.
@@ -1228,8 +1228,6 @@ Add every failed/skipped/unverified function below using this template.
 - BF-0023 - Employee overtime submit does not complete.
 - BF-0025 - Employee personal training edit does not complete.
 - BF-0027 - Employee attendance correction submit does not complete.
-- BF-0032 - Employee assigned documents do not display.
-- BF-0033 - Employee document signing cannot be completed.
 - BF-0045 - Employee profile phone update cannot start.
 - BF-0046 - Employee profile emergency contacts do not render.
 - BF-0047 - Employee calendar task create crashes page.

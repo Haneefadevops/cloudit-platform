@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
 import { api } from '@/lib/api'
 import { FileText, CheckCircle, Clock, X, FileSignature, ChevronRight, PenTool, ShieldCheck, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
@@ -84,11 +83,7 @@ export default function DocumentsPage() {
     const canvas = canvasRef.current; if (!canvas) return
 
     try {
-      const blob = await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), 'image/png'))
-      const filename = `signatures/${selectedDoc.id}-${Date.now()}.png`
-      const { error: uploadError } = await supabase.storage.from('attendance-selfies').upload(filename, blob, { contentType: 'image/png' })
-      if (uploadError) throw uploadError
-      const { data: urlData } = supabase.storage.from('attendance-selfies').getPublicUrl(filename)
+      const signatureUrl = canvas.toDataURL('image/png')
 
       let latitude = null, longitude = null
       try {
@@ -98,14 +93,17 @@ export default function DocumentsPage() {
 
       const res = await api.patch<SentDocument>(`/documents/${selectedDoc.id}`, {
         status: 'signed',
-        signature_url: urlData.publicUrl,
+        signature_url: signatureUrl,
         signed_at: new Date().toISOString(),
         signed_latitude: latitude,
         signed_longitude: longitude,
       })
       if (!res.ok) throw new Error(res.error || 'Signing failed')
 
-      toast.success('Document signed!'); setSelectedDoc(null); loadDocuments()
+      toast.success('Document signed!')
+      if (res.data) setSelectedDoc(res.data)
+      setShowSignature(false)
+      loadDocuments()
     } catch (error: any) { toast.error('Signing failed: ' + (error?.message || 'Unknown error')) }
   }
 

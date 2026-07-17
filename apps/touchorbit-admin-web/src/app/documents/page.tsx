@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
 import { api } from '@/lib/api'
 import { Plus, Edit2, Trash2, Send, FileText, CheckCircle, Clock, XCircle, RefreshCw, X, ChevronRight, FileSignature } from 'lucide-react'
 import { toast } from 'sonner'
@@ -82,14 +81,14 @@ export default function DocumentsPage() {
 
     try {
       const payload = { name: templateForm.name, description: templateForm.description, content: templateForm.content }
+      let res
       if (editingTemplate) {
-        // Backend currently has no template update endpoint
-        toast.error('Template editing is not supported by the backend yet')
-        return
+        res = await api.patch<DocumentTemplate>(`/document-templates/${editingTemplate.id}`, payload)
+      } else {
+        res = await api.post<DocumentTemplate>('/document-templates', payload)
       }
-      const res = await api.post<DocumentTemplate>('/document-templates', payload)
       if (!res.ok) throw new Error(res.error || 'Failed')
-      toast.success('Template created')
+      toast.success(editingTemplate ? 'Template updated' : 'Template created')
       setShowTemplateForm(false)
       setEditingTemplate(null)
       setTemplateForm({ name: '', description: '', content: '' })
@@ -124,9 +123,8 @@ export default function DocumentsPage() {
   async function handleDeleteTemplate(id: string) {
     if (!confirm('Delete this template?')) return
     try {
-      // Backend has no template delete endpoint yet; keep Supabase fallback
-      const { error } = await supabase.from('document_templates').delete().eq('id', id)
-      if (error) throw error
+      const res = await api.del<{ deleted: boolean }>(`/document-templates/${id}`)
+      if (!res.ok) throw new Error(res.error || 'Failed')
       toast.success('Template deleted')
       loadData()
     } catch (error: any) {
@@ -267,7 +265,7 @@ export default function DocumentsPage() {
                 <h2 className="text-xl font-black text-[#1A1727] tracking-tight">{editingTemplate ? 'Edit' : 'New'} Template</h2>
                 <button onClick={() => setShowTemplateForm(false)} className="p-2 text-[#9CA3AF] hover:text-[#1A1727] transition-all"><X size={20} strokeWidth={2.5} /></button>
               </div>
-              <form onSubmit={handleSaveTemplate} className="space-y-6 overflow-y-auto flex-1 pr-2 custom-scrollbar">
+              <form id="document-template-form" onSubmit={handleSaveTemplate} className="space-y-6 overflow-y-auto flex-1 pr-2 custom-scrollbar">
                 <div>
                   <label className="block text-[10px] font-black text-[#9CA3AF] uppercase tracking-widest mb-2 ml-1">Template Name</label>
                   <input required value={templateForm.name} onChange={e => setTemplateForm({...templateForm, name: e.target.value})} className="w-full px-4 py-3 bg-[#F8F7F9] border border-[#F1F0F4] rounded-2xl text-sm font-bold text-[#1A1727] outline-none" placeholder="e.g. Employment Contract v2" />
@@ -283,7 +281,7 @@ export default function DocumentsPage() {
               </form>
               <div className="flex gap-4 pt-8 shrink-0">
                   <button type="button" onClick={() => setShowTemplateForm(false)} className="flex-1 py-3 text-[11px] font-black uppercase tracking-widest text-[#9CA3AF] hover:bg-[#F8F7F9] rounded-xl transition-all">Cancel</button>
-                  <button type="submit" className="flex-1 py-3 bg-[#534AB7] text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/20 active:scale-95 transition-all">Save Template</button>
+                  <button type="submit" form="document-template-form" className="flex-1 py-3 bg-[#534AB7] text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/20 active:scale-95 transition-all">Save Template</button>
               </div>
             </div>
           </div>

@@ -52,6 +52,8 @@ const templateSchema = z.object({
   status: z.string().optional().nullable(),
 });
 
+const updateTemplateSchema = templateSchema.partial();
+
 @ApiTags("documents")
 @Controller("documents")
 @UseGuards(SessionAuthGuard)
@@ -176,5 +178,36 @@ export class DocumentTemplatesController {
       parsed.data,
     );
     return { ok: true, data: row };
+  }
+
+  @Patch(":id")
+  @RequireModule("touchorbit", "documents")
+  @ApiOperation({ summary: "Update document template" })
+  async update(
+    @CurrentOrganization() organizationId: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = updateTemplateSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid document template payload");
+    }
+    const row = await this.documentsService.updateTemplate(
+      organizationId,
+      id,
+      parsed.data,
+    );
+    return { ok: true, data: row };
+  }
+
+  @Delete(":id")
+  @RequireModule("touchorbit", "documents")
+  @ApiOperation({ summary: "Delete document template" })
+  async delete(
+    @CurrentOrganization() organizationId: string,
+    @Param("id") id: string,
+  ) {
+    const result = await this.documentsService.deleteTemplate(organizationId, id);
+    return { ok: true, data: result };
   }
 }

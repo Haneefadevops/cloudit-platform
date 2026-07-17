@@ -230,4 +230,67 @@ export class DocumentsService {
     );
     return result.rows[0];
   }
+
+  async updateTemplate(
+    organizationId: string,
+    id: string,
+    input: {
+      name?: string;
+      content?: string;
+      description?: string | null;
+      status?: string | null;
+    },
+  ) {
+    const params: unknown[] = [id, organizationId];
+    const setClauses: string[] = [];
+    const add = (column: string, value: unknown) => {
+      if (value !== undefined) {
+        params.push(value);
+        setClauses.push(`${column} = $${params.length}`);
+      }
+    };
+
+    add("name", input.name);
+    add("content", input.content);
+    add("description", input.description);
+    add("status", input.status);
+
+    if (setClauses.length === 0) {
+      const current = await this.databaseService.query(
+        `SELECT * FROM document_templates
+         WHERE id = $1::uuid AND organization_id = $2::uuid`,
+        [id, organizationId],
+      );
+      if (current.rows.length === 0) {
+        throw new NotFoundException("Document template not found");
+      }
+      return current.rows[0];
+    }
+
+    setClauses.push("updated_at = now()");
+    const result = await this.databaseService.query(
+      `UPDATE document_templates
+       SET ${setClauses.join(", ")}
+       WHERE id = $1::uuid AND organization_id = $2::uuid
+       RETURNING *`,
+      params,
+    );
+    if (result.rows.length === 0) {
+      throw new NotFoundException("Document template not found");
+    }
+    return result.rows[0];
+  }
+
+  async deleteTemplate(organizationId: string, id: string) {
+    const result = await this.databaseService.query(
+      `DELETE FROM document_templates
+       WHERE id = $1::uuid AND organization_id = $2::uuid
+       RETURNING id`,
+      [id, organizationId],
+    );
+    if (result.rows.length === 0) {
+      throw new NotFoundException("Document template not found");
+    }
+    return { deleted: true, id: result.rows[0].id };
+  }
 }
