@@ -6,6 +6,8 @@ interface Client {
   id: string;
   name: string;
   whatsappNumber: string;
+  whatsappPhoneNumberId: string;
+  metaAccessToken: string;
   status: string;
   chatwootAccountId?: number | null;
   chatwootInboxId?: number | null;
@@ -14,7 +16,7 @@ interface Client {
 interface ChatwootStatus {
   connected: boolean;
   accountId?: number | null;
-  accountName?: string;
+  accountName?: string | null;
 }
 
 export default function ClientsPage() {
@@ -23,10 +25,25 @@ export default function ClientsPage() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Client | null>(null);
+  const [form, setForm] = useState({
+    name: '',
+    whatsappNumber: '',
+    whatsappPhoneNumberId: '',
+    metaAccessToken: '',
+    autoSetup: true,
+  });
+
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
 
+  const showInfo = (text: string) => {
+    setMessage(text);
+    setTimeout(() => setMessage(null), 4000);
+  };
+
   const fetchClients = async () => {
+    if (!token) return [];
     const res = await fetch('/api/clients', {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -45,32 +62,44 @@ export default function ClientsPage() {
   };
 
   useEffect(() => {
-    fetchClients().then((data) => {
-      data.forEach((c) => fetchStatus(c.id));
+    if (!token) {
+      window.location.href = '/login';
+      return;
+    }
+    fetchClients().then((list) => {
+      list.forEach((c) => fetchStatus(c.id));
     });
   }, []);
 
-  const showInfo = (text: string) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
+  const resetForm = () => {
+    setForm({
+      name: '',
+      whatsappNumber: '',
+      whatsappPhoneNumberId: '',
+      metaAccessToken: '',
+      autoSetup: true,
+    });
+    setEditing(null);
+    setShowForm(false);
   };
 
-  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    const payload = {
-      name: formData.get('name') as string,
-      whatsappNumber: formData.get('whatsappNumber') as string,
-      whatsappPhoneNumberId: formData.get('whatsappPhoneNumberId') as string,
-      metaAccessToken: formData.get('metaAccessToken') as string,
-    };
-    const autoSetup = formData.get('autoSetup') === 'on';
+    setLoading(editing ? 'update' : 'create');
 
-    setLoading('create');
+    const payload = {
+      name: form.name,
+      whatsappNumber: form.whatsappNumber,
+      whatsappPhoneNumberId: form.whatsappPhoneNumberId,
+      metaAccessToken: form.metaAccessToken,
+    };
+
+    const url = editing ? `/api/clients/${editing.id}` : '/api/clients';
+    const method = editing ? 'PUT' : 'POST';
+
     try {
-      const res = await fetch('/api/clients', {
-        method: 'POST',
+      const res = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -79,11 +108,11 @@ export default function ClientsPage() {
       });
       const client = await res.json();
       if (!res.ok) {
-        showInfo(client.error || 'Failed to create client');
+        showInfo(client.error || client.message || 'Failed to save client');
         return;
       }
 
-      if (autoSetup) {
+      if (!editing && form.autoSetup) {
         const setupRes = await fetch(
           `/api/clients/${client.id}/chatwoot-setup`,
           {
@@ -93,22 +122,67 @@ export default function ClientsPage() {
         );
         const setupData = await setupRes.json();
         if (!setupRes.ok) {
-          showInfo(setupData.error || 'Client created but Chatwoot setup failed');
+          showInfo(setupData.error || 'Client saved but Chatwoot setup failed');
         } else {
           showInfo(
-            `Client created and Chatwoot account ${setupData.chatwootAccountId} connected`,
+            `Client saved and Chatwoot account ${setupData.chatwootAccountId} connected`,
           );
         }
       } else {
-        showInfo('Client created');
+        showInfo(editing ? 'Client updated' : 'Client created');
       }
 
-      form.reset();
-      setShowForm(false);
-      await fetchClients();
-      await fetchStatus(client.id);
+      resetForm();
+      const list = await fetchClients();
+      await Promise.all(list.map((c) => fetchStatus(c.id)));
     } finally {
       setLoading(null);
+    }
+  };
+
+  const handleEdit = (client: Client) => {
+    setEditing(client);
+    setForm({
+      name: client.name,
+      whatsappNumber: client.whatsappNumber,
+      whatsappPhoneNumberId: client.whatsappPhoneNumberId,
+      metaAccessToken: client.metaAccessToken,
+      autoSetup: false,
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this client?')) return;
+    const res = await fetch(`/api/clients/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      showInfo('Client deleted');
+      const list = await fetchClients();
+      await Promise.all(list.map((c) => fetchStatus(c.id)));
+    } else {
+      showInfo('Failed to delete client');
+    }
+  };
+
+  const toggleStatus = async (client: Client) => {
+    const newStatus = client.status === 'active' ? 'paused' : 'active';
+    const res = await fetch(`/api/clients/${client.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (res.ok) {
+      showInfo(`Client ${newStatus === 'active' ? 'activated' : 'paused'}`);
+      const list = await fetchClients();
+      await Promise.all(list.map((c) => fetchStatus(c.id)));
+    } else {
+      showInfo('Failed to update status');
     }
   };
 
@@ -127,8 +201,8 @@ export default function ClientsPage() {
           `Chatwoot connected: account ${data.chatwootAccountId}, inbox ${data.chatwootInboxId}`,
         );
       }
-      await fetchClients();
-      await fetchStatus(clientId);
+      const list = await fetchClients();
+      await Promise.all(list.map((c) => fetchStatus(c.id)));
     } finally {
       setLoading(null);
     }
@@ -160,6 +234,16 @@ export default function ClientsPage() {
     width: '100%',
   };
 
+  const buttonStyle = (color: string): React.CSSProperties => ({
+    padding: '6px 12px',
+    background: color,
+    color: 'white',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 13,
+  });
+
   return (
     <div>
       <div
@@ -171,17 +255,13 @@ export default function ClientsPage() {
       >
         <h1>Clients</h1>
         <button
-          onClick={() => setShowForm((s) => !s)}
-          style={{
-            padding: '8px 16px',
-            background: '#2563eb',
-            color: 'white',
-            border: 'none',
-            borderRadius: 6,
-            cursor: 'pointer',
+          onClick={() => {
+            resetForm();
+            setShowForm(true);
           }}
+          style={buttonStyle('#2563eb')}
         >
-          {showForm ? 'Cancel' : 'Add Client'}
+          Add Client
         </button>
       </div>
 
@@ -202,7 +282,7 @@ export default function ClientsPage() {
 
       {showForm && (
         <form
-          onSubmit={handleCreate}
+          onSubmit={handleSubmit}
           style={{
             marginTop: 16,
             background: 'white',
@@ -214,44 +294,72 @@ export default function ClientsPage() {
             gap: 12,
           }}
         >
-          <input name="name" placeholder="Client name" required style={inputStyle} />
           <input
-            name="whatsappNumber"
+            placeholder="Client name"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            required
+            style={inputStyle}
+          />
+          <input
             placeholder="WhatsApp number (e.g. +94751234567)"
+            value={form.whatsappNumber}
+            onChange={(e) =>
+              setForm({ ...form, whatsappNumber: e.target.value })
+            }
             required
             style={inputStyle}
           />
           <input
-            name="whatsappPhoneNumberId"
             placeholder="WhatsApp Phone Number ID"
+            value={form.whatsappPhoneNumberId}
+            onChange={(e) =>
+              setForm({ ...form, whatsappPhoneNumberId: e.target.value })
+            }
             required
             style={inputStyle}
           />
           <input
-            name="metaAccessToken"
             placeholder="Meta Access Token"
+            value={form.metaAccessToken}
+            onChange={(e) =>
+              setForm({ ...form, metaAccessToken: e.target.value })
+            }
             required
             style={inputStyle}
           />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
-            <input type="checkbox" name="autoSetup" defaultChecked />
-            Auto-setup Chatwoot account
-          </label>
-          <button
-            type="submit"
-            disabled={loading === 'create'}
-            style={{
-              padding: '8px 16px',
-              background: '#16a34a',
-              color: 'white',
-              border: 'none',
-              borderRadius: 6,
-              cursor: 'pointer',
-              opacity: loading === 'create' ? 0.7 : 1,
-            }}
-          >
-            {loading === 'create' ? 'Creating...' : 'Create Client'}
-          </button>
+          {!editing && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+              <input
+                type="checkbox"
+                checked={form.autoSetup}
+                onChange={(e) =>
+                  setForm({ ...form, autoSetup: e.target.checked })
+                }
+              />
+              Auto-setup Chatwoot account
+            </label>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="submit"
+              disabled={loading === 'create' || loading === 'update'}
+              style={buttonStyle('#16a34a')}
+            >
+              {loading === 'create' || loading === 'update'
+                ? 'Saving...'
+                : editing
+                ? 'Update Client'
+                : 'Create Client'}
+            </button>
+            <button
+              type="button"
+              onClick={resetForm}
+              style={buttonStyle('#6b7280')}
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       )}
 
@@ -279,60 +387,30 @@ export default function ClientsPage() {
                 <div>
                   <strong>{c.name}</strong>
                   <div style={{ color: '#6b7280', fontSize: 14 }}>
-                    {c.whatsappNumber} • {c.status}
+                    {c.whatsappNumber} •{' '}
+                    <span
+                      style={{
+                        color: c.status === 'active' ? '#16a34a' : '#ef4444',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {c.status}
+                    </span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {isConnected ? (
-                    <>
-                      <button
-                        onClick={() => syncAgents(c.id)}
-                        disabled={loading === `sync-${c.id}`}
-                        style={{
-                          padding: '6px 12px',
-                          background: '#2563eb',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: 6,
-                          cursor: 'pointer',
-                          fontSize: 13,
-                          opacity: loading === `sync-${c.id}` ? 0.7 : 1,
-                        }}
-                      >
-                        {loading === `sync-${c.id}` ? 'Syncing...' : 'Sync Agents'}
-                      </button>
-                      <button
-                        onClick={() => fetchStatus(c.id)}
-                        style={{
-                          padding: '6px 12px',
-                          background: '#f3f4f6',
-                          border: '1px solid #d1d5db',
-                          borderRadius: 6,
-                          cursor: 'pointer',
-                          fontSize: 13,
-                        }}
-                      >
-                        Refresh Status
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setupChatwoot(c.id)}
-                      disabled={loading === `setup-${c.id}`}
-                      style={{
-                        padding: '6px 12px',
-                        background: '#2563eb',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        opacity: loading === `setup-${c.id}` ? 0.7 : 1,
-                      }}
-                    >
-                      {loading === `setup-${c.id}` ? 'Setting up...' : 'Setup Chatwoot'}
-                    </button>
-                  )}
+                  <button onClick={() => handleEdit(c)} style={buttonStyle('#2563eb')}>
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => toggleStatus(c)}
+                    style={buttonStyle(c.status === 'active' ? '#f59e0b' : '#16a34a')}
+                  >
+                    {c.status === 'active' ? 'Pause' : 'Activate'}
+                  </button>
+                  <button onClick={() => handleDelete(c.id)} style={buttonStyle('#ef4444')}>
+                    Delete
+                  </button>
                 </div>
               </div>
 
@@ -344,15 +422,51 @@ export default function ClientsPage() {
                   background: isConnected ? '#f0fdf4' : '#fffbeb',
                   padding: '8px 12px',
                   borderRadius: 6,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
                 }}
               >
-                {status === undefined
-                  ? 'Loading Chatwoot status...'
-                  : isConnected
-                  ? `Chatwoot connected • Account ${
-                      status?.accountId ?? c.chatwootAccountId
-                    }${status?.accountName ? ` (${status.accountName})` : ''}`
-                  : 'Chatwoot not connected'}
+                <span>
+                  {status === undefined
+                    ? 'Loading Chatwoot status...'
+                    : isConnected
+                    ? `Chatwoot connected • Account ${
+                        status?.accountId ?? c.chatwootAccountId
+                      }${status?.accountName ? ` (${status.accountName})` : ''}`
+                    : 'Chatwoot not connected'}
+                </span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {isConnected ? (
+                    <button
+                      onClick={() => syncAgents(c.id)}
+                      disabled={loading === `sync-${c.id}`}
+                      style={{
+                        ...buttonStyle('#2563eb'),
+                        opacity: loading === `sync-${c.id}` ? 0.7 : 1,
+                      }}
+                    >
+                      {loading === `sync-${c.id}` ? 'Syncing...' : 'Sync Agents'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setupChatwoot(c.id)}
+                      disabled={loading === `setup-${c.id}`}
+                      style={{
+                        ...buttonStyle('#2563eb'),
+                        opacity: loading === `setup-${c.id}` ? 0.7 : 1,
+                      }}
+                    >
+                      {loading === `setup-${c.id}` ? 'Setting up...' : 'Setup Chatwoot'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => fetchStatus(c.id)}
+                    style={buttonStyle('#6b7280')}
+                  >
+                    Refresh Status
+                  </button>
+                </div>
               </div>
             </div>
           );

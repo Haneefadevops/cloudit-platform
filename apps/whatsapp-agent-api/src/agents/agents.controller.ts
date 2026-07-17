@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -29,5 +30,10 @@ export class AgentsController {
   @Put(':id')
   update(@Param('id') id: string, @Body() body: any) {
     return this.agentsService.update(id, body);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.agentsService.remove(id);
   }
 }
