@@ -2,11 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
   async rewrites() {
+    const apiUrl = (process.env.API_URL || 'http://localhost:3010/api').replace(/\/$/, '');
     return [
       {
         source: '/api/:path*',
-        destination:
-          process.env.API_URL || 'http://localhost:3010/api/:path*',
+        destination: `${apiUrl}/:path*`,
       },
     ];
   },
