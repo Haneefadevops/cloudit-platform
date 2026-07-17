@@ -31,8 +31,9 @@ export default function ClientsPage() {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
-    setClients(data);
-    return data as Client[];
+    const list = Array.isArray(data) ? data : [];
+    setClients(list);
+    return list;
   };
 
   const fetchStatus = async (clientId: string) => {

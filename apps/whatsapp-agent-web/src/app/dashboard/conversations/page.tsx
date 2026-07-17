@@ -19,17 +19,29 @@ export default function ConversationsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      window.location.href = '/login';
+      return;
+    }
     fetch(`/api/conversations${status ? `?status=${status}` : ''}`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     })
-      .then((r) => r.json())
-      .then((data) => {
-        setConversations(data || []);
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok || !Array.isArray(data)) {
+          console.error('Conversations fetch failed:', data);
+          setConversations([]);
+        } else {
+          setConversations(data);
+        }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        console.error(err);
+        setConversations([]);
+        setLoading(false);
+      });
   }, [status]);
 
   const statusBadge = (s: string) => {
