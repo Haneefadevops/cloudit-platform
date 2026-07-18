@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 14 | 0 | 9 | 19 | 0 |
+| High | 12 | 0 | 11 | 19 | 0 |
 | Medium | 3 | 0 | 2 | 3 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -768,7 +768,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0036 - Payroll Report Crashes After Generate
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Reports
@@ -777,14 +777,14 @@ Add every failed/skipped/unverified function below using this template.
 - **Test file:** `e2e/tests/admin/reports-functional.spec.ts`
 - **Test name:** `F22 generates /reports/payroll without a report error`
 - **Expected:** Selecting `This Month` and clicking `Generate` should render payroll report data or a clean empty state.
-- **Actual:** The report API returns, then the page shows `Application error: a client-side exception has occurred`.
+- **Actual:** The report API returned, then the page showed `Application error: a client-side exception has occurred`.
 - **Evidence:** `e2e/test-results/admin-reports-functional-A-8dc5f-roll-without-a-report-error-chromium-retry2/error-context.md`.
-- **Likely cause:** Client-side report rendering fails after receiving the backend payroll response.
-- **Fix plan:** Inspect browser console/trace, normalize payroll row values used by stats/table, and retest payroll report generation/export.
+- **Likely cause:** Client-side report rendering failed after receiving the backend payroll response, likely because PostgreSQL numeric values can arrive as strings and were used directly in totals/formatting.
+- **Fix plan:** Normalize payroll row values used by stats/table, keep payroll report on the backend report API, and retest payroll report generation/export.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/reports-functional.spec.ts --grep payroll`
-- **Last tested:** 2026-07-14
-- **Notes:** Payroll reporting is a go-live sensitive area.
+- **Last tested:** 2026-07-18 local build
+- **Notes:** Payroll report totals and LKR formatting now coerce numeric values safely. Admin web build passed. Deployment E2E retest is pending.
 
 ### BF-0037 - Roster Adherence Report Returns HTTP 500
 
@@ -1048,7 +1048,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0050 - Payroll Process Page Crashes
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Payroll
@@ -1057,14 +1057,14 @@ Add every failed/skipped/unverified function below using this template.
 - **Test file:** `e2e/tests/admin/payroll-functional.spec.ts`
 - **Test name:** `F15.2 processes a payroll run and shows calculated payroll items`
 - **Expected:** Opening a draft payroll run's process page should show `Process Payroll`, clicking `Start Processing` should POST `/api/payroll/runs/:id/process`, show success, and render calculated payroll items.
-- **Actual:** Opening the process route renders `Application error: a client-side exception has occurred`; the process button is never available.
+- **Actual:** Opening the process route rendered `Application error: a client-side exception has occurred`; the process button was never available.
 - **Evidence:** `e2e/test-results/admin-payroll-functional-A-6f335-ws-calculated-payroll-items-chromium-retry2/error-context.md`, `e2e/test-results/admin-payroll-functional-A-6f335-ws-calculated-payroll-items-chromium-retry2/test-failed-1.png`.
-- **Likely cause:** Client-side payroll process page crash when loading a local DB payroll run, likely due to an unguarded run/employee response shape or a route component runtime exception.
-- **Fix plan:** Inspect the browser console/trace for the thrown exception, harden payroll process page data loading, verify active employee list handling, and retest processing plus item rendering.
+- **Likely cause:** Client-side payroll process page crash when loading a local DB payroll run, likely due to an unguarded run/employee response shape or numeric value coercion issue.
+- **Fix plan:** Harden payroll process page data loading and numeric rendering, verify active employee list handling, keep payroll processing resilient when helper rows are missing, and retest processing plus item rendering.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/payroll-functional.spec.ts --grep "F15\\.2"`
-- **Last tested:** 2026-07-14
-- **Notes:** The test seeded a unique future payroll run through the local API to avoid duplicate current-month production state.
+- **Last tested:** 2026-07-18 local build
+- **Notes:** Payroll processing now has safer helper fallbacks, active employee filtering, and numeric formatting guards in the process page. API and admin web builds passed after regenerating the local Prisma client. Deployment E2E retest is pending.
 
 ### BF-0051 - Employee Self Performance Review Cannot Be Submitted
 
@@ -1193,6 +1193,10 @@ Add every failed/skipped/unverified function below using this template.
 | 2026-07-18 | Local build | `npm.cmd run build --workspace=apps/touchorbit-api` | Passed | Build output | Phase 7 API changes compile: roster availability, roster acknowledgments, and shift field support. |
 | 2026-07-18 | Local build | `npm.cmd run build --workspace=apps/touchorbit-admin-web` | Passed | Build output | Phase 7 admin roster changes compile: local employee/availability reads and local shift add/toggle. |
 | 2026-07-18 | Local build | `npm.cmd run build --workspace=apps/touchorbit-employee-web` | Passed | Build output | Phase 7 employee roster changes compile: local availability add/delete, local schedule identity, local acknowledge/conflict actions. |
+| 2026-07-18 | Local generate | `npx.cmd prisma generate --schema apps/touchorbit-api/prisma/schema.prisma` | Passed | Build output | Regenerated the local TouchOrbit Prisma client needed by the API build in this workspace. |
+| 2026-07-18 | Local build | `npm.cmd run build --workspace=apps/touchorbit-api` | Passed | Build output | Phase 8 API changes compile: employee payslip endpoint and safer payroll processing. |
+| 2026-07-18 | Local build | `npm.cmd run build --workspace=apps/touchorbit-admin-web` | Passed | Build output | Phase 8 admin payroll process/report hardening compiles. |
+| 2026-07-18 | Local build | `npm.cmd run build --workspace=apps/touchorbit-employee-web` | Passed | Build output | Phase 8 employee payslips local API migration compiles. |
 
 ## Open Items By Portal
 
@@ -1209,7 +1213,6 @@ Add every failed/skipped/unverified function below using this template.
 - BF-0024 - Admin shift template status toggle does not complete.
 - BF-0034 - Attendance report crashes after generate.
 - BF-0035 - Leave report crashes after generate.
-- BF-0036 - Payroll report crashes after generate.
 - BF-0037 - Roster adherence report returns HTTP 500.
 - BF-0038 - Overtime report returns HTTP 500.
 - BF-0039 - Late arrivals report returns HTTP 500.
@@ -1218,7 +1221,6 @@ Add every failed/skipped/unverified function below using this template.
 - BF-0042 - Leave approval chain save does not complete.
 - BF-0043 - Branch create does not complete.
 - BF-0044 - Department create does not complete.
-- BF-0050 - Payroll process page crashes.
 
 ### Employee Portal
 

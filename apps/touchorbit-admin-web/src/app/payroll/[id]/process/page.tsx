@@ -44,6 +44,14 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ]
 
+function num(value: number | string | null | undefined) {
+  return Number(value ?? 0)
+}
+
+function fmtLKR(value: number | string | null | undefined) {
+  return num(value).toLocaleString()
+}
+
 export default function ProcessPayrollPage() {
   const params = useParams()
   const router = useRouter()
@@ -216,23 +224,23 @@ export default function ProcessPayrollPage() {
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm">
                         <div className="font-medium text-gray-900">{item.employee_name}</div>
-                        <div className="text-gray-500">Basic: LKR {item.basic_salary.toLocaleString()}</div>
+                        <div className="text-gray-500">Basic: LKR {fmtLKR(item.basic_salary)}</div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">
                         <div>Worked: {item.days_worked}</div>
                         <div className="text-gray-500 text-xs">Leave: {item.days_on_leave}, Absent: {item.days_absent}</div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">
-                        {item.overtime_hours > 0 ? `${item.overtime_hours}h` : '-'}
+                        {num(item.overtime_hours) > 0 ? `${item.overtime_hours}h` : '-'}
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        <div>LKR {item.gross_salary.toLocaleString()}</div>
+                        <div>LKR {fmtLKR(item.gross_salary)}</div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">
-                        LKR {item.total_deductions.toLocaleString()}
+                        LKR {fmtLKR(item.total_deductions)}
                       </td>
                       <td className="px-4 py-3 text-sm font-bold text-green-600">
-                        LKR {item.net_salary.toLocaleString()}
+                        LKR {fmtLKR(item.net_salary)}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className="flex items-center gap-1 text-green-600">
@@ -249,13 +257,13 @@ export default function ProcessPayrollPage() {
                       TOTAL ({items.length} employees)
                     </td>
                     <td className="px-4 py-3 text-sm font-bold text-gray-900">
-                      LKR {items.reduce((sum, item) => sum + item.gross_salary, 0).toLocaleString()}
+                      LKR {items.reduce((sum, item) => sum + num(item.gross_salary), 0).toLocaleString()}
                     </td>
                     <td className="px-4 py-3 text-sm font-bold text-gray-900">
-                      LKR {items.reduce((sum, item) => sum + item.total_deductions, 0).toLocaleString()}
+                      LKR {items.reduce((sum, item) => sum + num(item.total_deductions), 0).toLocaleString()}
                     </td>
                     <td className="px-4 py-3 text-sm font-bold text-green-600">
-                      LKR {items.reduce((sum, item) => sum + item.net_salary, 0).toLocaleString()}
+                      LKR {items.reduce((sum, item) => sum + num(item.net_salary), 0).toLocaleString()}
                     </td>
                     <td></td>
                   </tr>

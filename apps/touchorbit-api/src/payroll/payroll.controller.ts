@@ -90,6 +90,10 @@ const sendPayslipsSchema = z.object({
   employee_ids: z.array(z.string().uuid()).optional(),
 });
 
+const payslipsQuerySchema = z.object({
+  employee_id: z.string().uuid().optional(),
+});
+
 @ApiTags("payroll")
 @Controller("payroll")
 @UseGuards(SessionAuthGuard)
@@ -158,6 +162,26 @@ export class PayrollController {
     @Param("id") id: string,
   ) {
     const rows = await this.payrollService.findRunItems(organizationId, id);
+    return { ok: true, data: rows };
+  }
+
+  @Get("payslips")
+  @RequireModule("touchorbit", "payroll")
+  @ApiOperation({ summary: "List employee payslips" })
+  async findPayslips(
+    @CurrentOrganization() organizationId: string,
+    @CurrentUser() user: AuthContext,
+    @Query() query: unknown,
+  ) {
+    const parsed = payslipsQuerySchema.safeParse(query);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid payslip query");
+    }
+    const rows = await this.payrollService.findPayslips(
+      organizationId,
+      user.id,
+      parsed.data.employee_id,
+    );
     return { ok: true, data: rows };
   }
 

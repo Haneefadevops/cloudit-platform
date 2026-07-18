@@ -91,7 +91,8 @@ export class PayrollService {
         `SELECT id, basic_salary, bank_name, bank_account_number
          FROM employees
          WHERE organization_id = $1::uuid
-           AND employment_status = 'active'`,
+           AND termination_date IS NULL
+           AND COALESCE(employment_status, 'active') = 'active'`,
         [organizationId],
       );
 
@@ -114,7 +115,14 @@ export class PayrollService {
           `SELECT * FROM calculate_attendance_based_salary($1::uuid, $2, $3, $4)`,
           [employee.id, basicSalary, run.month, run.year],
         );
-        const attendance = attendanceResult.rows[0];
+        const attendance =
+          attendanceResult.rows[0] ?? {
+            total_days: new Date(run.year, run.month, 0).getDate(),
+            days_worked: 0,
+            days_on_leave: 0,
+            days_absent: new Date(run.year, run.month, 0).getDate(),
+            prorated_salary: 0,
+          };
 
         const structureResult = await client.query<{
           component_id: string;
@@ -145,7 +153,13 @@ export class PayrollService {
           basicSalary,
           grossSalary,
         ]);
-        const deductions = deductionsResult.rows[0];
+        const deductions =
+          deductionsResult.rows[0] ?? {
+            epf_employee: 0,
+            epf_employer: 0,
+            etf: 0,
+            paye_tax: 0,
+          };
         const totalDeductions =
           Number(deductions.epf_employee) + Number(deductions.paye_tax);
         const netSalary = grossSalary - totalDeductions;
@@ -241,6 +255,50 @@ export class PayrollService {
        WHERE pi.payroll_run_id = $2::uuid AND pi.organization_id = $1::uuid
        ORDER BY e.first_name, e.last_name`,
       [organizationId, runId],
+    );
+    return result.rows;
+  }
+
+  async findPayslips(
+    organizationId: string,
+    userId: string,
+    employeeId?: string,
+  ) {
+    let resolvedEmployeeId = employeeId;
+    if (!resolvedEmployeeId) {
+      const employeeResult = await this.databaseService.query(
+        `SELECT id FROM employees
+         WHERE organization_id = $1::uuid
+           AND user_id = $2::uuid
+           AND termination_date IS NULL
+         LIMIT 1`,
+        [organizationId, userId],
+      );
+      resolvedEmployeeId = employeeResult.rows[0]?.id;
+    }
+
+    if (!resolvedEmployeeId) {
+      return [];
+    }
+
+    const result = await this.databaseService.query(
+      `SELECT
+         pi.*,
+         jsonb_build_object(
+           'id', pr.id,
+           'month', pr.month,
+           'year', pr.year,
+           'status', pr.status,
+           'finalized_at', pr.finalized_at
+         ) AS payroll_runs
+       FROM payroll_items pi
+       JOIN payroll_runs pr
+         ON pr.id = pi.payroll_run_id
+        AND pr.organization_id = pi.organization_id
+       WHERE pi.organization_id = $1::uuid
+         AND pi.employee_id = $2::uuid
+       ORDER BY pr.year DESC, pr.month DESC, pi.created_at DESC`,
+      [organizationId, resolvedEmployeeId],
     );
     return result.rows;
   }

@@ -20,8 +20,12 @@ const DETAIL_COLUMNS = [
   { key: 'type', header: 'Type' },
 ]
 
-function fmtLKR(n: number) {
-  return 'LKR ' + n.toLocaleString('en-LK')
+function num(value: number | string | null | undefined) {
+  return Number(value ?? 0)
+}
+
+function fmtLKR(n: number | string | null | undefined) {
+  return 'LKR ' + num(n).toLocaleString('en-LK')
 }
 
 export default function PayrollReportPage() {
@@ -81,9 +85,9 @@ export default function PayrollReportPage() {
   }
 
   const employeeCount = data.length
-  const totalGross = data.reduce((s, r) => s + r.gross_salary, 0)
-  const totalNet = data.reduce((s, r) => s + r.net_salary, 0)
-  const totalDeductions = data.reduce((s, r) => s + r.total_deductions, 0)
+  const totalGross = data.reduce((s, r) => s + num(r.gross_salary), 0)
+  const totalNet = data.reduce((s, r) => s + num(r.net_salary), 0)
+  const totalDeductions = data.reduce((s, r) => s + num(r.total_deductions), 0)
 
   return (
     <DashboardLayout>
@@ -160,11 +164,11 @@ export default function PayrollReportPage() {
             }))}
             summary={[
               { value: 'TOTAL', colSpan: 5 },
-              { value: fmtLKR(data.reduce((s, r) => s + r.basic_salary, 0)), align: 'right' },
+              { value: fmtLKR(data.reduce((s, r) => s + num(r.basic_salary), 0)), align: 'right' },
               { value: fmtLKR(totalGross), align: 'right' },
-              { value: fmtLKR(data.reduce((s, r) => s + r.epf_employee, 0)), align: 'right' },
-              { value: fmtLKR(data.reduce((s, r) => s + r.etf, 0)), align: 'right' },
-              { value: fmtLKR(data.reduce((s, r) => s + r.paye_tax, 0)), align: 'right' },
+              { value: fmtLKR(data.reduce((s, r) => s + num(r.epf_employee), 0)), align: 'right' },
+              { value: fmtLKR(data.reduce((s, r) => s + num(r.etf), 0)), align: 'right' },
+              { value: fmtLKR(data.reduce((s, r) => s + num(r.paye_tax), 0)), align: 'right' },
               { value: fmtLKR(totalDeductions), align: 'right' },
               { value: fmtLKR(totalNet), align: 'right' },
             ]}
