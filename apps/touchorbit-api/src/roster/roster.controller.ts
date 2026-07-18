@@ -48,6 +48,31 @@ const noShowQuerySchema = z.object({
   date: dateSchema.optional(),
 });
 
+const availabilityQuerySchema = z.object({
+  employee_id: z.string().uuid().optional(),
+  week_start: dateSchema.optional(),
+});
+
+const availabilitySchema = z.object({
+  employee_id: z.string().uuid().optional(),
+  day_of_week: z.coerce.number().int().min(0).max(6),
+  start_time: z.string().optional().nullable(),
+  end_time: z.string().optional().nullable(),
+  is_available: z.boolean().default(true),
+  is_recurring: z.boolean().default(true),
+  reason: z.string().optional().nullable(),
+  effective_from: dateSchema.optional().nullable(),
+  effective_until: dateSchema.optional().nullable(),
+});
+
+const acknowledgmentSchema = z.object({
+  assignment_id: z.string().uuid().optional(),
+  employee_id: z.string().uuid().optional(),
+  date: dateSchema.optional(),
+  status: z.enum(["acknowledged", "conflict"]),
+  reason: z.string().optional().nullable(),
+});
+
 @ApiTags("roster")
 @Controller("roster")
 @UseGuards(SessionAuthGuard)
@@ -257,6 +282,75 @@ export class RosterController {
       parsed.data.week_start,
     );
     return { ok: true, data: rows };
+  }
+
+  @Get("availability")
+  @RequireModule("touchorbit", "attendance")
+  @ApiOperation({ summary: "List employee availability" })
+  async getAvailability(
+    @CurrentOrganization() organizationId: string,
+    @Query() query: unknown,
+  ) {
+    const parsed = availabilityQuerySchema.safeParse(query);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid availability query");
+    }
+    const rows = await this.rosterService.getAvailability(
+      organizationId,
+      parsed.data,
+    );
+    return { ok: true, data: rows };
+  }
+
+  @Post("availability")
+  @RequireModule("touchorbit", "attendance")
+  @ApiOperation({ summary: "Create employee availability" })
+  async createAvailability(
+    @CurrentOrganization() organizationId: string,
+    @CurrentUser("id") userId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = availabilitySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid availability payload");
+    }
+    const row = await this.rosterService.createAvailability(
+      organizationId,
+      userId,
+      parsed.data,
+    );
+    return { ok: true, data: row };
+  }
+
+  @Delete("availability/:id")
+  @RequireModule("touchorbit", "attendance")
+  @ApiOperation({ summary: "Delete employee availability" })
+  async deleteAvailability(
+    @CurrentOrganization() organizationId: string,
+    @Param("id") id: string,
+  ) {
+    const result = await this.rosterService.deleteAvailability(organizationId, id);
+    return { ok: true, data: result };
+  }
+
+  @Post("acknowledgments")
+  @RequireModule("touchorbit", "attendance")
+  @ApiOperation({ summary: "Acknowledge or flag a roster assignment" })
+  async acknowledge(
+    @CurrentOrganization() organizationId: string,
+    @CurrentUser("id") userId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = acknowledgmentSchema.safeParse(body);
+    if (!parsed.success || (!parsed.data.assignment_id && (!parsed.data.employee_id || !parsed.data.date))) {
+      throw new BadRequestException("Invalid acknowledgment payload");
+    }
+    const row = await this.rosterService.acknowledgeAssignment(
+      organizationId,
+      userId,
+      parsed.data,
+    );
+    return { ok: true, data: row };
   }
 
   @Post("preview-conflicts")

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { Clock, Plus, Trash2, X, Repeat } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -20,7 +20,7 @@ interface AvailabilitySlot {
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export function AvailabilitySetter() {
-  const { userId, organizationId, isLoaded } = useAuth()
+  const { isLoaded, isSignedIn } = useAuth()
   const [slots, setSlots] = useState<AvailabilitySlot[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -34,24 +34,18 @@ export function AvailabilitySetter() {
   })
 
   const loadSlots = useCallback(async () => {
-    if (!organizationId || !isLoaded || !userId) return
+    if (!isLoaded || !isSignedIn) return
     setLoading(true)
     try {
-      const { data: emp } = await supabase.from('employees').select('id').eq('user_id', userId).single()
-      if (!emp) return
-
-      const { data } = await supabase
-        .from('employee_availability')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .eq('employee_id', emp.id)
-        .order('day_of_week', { ascending: true })
-
-      setSlots(data || [])
+      const empRes = await api.get<{ id: string }>('/employees/me')
+      if (!empRes.ok || !empRes.data) throw new Error(empRes.error || 'Employee not found')
+      const res = await api.get<AvailabilitySlot[]>(`/roster/availability?employee_id=${empRes.data.id}`)
+      if (!res.ok) throw new Error(res.error)
+      setSlots(res.data || [])
     } finally {
       setLoading(false)
     }
-  }, [organizationId, isLoaded, userId])
+  }, [isLoaded, isSignedIn])
 
   useEffect(() => {
     loadSlots()
@@ -59,14 +53,9 @@ export function AvailabilitySetter() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
-    if (!organizationId || !userId) return
+    if (!isSignedIn) return
     try {
-      const { data: emp } = await supabase.from('employees').select('id').eq('user_id', userId).single()
-      if (!emp) return
-
-      await supabase.from('employee_availability').insert({
-        organization_id: organizationId,
-        employee_id: emp.id,
+      const res = await api.post<AvailabilitySlot>('/roster/availability', {
         day_of_week: form.day_of_week,
         start_time: form.start_time || null,
         end_time: form.end_time || null,
@@ -75,6 +64,7 @@ export function AvailabilitySetter() {
         reason: form.reason || null,
         effective_from: new Date().toISOString().slice(0, 10),
       })
+      if (!res.ok) throw new Error(res.error)
       toast.success('Availability updated')
       setShowForm(false)
       loadSlots()
@@ -85,7 +75,8 @@ export function AvailabilitySetter() {
 
   async function handleDelete(id: string) {
     try {
-      await supabase.from('employee_availability').delete().eq('id', id)
+      const res = await api.del(`/roster/availability/${id}`)
+      if (!res.ok) throw new Error(res.error)
       toast.success('Removed')
       loadSlots()
     } catch {

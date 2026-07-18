@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { EmployeeLayout } from '@/components/employee-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
 import { api } from '@/lib/api'
 import { 
   CalendarDays, 
@@ -38,6 +37,8 @@ interface RosterEntry {
   end_time: string | null
   break_minutes: number | null
   notes: string | null
+  acknowledgment_status?: 'pending' | 'acknowledged' | 'conflict' | null
+  conflict_reason?: string | null
 }
 
 interface ClockEvent {
@@ -50,7 +51,7 @@ interface SwapRequest {
   requester_employee_id: string
   target_employee_id: string | null
   requester_date: string
-  target_date: string
+  target_date: string | null
   status: 'pending' | 'claimed' | 'approved' | 'rejected'
   created_at: string
   target?: { first_name: string, last_name: string }
@@ -59,7 +60,7 @@ interface SwapRequest {
 }
 
 export default function EmployeeRosterPage() {
-  const { userId, isLoaded, isSignedIn, organizationId } = useAuth()
+  const { isLoaded, isSignedIn } = useAuth()
   
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
     const d = new Date()
@@ -110,8 +111,9 @@ export default function EmployeeRosterPage() {
   async function loadMyRoster() {
     setLoading(true)
     try {
-      const { data: employee } = await supabase.from('employees').select('id, organization_id').eq('user_id', userId).single()
-      if (!employee) { setLoading(false); return }
+      const employeeRes = await api.get<{ id: string }>('/employees/me')
+      if (!employeeRes.ok || !employeeRes.data) throw new Error(employeeRes.error || 'Employee not found')
+      const employee = employeeRes.data
       setEmployeeId(employee.id)
 
       const weekStartStr = currentWeekStart.toISOString().split('T')[0]
@@ -121,9 +123,9 @@ export default function EmployeeRosterPage() {
       if (!rosterRes.ok) throw new Error(rosterRes.error)
       setMyRoster((rosterRes.data || []).filter(r => r.employee_id === employee.id))
 
-      const { data: events, error: eventsError } = await supabase.from('clock_events').select('event_type, timestamp').eq('employee_id', employee.id).gte('timestamp', weekStartStr).lt('timestamp', nextWeekStartStr).order('timestamp', { ascending: true })
-      if (eventsError) throw eventsError
-      setClockEvents(events || [])
+      const eventsRes = await api.get<ClockEvent[]>(`/attendance?employee_id=${employee.id}&from=${weekStartStr}&to=${nextWeekStartStr}&limit=500`)
+      if (!eventsRes.ok) throw new Error(eventsRes.error)
+      setClockEvents((eventsRes.data || []).sort((a, b) => a.timestamp.localeCompare(b.timestamp)))
 
       const statusRes = await api.get<{ status: string }>(`/roster/week-status?week_start=${weekStartStr}`)
       if (!statusRes.ok) throw new Error(statusRes.error)
@@ -150,20 +152,23 @@ export default function EmployeeRosterPage() {
         s.requester_employee_id !== employee.id
       ))
 
-      const { data: colleagues } = await supabase.from('employees').select('id, first_name, last_name').eq('organization_id', organizationId).neq('id', employee.id).is('termination_date', null).order('first_name')
-      setAllEmployees(colleagues || [])
+      const colleaguesRes = await api.get<{ id: string; first_name: string; last_name: string; termination_date?: string | null }[]>('/employees?status=active&limit=500')
+      if (!colleaguesRes.ok) throw new Error(colleaguesRes.error)
+      setAllEmployees((colleaguesRes.data || [])
+        .filter(emp => emp.id !== employee.id && !emp.termination_date)
+        .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`)))
     } catch (error) { toast.error('Failed to load schedule') } finally { setLoading(false) }
   }
 
   const handleAcknowledge = async (dateStr: string) => {
     try {
-      const { data: employee } = await supabase.from('employees').select('id').eq('user_id', userId).single()
-      if (!employee) return
-      await supabase.rpc('acknowledge_roster_assignment', {
-        p_employee_id: employee.id,
-        p_date: dateStr,
-        p_status: 'acknowledged'
+      if (!employeeId) return
+      const res = await api.post('/roster/acknowledgments', {
+        employee_id: employeeId,
+        date: dateStr,
+        status: 'acknowledged'
       })
+      if (!res.ok) throw new Error(res.error)
       toast.success('Shift acknowledged')
       loadMyRoster()
     } catch {
@@ -173,13 +178,14 @@ export default function EmployeeRosterPage() {
 
   const handleFlagConflict = async (dateStr: string) => {
     try {
-      const { data: employee } = await supabase.from('employees').select('id').eq('user_id', userId).single()
-      if (!employee) return
-      await supabase.rpc('acknowledge_roster_assignment', {
-        p_employee_id: employee.id,
-        p_date: dateStr,
-        p_status: 'flagged'
+      if (!employeeId) return
+      const res = await api.post('/roster/acknowledgments', {
+        employee_id: employeeId,
+        date: dateStr,
+        status: 'conflict',
+        reason: 'Employee flagged a roster conflict'
       })
+      if (!res.ok) throw new Error(res.error)
       toast.success('Conflict flagged')
       loadMyRoster()
     } catch {
@@ -212,7 +218,6 @@ export default function EmployeeRosterPage() {
         requested_employee_id: swapForm.is_open ? undefined : swapForm.target_employee_id,
       }
       if (swapForm.target_date) {
-        // TODO: backend shift-swap create does not yet accept a custom target_date
         body.target_date = swapForm.target_date
       }
 
@@ -391,7 +396,7 @@ export default function EmployeeRosterPage() {
                               <div className="text-[11px] font-black text-[#1A1727] flex items-center gap-2">
                                  {swap.requester?.first_name} <ArrowRight size={10} /> {swap.target?.first_name}
                               </div>
-                              <div className="text-[10px] font-bold text-[#9CA3AF] uppercase mt-1 tracking-tighter">{new Date(swap.requester_date).toLocaleDateString('en-GB', {day:'2-digit', month:'short'})} ↔ {new Date(swap.target_date).toLocaleDateString('en-GB', {day:'2-digit', month:'short'})}</div>
+                              <div className="text-[10px] font-bold text-[#9CA3AF] uppercase mt-1 tracking-tighter">{new Date(swap.requester_date).toLocaleDateString('en-GB', {day:'2-digit', month:'short'})} ↔ {swap.target_date ? new Date(swap.target_date).toLocaleDateString('en-GB', {day:'2-digit', month:'short'}) : 'Open'}</div>
                            </div>
                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${swap.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : swap.status === 'claimed' ? 'bg-purple-100 text-purple-700' : swap.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>{swap.status}</span>
                         </div>

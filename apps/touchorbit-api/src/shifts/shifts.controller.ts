@@ -23,8 +23,12 @@ const createShiftSchema = z.object({
   start_time: timeSchema,
   end_time: timeSchema,
   break_duration: z.number().int().min(0).optional(),
+  break_minutes: z.number().int().min(0).optional(),
   color: z.string().max(32).optional(),
   is_night_shift: z.boolean().optional(),
+  department_id: z.string().uuid().optional().nullable(),
+  branch_id: z.string().uuid().optional().nullable(),
+  status: z.enum(["active", "inactive"]).optional(),
 });
 
 const updateShiftSchema = z.object({
@@ -77,9 +81,12 @@ export class ShiftsController {
       name: parsed.data.name,
       startTime: parsed.data.start_time,
       endTime: parsed.data.end_time,
-      breakDuration: parsed.data.break_duration,
+      breakDuration: parsed.data.break_duration ?? parsed.data.break_minutes,
       color: parsed.data.color,
       isNightShift: parsed.data.is_night_shift,
+      departmentId: parsed.data.department_id ?? undefined,
+      branchId: parsed.data.branch_id ?? undefined,
+      status: parsed.data.status,
     });
     return { ok: true, data: row };
   }

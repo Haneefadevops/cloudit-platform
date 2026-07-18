@@ -217,22 +217,18 @@ export default function RosterPage() {
     try {
       const weekStartStr = currentWeekStart.toISOString().split('T')[0]
 
-      // 1. Load Employees (shared)
-      let empQuery = supabase
-        .from('employees')
-        .select('id, first_name, last_name, department_id, branch_id, department')
-        .eq('organization_id', organizationId)
-        .is('termination_date', null)
-        .order('first_name')
-
+      // 1. Load Employees through the local API so the roster grid uses local DB seed employees.
+      const employeeParams = new URLSearchParams({ status: 'active', limit: '500' })
       if (scopeType === 'dept' && scopeId) {
-        empQuery = empQuery.eq('department_id', scopeId)
+        employeeParams.set('department_id', scopeId)
       } else if (scopeType === 'branch' && scopeId) {
-        empQuery = empQuery.eq('branch_id', scopeId)
+        employeeParams.set('branch_id', scopeId)
       }
-
-      const { data: empData } = await empQuery
-      setEmployees(empData || [])
+      const employeesRes = await api.get<Employee[]>(`/employees?${employeeParams.toString()}`)
+      if (!employeesRes.ok) throw new Error(employeesRes.error)
+      setEmployees((employeesRes.data || [])
+        .filter(emp => !(emp as Employee & { termination_date?: string | null }).termination_date)
+        .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`)))
 
       // 2. Load Week Status
       const statusRes = await api.get<{ status: string }>(`/roster/week-status?week_start=${weekStartStr}`)
@@ -279,14 +275,10 @@ export default function RosterPage() {
           }))
         setPendingSwaps(mappedSwaps)
 
-        // 8. Load employee availability for this week
-        const { data: avData } = await supabase
-          .from('employee_availability')
-          .select('employee_id, day_of_week, start_time, end_time, is_available')
-          .eq('organization_id', organizationId)
-          .or(`effective_from.lte.${weekStartStr},effective_from.is.null`)
-          .or(`effective_until.gte.${weekStartStr},effective_until.is.null`)
-        setAvailabilityData(avData || [])
+        // 8. Load employee availability for this week through the local API.
+        const availabilityRes = await api.get<AvailabilitySlot[]>(`/roster/availability?week_start=${weekStartStr}`)
+        if (!availabilityRes.ok) throw new Error(availabilityRes.error)
+        setAvailabilityData(availabilityRes.data || [])
 
       } else {
         // Load Adherence data
@@ -409,25 +401,18 @@ export default function RosterPage() {
     e.preventDefault()
     setAddingTemplate(true)
     try {
-      // TODO: backend /shifts does not yet support department_id/branch_id/status
-      const { data, error } = await supabase
-        .from('shifts')
-        .insert({
-          organization_id: organizationId,
-          name: newTemplate.name,
-          start_time: newTemplate.start_time,
-          end_time: newTemplate.end_time,
-          break_minutes: newTemplate.break_minutes,
-          department_id: newTemplate.department_id || null,
-          branch_id: newTemplate.branch_id || null,
-          status: 'active'
-        })
-        .select()
-        .single()
+      const res = await api.post<ShiftTemplate>('/shifts', {
+        name: newTemplate.name,
+        start_time: newTemplate.start_time,
+        end_time: newTemplate.end_time,
+        break_minutes: newTemplate.break_minutes,
+        department_id: newTemplate.department_id || null,
+        branch_id: newTemplate.branch_id || null,
+        status: 'active'
+      })
+      if (!res.ok) throw new Error(res.error)
 
-      if (error) throw error
-
-      setTemplates(prev => [...prev, data as ShiftTemplate])
+      if (res.data) setTemplates(prev => [...prev, res.data as ShiftTemplate])
       setNewTemplate({
         name: '',
         start_time: '08:00',
@@ -448,13 +433,8 @@ export default function RosterPage() {
   const toggleTemplateActive = async (id: string, currentStatus: 'active' | 'inactive') => {
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
     try {
-      // TODO: backend PATCH /shifts/:id does not yet support status
-      const { error } = await supabase
-        .from('shifts')
-        .update({ status: newStatus })
-        .eq('id', id)
-
-      if (error) throw error
+      const res = await api.patch<ShiftTemplate>(`/shifts/${id}`, { status: newStatus })
+      if (!res.ok) throw new Error(res.error)
 
       setTemplates(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t))
       toast.success(`Shift ${newStatus === 'active' ? 'activated' : 'deactivated'}`)
@@ -509,12 +489,8 @@ export default function RosterPage() {
         const res = await api.post('/roster/lock', { week_start: weekStartStr })
         if (!res.ok) throw new Error(res.error)
       } else {
-        // TODO: backend has no unlock/set-draft endpoint yet
-        const { error } = await supabase.rpc('set_roster_week_status', {
-          p_week_start: weekStartStr,
-          p_status: status
-        })
-        if (error) throw error
+        const res = await api.post('/roster/week/unlock', { week_start: weekStartStr })
+        if (!res.ok) throw new Error(res.error)
       }
       setWeekStatus(status)
       toast.success(`Roster ${status === 'published' ? 'published — employees can see their schedule' : status === 'locked' ? 'locked — no further edits allowed' : 'unlocked'}`)

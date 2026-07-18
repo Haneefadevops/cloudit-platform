@@ -31,13 +31,16 @@ export class ShiftsService {
       breakDuration?: number;
       color?: string;
       isNightShift?: boolean;
+      departmentId?: string;
+      branchId?: string;
+      status?: "active" | "inactive";
     },
   ) {
     const result = await this.databaseService.query(
       `INSERT INTO shifts (
-         organization_id, name, start_time, end_time, break_minutes, color
+         organization_id, name, start_time, end_time, break_minutes, color, department_id, branch_id, status
        )
-       VALUES ($1::uuid, $2, $3::time, $4::time, $5, $6)
+       VALUES ($1::uuid, $2, $3::time, $4::time, $5, $6, $7::uuid, $8::uuid, COALESCE($9, 'active'))
        RETURNING *`,
       [
         organizationId,
@@ -46,6 +49,9 @@ export class ShiftsService {
         input.endTime,
         input.breakDuration ?? 0,
         input.color ?? "#8B5CF6",
+        input.departmentId ?? null,
+        input.branchId ?? null,
+        input.status ?? null,
       ],
     );
     return result.rows[0];

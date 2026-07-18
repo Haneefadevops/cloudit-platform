@@ -401,6 +401,170 @@ export class RosterService {
     return result.rows;
   }
 
+  async getAvailability(
+    organizationId: string,
+    filters: { employee_id?: string; week_start?: string },
+  ) {
+    const params: unknown[] = [organizationId];
+    const conditions = ["ea.organization_id = $1::uuid"];
+
+    if (filters.employee_id) {
+      params.push(filters.employee_id);
+      conditions.push(`ea.employee_id = $${params.length}::uuid`);
+    }
+
+    if (filters.week_start) {
+      params.push(filters.week_start);
+      const weekIdx = params.length;
+      conditions.push(
+        `(ea.effective_from IS NULL OR ea.effective_from <= $${weekIdx}::date + INTERVAL '6 days')`,
+      );
+      conditions.push(
+        `(ea.effective_until IS NULL OR ea.effective_until >= $${weekIdx}::date)`,
+      );
+    }
+
+    const result = await this.databaseService.query(
+      `SELECT
+         ea.*,
+         concat_ws(' ', e.first_name, e.last_name) AS employee_name
+       FROM employee_availability ea
+       JOIN employees e ON e.id = ea.employee_id AND e.organization_id = ea.organization_id
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY ea.day_of_week, ea.start_time NULLS FIRST, ea.created_at DESC`,
+      params,
+    );
+    return result.rows;
+  }
+
+  async createAvailability(
+    organizationId: string,
+    userId: string | undefined,
+    input: {
+      employee_id?: string;
+      day_of_week: number;
+      start_time?: string | null;
+      end_time?: string | null;
+      is_available: boolean;
+      is_recurring: boolean;
+      reason?: string | null;
+      effective_from?: string | null;
+      effective_until?: string | null;
+    },
+  ) {
+    let employeeId = input.employee_id;
+    if (!employeeId) {
+      const employeeResult = await this.databaseService.query(
+        `SELECT id FROM employees
+         WHERE organization_id = $1::uuid
+           AND user_id = $2::uuid
+           AND termination_date IS NULL
+         LIMIT 1`,
+        [organizationId, userId ?? null],
+      );
+      employeeId = employeeResult.rows[0]?.id;
+    }
+
+    if (!employeeId) {
+      throw new BadRequestException("Employee not found");
+    }
+
+    const employeeCheck = await this.databaseService.query(
+      `SELECT 1 FROM employees
+       WHERE id = $1::uuid
+         AND organization_id = $2::uuid
+         AND termination_date IS NULL`,
+      [employeeId, organizationId],
+    );
+    if (employeeCheck.rows.length === 0) {
+      throw new BadRequestException("Employee not found or not active");
+    }
+
+    const result = await this.databaseService.query(
+      `INSERT INTO employee_availability (
+         organization_id, employee_id, day_of_week, start_time, end_time,
+         is_available, is_recurring, reason, effective_from, effective_until, created_by
+       )
+       VALUES (
+         $1::uuid, $2::uuid, $3, $4::time, $5::time,
+         $6, $7, $8, COALESCE($9::date, CURRENT_DATE), $10::date, $11::uuid
+       )
+       RETURNING *`,
+      [
+        organizationId,
+        employeeId,
+        input.day_of_week,
+        input.start_time ?? null,
+        input.end_time ?? null,
+        input.is_available,
+        input.is_recurring,
+        input.reason ?? null,
+        input.effective_from ?? null,
+        input.effective_until ?? null,
+        userId ?? null,
+      ],
+    );
+    return result.rows[0];
+  }
+
+  async deleteAvailability(organizationId: string, id: string) {
+    const result = await this.databaseService.query(
+      `DELETE FROM employee_availability
+       WHERE id = $1::uuid AND organization_id = $2::uuid
+       RETURNING id`,
+      [id, organizationId],
+    );
+    if (result.rows.length === 0) {
+      throw new NotFoundException("Availability slot not found");
+    }
+    return { deleted: true, id: result.rows[0].id };
+  }
+
+  async acknowledgeAssignment(
+    organizationId: string,
+    userId: string | undefined,
+    input: {
+      assignment_id?: string;
+      employee_id?: string;
+      date?: string;
+      status: "acknowledged" | "conflict";
+      reason?: string | null;
+    },
+  ) {
+    const params: unknown[] = [organizationId, userId ?? null, input.status];
+    const conditions = ["organization_id = $1::uuid"];
+
+    if (input.assignment_id) {
+      params.push(input.assignment_id);
+      conditions.push(`id = $${params.length}::uuid`);
+    } else {
+      params.push(input.employee_id);
+      conditions.push(`employee_id = $${params.length}::uuid`);
+      params.push(input.date);
+      conditions.push(`date = $${params.length}::date`);
+    }
+
+    params.push(input.status === "conflict" ? input.reason ?? "Employee flagged a roster conflict" : null);
+    const reasonIdx = params.length;
+
+    const result = await this.databaseService.query(
+      `UPDATE roster_assignments
+       SET acknowledgment_status = CASE WHEN $3 = 'conflict' THEN 'conflict' ELSE 'acknowledged' END,
+           acknowledged_at = CASE WHEN $3 = 'conflict' THEN acknowledged_at ELSE now() END,
+           acknowledged_by = CASE WHEN $3 = 'conflict' THEN acknowledged_by ELSE $2::uuid END,
+           conflict_reason = CASE WHEN $3 = 'conflict' THEN $${reasonIdx} ELSE NULL END,
+           conflict_flagged_at = CASE WHEN $3 = 'conflict' THEN now() ELSE NULL END,
+           updated_at = now()
+       WHERE ${conditions.join(" AND ")}
+       RETURNING *`,
+      params,
+    );
+    if (result.rows.length === 0) {
+      throw new NotFoundException("Roster assignment not found");
+    }
+    return result.rows[0];
+  }
+
   async previewConflicts(organizationId: string, weekStart: string) {
     const result = await this.databaseService.query(
       `WITH week_days AS (

@@ -1,6 +1,6 @@
 # TouchOrbit Broken Functions Report
 
-Last updated: 2026-07-17
+Last updated: 2026-07-18
 
 ## Purpose
 
@@ -30,7 +30,7 @@ Module 0 foundation test has passed after stabilizing the test setup authenticat
 | Severity | Open | In Progress | Ready For Retest | Fixed | Accepted Risk |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Critical | 0 | 0 | 0 | 2 | 0 |
-| High | 16 | 0 | 7 | 19 | 0 |
+| High | 14 | 0 | 9 | 19 | 0 |
 | Medium | 3 | 0 | 2 | 3 | 0 |
 | Low | 0 | 0 | 0 | 0 | 0 |
 
@@ -573,14 +573,14 @@ Add every failed/skipped/unverified function below using this template.
 - **Test file:** `e2e/tests/admin/roster-functional.spec.ts`
 - **Test name:** `F12.3 assigns and clears a roster shift from the grid`
 - **Expected:** The seeded active E2E employee should appear in the roster grid, the admin should be able to select a shift for a day, the page should call `POST /api/roster/assignments`, and clearing the select should call `DELETE /api/roster/assignments/:id`.
-- **Actual:** The roster page renders the week grid header, but the employee table body is empty and `E2E Employee` never appears.
+- **Actual:** The roster page rendered the week grid header, but the employee table body was empty and `E2E Employee` never appeared.
 - **Evidence:** `e2e/test-results/admin-roster-functional-Ad-1ec7c--roster-shift-from-the-grid-chromium-retry2/test-failed-1.png`, related retry trace and error context in the same folder.
-- **Likely cause:** The roster page still loads employees through Supabase (`supabase.from('employees')`) while E2E seed data is created in the local DB through the local API. The local API roster assignment endpoints exist, but the frontend cannot reach the test employee from its employee source.
+- **Likely cause:** The roster page still loaded employees through Supabase (`supabase.from('employees')`) while E2E seed data is created in the local DB through the local API. The local API roster assignment endpoints existed, but the frontend could not reach the test employee from its employee source.
 - **Fix plan:** Migrate roster employee loading to the local `/api/employees` endpoint, keep manager scope filtering compatible with local API data, then rerun the roster functional module to verify assign and clear.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/roster-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** The temporary shift seeded for this test is cleaned up in the test `finally` block. This blocks roster assignment, publish-readiness, and employee schedule visibility testing.
+- **Last tested:** 2026-07-18 local build
+- **Notes:** Admin roster employee and availability reads now use the local API; shift add/toggle also uses the local shifts API. API and admin web builds passed. Deployment E2E retest is pending.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -1037,14 +1037,14 @@ Add every failed/skipped/unverified function below using this template.
 - **Test file:** `e2e/tests/employee/roster-functional.spec.ts`
 - **Test name:** `EF26.1 employee adds and removes an availability slot`
 - **Expected:** Filling the My Availability form and clicking Save should persist the availability slot, show `Availability updated`, render the new time range, and allow removal.
-- **Actual:** After Save, no success toast appears, the form remains open, and the new slot does not render.
+- **Actual:** After Save, no success toast appeared, the form remained open, and the new slot did not render.
 - **Evidence:** `e2e/test-results/employee-roster-functional-0f1b0-emoves-an-availability-slot-employee-chromium-retry2/error-context.md`, `e2e/test-results/employee-roster-functional-0f1b0-emoves-an-availability-slot-employee-chromium-retry2/test-failed-1.png`.
-- **Likely cause:** Employee availability still reads/writes directly through Supabase (`employee_availability`) instead of a local API/local DB endpoint, so production local-DB-only availability management is not completing.
+- **Likely cause:** Employee availability still read/wrote directly through Supabase (`employee_availability`) instead of a local API/local DB endpoint, so production local-DB-only availability management was not completing.
 - **Fix plan:** Add local API endpoints for employee availability create/list/delete, migrate `AvailabilitySetter` off Supabase, surface API errors, and retest add/remove.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/roster-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** The delete half of the workflow could not be reached because create did not complete.
+- **Last tested:** 2026-07-18 local build
+- **Notes:** Local roster availability list/create/delete endpoints are implemented, and `AvailabilitySetter` now uses them with `/employees/me`. Employee roster acknowledge/conflict actions also moved to the local roster API. API and employee web builds passed. Deployment E2E retest is pending.
 
 ### BF-0050 - Payroll Process Page Crashes
 
@@ -1190,6 +1190,9 @@ Add every failed/skipped/unverified function below using this template.
 | 2026-07-17 | Local build | `npm.cmd run build --workspace=apps/touchorbit-api` | Passed | Build output | Phase 6 API changes compile: document-template PATCH/DELETE and document signing metadata. |
 | 2026-07-17 | Local build | `npm.cmd run build --workspace=apps/touchorbit-admin-web` | Passed | Build output | Phase 6 admin document template create/edit/delete UI compiles. |
 | 2026-07-17 | Local build | `npm.cmd run build --workspace=apps/touchorbit-employee-web` | Passed | Build output | Phase 6 employee assigned-document/signing UI compiles. |
+| 2026-07-18 | Local build | `npm.cmd run build --workspace=apps/touchorbit-api` | Passed | Build output | Phase 7 API changes compile: roster availability, roster acknowledgments, and shift field support. |
+| 2026-07-18 | Local build | `npm.cmd run build --workspace=apps/touchorbit-admin-web` | Passed | Build output | Phase 7 admin roster changes compile: local employee/availability reads and local shift add/toggle. |
+| 2026-07-18 | Local build | `npm.cmd run build --workspace=apps/touchorbit-employee-web` | Passed | Build output | Phase 7 employee roster changes compile: local availability add/delete, local schedule identity, local acknowledge/conflict actions. |
 
 ## Open Items By Portal
 
@@ -1204,7 +1207,6 @@ Add every failed/skipped/unverified function below using this template.
 - BF-0014 - Admin geofence create causes client-side exception.
 - BF-0018 - Leave balance adjustment API fails with parameter type error.
 - BF-0024 - Admin shift template status toggle does not complete.
-- BF-0026 - Admin roster grid does not show local DB seed employee.
 - BF-0034 - Attendance report crashes after generate.
 - BF-0035 - Leave report crashes after generate.
 - BF-0036 - Payroll report crashes after generate.
@@ -1232,7 +1234,6 @@ Add every failed/skipped/unverified function below using this template.
 - BF-0046 - Employee profile emergency contacts do not render.
 - BF-0047 - Employee calendar task create crashes page.
 - BF-0048 - Employee calendar pending task cannot be completed.
-- BF-0049 - Employee availability save does not complete.
 - BF-0051 - Employee self performance review cannot be submitted.
 - BF-0052 - Employee attendance page is flaky and renders no content.
 
