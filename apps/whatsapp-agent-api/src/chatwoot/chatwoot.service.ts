@@ -292,7 +292,7 @@ export class ChatwootService {
     subscriptions: string[] = [
       'message_created',
       'conversation_status_changed',
-      'conversation_resolved',
+      'conversation_updated',
     ],
   ): Promise<ChatwootWebhook> {
     return this.request<ChatwootWebhook>(
