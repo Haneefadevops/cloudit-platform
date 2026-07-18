@@ -74,7 +74,7 @@ export class KnowledgeBaseService {
         },
         body: JSON.stringify({
           model: this.embeddingModel,
-          input: text,
+          input: [text],
         }),
       });
 
