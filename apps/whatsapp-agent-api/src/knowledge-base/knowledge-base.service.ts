@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import * as mammoth from 'mammoth';
 import pdfParse from 'pdf-parse';
@@ -188,6 +189,35 @@ export class KnowledgeBaseService {
     return results;
   }
 
+  private extractKeywords(query: string): string[] {
+    const stopWords = new Set([
+      'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+      'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+      'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare',
+      'ought', 'used', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by',
+      'from', 'as', 'into', 'through', 'during', 'before', 'after', 'above',
+      'below', 'between', 'under', 'again', 'further', 'then', 'once', 'here',
+      'there', 'when', 'where', 'why', 'how', 'all', 'each', 'few', 'more',
+      'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
+      'same', 'so', 'than', 'too', 'very', 'just', 'and', 'but', 'if', 'or',
+      'because', 'until', 'while', 'what', 'which', 'who', 'whom', 'this',
+      'that', 'these', 'those', 'am', 'i', 'me', 'my', 'myself', 'we', 'our',
+      'you', 'your', 'he', 'him', 'his', 'she', 'her', 'it', 'its', 'they',
+      'them', 'their', 's', 't', 'don', 'doesn', 'didn', 'wasn', 'weren',
+      'won', 'wouldn', 'couldn', 'shouldn', 'isn', 'aren', 'hasn', 'haven',
+      'hadn', 'ma', 'mightn', 'mustn', 'needn', 'shan', 'shouldn', 'wasn',
+      'weren', 'won', 'wouldn', 'yours', 'yourself', 'yourselves', 'himself',
+      'herself', 'itself', 'themselves', 'ourselves', 'us',
+    ]);
+
+    return query
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .map((w) => w.trim())
+      .filter((w) => w.length >= 3 && !stopWords.has(w));
+  }
+
   async search(
     clientId: string,
     query: string,
@@ -196,17 +226,40 @@ export class KnowledgeBaseService {
     const embedding = await this.generateEmbedding(query);
 
     if (!embedding) {
-      // Fallback to simple keyword search if embeddings are unavailable
-      const keyword = query.toLowerCase();
-      const docs = await this.prisma.$queryRaw<Array<{ id: string; title: string; content: string }>>`
-        SELECT "id", "title", "content"
+      // Fallback to multi-keyword search if embeddings are unavailable
+      const keywords = this.extractKeywords(query);
+      this.logger.debug(`Keyword fallback keywords: ${keywords.join(', ')}`);
+
+      if (keywords.length === 0) {
+        return [];
+      }
+
+      const conditions = keywords.map(
+        (keyword) =>
+          Prisma.sql`LOWER("content") LIKE ${`%${keyword}%`}`,
+      );
+      const whereClause = Prisma.join(conditions, ' OR ');
+
+      const docs = await this.prisma.$queryRaw<
+        Array<{ id: string; title: string; content: string; matches: number }>
+      >`
+        SELECT "id", "title", "content",
+          ${Prisma.join(
+            keywords.map(
+              (keyword) =>
+                Prisma.sql`CASE WHEN LOWER("content") LIKE ${`%${keyword}%`} THEN 1 ELSE 0 END`,
+            ),
+            ' + ',
+          )} AS "matches"
         FROM "documents"
         WHERE "clientId" = ${clientId}
-          AND LOWER("content") LIKE ${`%${keyword}%`}
-        ORDER BY "createdAt" DESC
+          AND (${whereClause})
+        ORDER BY "matches" DESC, "createdAt" DESC
         LIMIT ${limit}
       `;
-      return docs.map((d) => ({ ...d, similarity: 0.5 }));
+
+      this.logger.debug(`Keyword fallback found ${docs.length} documents`);
+      return docs.map((d) => ({ ...d, similarity: 0.5 + Math.min(d.matches * 0.1, 0.4) }));
     }
 
     const vectorLiteral = `[${embedding.join(',')}]`;
