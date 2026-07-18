@@ -9,6 +9,7 @@ import {
   UseGuards,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ClientsService } from './clients.service';
 import { ChatwootService } from '../chatwoot/chatwoot.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,6 +25,7 @@ export class ClientsController {
     private readonly clientsService: ClientsService,
     private readonly chatwootService: ChatwootService,
     private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Get()
@@ -61,14 +63,26 @@ export class ClientsController {
       return { error: 'Client not found' };
     }
 
+    // 1. Create the Chatwoot account for this client
     const account = await this.chatwootService.createAccount(client.name);
+
+    // 2. Link the platform super admin so we can manage the account
     await this.chatwootService.addAdminToAccount(account.id);
+
+    // 3. Create the WhatsApp/API inbox
     const inbox = await this.chatwootService.createInbox(
       account.id,
       inboxName || `${client.name} WhatsApp`,
     );
 
-    // Seed default labels for handoff categorization
+    // 4. Configure the Chatwoot webhook so agent replies reach TheReplyte
+    const webhookUrl = `${this.configService.get(
+      'API_PUBLIC_URL',
+      'https://api.thereplyte.com',
+    )}/api/webhooks/chatwoot`;
+    const webhook = await this.chatwootService.createWebhook(account.id, webhookUrl);
+
+    // 5. Seed default labels for handoff categorization
     for (const label of ['ai-handoff', 'urgent', 'complaint']) {
       try {
         await this.chatwootService.createLabel(account.id, label);
@@ -77,16 +91,40 @@ export class ClientsController {
       }
     }
 
+    // 6. Create the client admin user in Chatwoot and auto-confirm the email
+    let chatwootAdminUserId: number | undefined;
+    if (client.adminEmail) {
+      try {
+        const adminUser = await this.chatwootService.createAccountAdmin(
+          account.id,
+          client.adminEmail,
+          client.adminEmail,
+          'administrator',
+        );
+        chatwootAdminUserId = adminUser.id;
+        await this.chatwootService.confirmUserByEmail(client.adminEmail);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to create/confirm Chatwoot admin for ${client.adminEmail}: ${(error as Error).message}`,
+        );
+      }
+    }
+
     await this.clientsService.update(id, {
       chatwootAccountId: account.id,
       chatwootInboxId: inbox.id,
       chatwootApiKey: this.chatwootService.getAdminApiKey(),
+      chatwootAdminUserId,
+      webhookUrl,
     });
 
     return {
       status: 'ok',
       chatwootAccountId: account.id,
       chatwootInboxId: inbox.id,
+      webhookId: webhook.id,
+      webhookUrl,
+      chatwootAdminUserId,
     };
   }
 

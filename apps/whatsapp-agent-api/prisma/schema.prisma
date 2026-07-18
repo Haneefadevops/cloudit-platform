@@ -8,21 +8,56 @@ datasource db {
 }
 
 model Client {
-  id                  String   @id @default(uuid())
-  name                String
-  whatsappNumber      String   @unique
-  whatsappPhoneNumberId String @unique
+  id                    String   @id @default(uuid())
+  name                  String
+  whatsappNumber        String   @unique
+  whatsappPhoneNumberId String   @unique
   metaAccessToken       String
-  chatwootAccountId   Int?
-  chatwootInboxId     Int?
-  chatwootApiKey      String?
-  businessProfile     Json?    @default("{}")
-  products            Json?    @default("[]")
-  systemPrompt        String?  @default("You are a helpful AI assistant.")
-  aiTemperature       Float?   @default(0.7)
-  status              String   @default("active") // active, paused, suspended
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+
+  // Business information
+  industry              String?
+  website               String?
+  timezone              String?  @default("UTC")
+  language              String?  @default("en")
+  businessDescription   String?
+
+  // Primary admin contact (used for Chatwoot admin login)
+  adminEmail            String?
+  adminPhone            String?
+
+  // Chatwoot integration
+  chatwootAccountId     Int?
+  chatwootInboxId       Int?
+  chatwootApiKey        String?
+  chatwootAdminUserId   Int?
+
+  // AI settings (editable in AI Settings page)
+  systemPrompt          String?  @default("You are a helpful AI assistant.")
+  aiTemperature         Float?   @default(0.7)
+  aiModel               String?  @default("kimi-latest")
+  maxTokens             Int?     @default(1024)
+  confidenceThreshold   Float?   @default(0.7)
+  aiEnabled             Boolean  @default(true)
+  welcomeMessage        String?  @default("Hello! How can we help you today?")
+  fallbackMessage       String?  @default("I'm sorry, I didn't understand that. Let me connect you with our team.")
+  handoffKeywords       String?  @default("human,agent,person,manager,supervisor")
+  operatingHoursStart   String?  @default("09:00")
+  operatingHoursEnd     String?  @default("17:00")
+  closedDays            String?  @default("Saturday,Sunday")
+
+  // Meta webhook
+  verifyToken           String?  @default(uuid())
+  webhookUrl            String?
+  metaWebhookStatus     String?  @default("pending") // pending, active, error
+  lastWebhookAt         DateTime?
+
+  // Legacy fields (kept for backwards compatibility)
+  businessProfile       Json?    @default("{}")
+  products              Json?    @default("[]")
+
+  status                String   @default("active") // active, paused, suspended
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   customers     Customer[]
   conversations Conversation[]

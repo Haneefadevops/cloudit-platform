@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Pool } from 'pg';
 
 export interface ChatwootAccount {
   id: number;
@@ -42,6 +43,12 @@ export interface ChatwootUser {
   email: string;
 }
 
+export interface ChatwootWebhook {
+  id: number;
+  url: string;
+  subscriptions: string[];
+}
+
 @Injectable()
 export class ChatwootService {
   private readonly logger = new Logger(ChatwootService.name);
@@ -66,6 +73,10 @@ export class ChatwootService {
   private get adminUserId(): number | undefined {
     const value = this.configService.get<string>('CHATWOOT_ADMIN_USER_ID', '');
     return value ? Number(value) : undefined;
+  }
+
+  private get chatwootDatabaseUrl(): string | undefined {
+    return this.configService.get<string>('CHATWOOT_DATABASE_URL');
   }
 
   private headers(apiKey: string) {
@@ -273,5 +284,92 @@ export class ChatwootService {
       },
       this.adminApiKey,
     );
+  }
+
+  async createWebhook(
+    accountId: number,
+    url: string,
+    subscriptions: string[] = [
+      'message_created',
+      'conversation_status_changed',
+      'conversation_resolved',
+    ],
+  ): Promise<ChatwootWebhook> {
+    return this.request<ChatwootWebhook>(
+      `/api/v1/accounts/${accountId}/webhooks`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'TheReplyte WhatsApp Bridge',
+          url,
+          subscriptions,
+        }),
+      },
+      this.adminApiKey,
+    );
+  }
+
+  async createAccountAdmin(
+    accountId: number,
+    email: string,
+    name?: string,
+    role = 'administrator',
+  ): Promise<ChatwootUser> {
+    return this.request<ChatwootUser>(
+      `/api/v1/accounts/${accountId}/agents`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: name || email,
+          email,
+          role,
+        }),
+      },
+      this.adminApiKey,
+    );
+  }
+
+  /**
+   * Auto-confirm a Chatwoot user by setting confirmed_at in the Chatwoot database.
+   * This bypasses SMTP email verification so client admins can log in immediately.
+   */
+  async confirmUserByEmail(email: string): Promise<void> {
+    const databaseUrl = this.chatwootDatabaseUrl;
+    if (!databaseUrl) {
+      this.logger.warn(
+        'CHATWOOT_DATABASE_URL not set; cannot auto-confirm Chatwoot user. SMTP verification will be required.',
+      );
+      return;
+    }
+
+    let pool: Pool | undefined;
+    try {
+      pool = new Pool({ connectionString: databaseUrl, max: 1 });
+      const result = await pool.query(
+        `UPDATE users
+         SET confirmed_at = NOW(),
+             confirmation_token = NULL,
+             unconfirmed_email = NULL,
+             updated_at = NOW()
+         WHERE email = $1
+           AND confirmed_at IS NULL
+         RETURNING id`,
+        [email],
+      );
+
+      if (result.rowCount && result.rowCount > 0) {
+        this.logger.log(`Auto-confirmed Chatwoot user ${email}`);
+      } else {
+        this.logger.warn(
+          `Could not auto-confirm Chatwoot user ${email}; user may not exist or already confirmed`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to auto-confirm Chatwoot user ${email}: ${(error as Error).message}`,
+      );
+    } finally {
+      await pool?.end();
+    }
   }
 }

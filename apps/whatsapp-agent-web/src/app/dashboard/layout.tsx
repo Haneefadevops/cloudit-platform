@@ -13,7 +13,7 @@ export default function DashboardLayout({
   const nav = [
     { href: '/dashboard/conversations', label: 'Conversations' },
     { href: '/dashboard/clients', label: 'Clients' },
-    { href: '/dashboard/agents', label: 'Agents' },
+    { href: '/dashboard/ai-settings', label: 'AI Settings' },
     { href: '/dashboard/analytics', label: 'Analytics' },
   ];
 

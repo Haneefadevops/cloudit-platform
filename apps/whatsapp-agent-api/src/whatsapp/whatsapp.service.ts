@@ -124,26 +124,31 @@ export class WhatsAppService {
       return;
     }
 
-    // 6. Check for handoff keywords
+    // 6. Check for handoff keywords (client-configurable)
     const lowerMessage = messageBody.toLowerCase();
-    const handoffKeywords = [
-      'human',
-      'agent',
-      'person',
-      'manager',
-      'supervisor',
-      'complaint',
-      'refund',
-      'return',
-      'wrong',
-      'missing',
-      'cancel order',
-      'change order',
-      'not received',
-      'speak to someone',
-      'talk to someone',
-      'real person',
-    ];
+    const handoffKeywords = client.handoffKeywords
+      ? client.handoffKeywords
+          .split(',')
+          .map((k) => k.trim().toLowerCase())
+          .filter(Boolean)
+      : [
+          'human',
+          'agent',
+          'person',
+          'manager',
+          'supervisor',
+          'complaint',
+          'refund',
+          'return',
+          'wrong',
+          'missing',
+          'cancel order',
+          'change order',
+          'not received',
+          'speak to someone',
+          'talk to someone',
+          'real person',
+        ];
 
     const wantsHuman = handoffKeywords.some((keyword) =>
       lowerMessage.includes(keyword),
@@ -160,6 +165,7 @@ export class WhatsAppService {
         client,
         to: from,
         message:
+          client.fallbackMessage ||
           'I understand. Let me connect you with one of our team members. They will be with you shortly.',
       });
       return;
@@ -185,6 +191,7 @@ export class WhatsAppService {
         products: Array.isArray(client.products) ? client.products : undefined,
         systemPrompt: client.systemPrompt || undefined,
         aiTemperature: client.aiTemperature,
+        maxTokens: client.maxTokens,
       },
       customer: {
         name: customer.name,

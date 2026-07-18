@@ -8,6 +8,7 @@ interface GenerateReplyInput {
     products?: any[];
     systemPrompt?: string;
     aiTemperature?: number | null;
+    maxTokens?: number | null;
   };
   customer: {
     name?: string | null;
@@ -59,6 +60,7 @@ export class AiService {
           model,
           messages,
           temperature: client.aiTemperature ?? 0.7,
+          max_tokens: client.maxTokens ?? 1024,
           response_format: { type: 'json_object' },
         }),
       });
