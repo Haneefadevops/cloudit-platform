@@ -33,11 +33,15 @@ export class ChatwootController {
         await this.handleAgentReply(payload);
       }
 
-      if (
+      const isResolveEvent =
         event === 'conversation_resolved' ||
         (event === 'conversation_status_changed' && payload.conversation?.status === 'resolved') ||
-        (event === 'conversation_updated' && payload.conversation?.status === 'resolved')
-      ) {
+        (event === 'conversation_updated' && payload.conversation?.status === 'resolved');
+
+      if (isResolveEvent) {
+        this.logger.debug(
+          `Resolve webhook payload: ${JSON.stringify(payload)}`,
+        );
         await this.handleConversationResolved(payload.conversation?.id ?? payload.id);
       }
     } catch (error) {
