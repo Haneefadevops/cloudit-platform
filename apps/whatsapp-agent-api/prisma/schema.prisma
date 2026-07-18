@@ -33,7 +33,7 @@ model Client {
 
   // AI settings (editable in AI Settings page)
   systemPrompt          String?  @default("You are a helpful AI assistant.")
-  aiTemperature         Float?   @default(0.7)
+  aiTemperature         Float?   @default(1.0)
   aiModel               String?  @default("kimi-latest")
   maxTokens             Int?     @default(1024)
   confidenceThreshold   Float?   @default(0.7)

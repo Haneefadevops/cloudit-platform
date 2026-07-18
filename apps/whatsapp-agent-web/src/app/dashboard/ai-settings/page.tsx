@@ -63,7 +63,7 @@ function AiSettingsForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState({
     systemPrompt: '',
-    aiTemperature: 0.7,
+    aiTemperature: 1.0,
     aiModel: 'kimi-latest',
     maxTokens: 1024,
     confidenceThreshold: 0.7,
@@ -110,7 +110,7 @@ function AiSettingsForm() {
     if (!client) return;
     setForm({
       systemPrompt: client.systemPrompt || '',
-      aiTemperature: client.aiTemperature ?? 0.7,
+      aiTemperature: client.aiTemperature ?? 1.0,
       aiModel: client.aiModel || 'kimi-latest',
       maxTokens: client.maxTokens ?? 1024,
       confidenceThreshold: client.confidenceThreshold ?? 0.7,
