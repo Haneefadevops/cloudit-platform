@@ -167,8 +167,12 @@ export class ChatwootService {
     phone: string,
     name?: string,
   ): Promise<ChatwootContact> {
+    // Ensure E.164 format: strip whitespace and prepend + if missing
+    const normalized = phone.trim().replace(/\s/g, '');
+    const e164 = normalized.startsWith('+') ? normalized : `+${normalized}`;
+
     const payload = {
-      phone_number: phone,
+      phone_number: e164,
       name: name || phone,
     };
     return this.request<ChatwootContact>(
