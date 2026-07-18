@@ -8,6 +8,7 @@ interface ChatwootMessagePayload {
   id?: number;
   content?: string;
   message_type?: string;
+  status?: string;
   conversation?: { id?: number; status?: string };
   sender?: { id?: number; name?: string; email?: string };
 }
@@ -33,16 +34,26 @@ export class ChatwootController {
         await this.handleAgentReply(payload);
       }
 
+      if (
+        event === 'conversation_status_changed' ||
+        event === 'conversation_updated'
+      ) {
+        this.logger.log(
+          `Conversation event payload: ${JSON.stringify(payload)}`,
+        );
+      }
+
       const isResolveEvent =
         event === 'conversation_resolved' ||
-        (event === 'conversation_status_changed' && payload.conversation?.status === 'resolved') ||
-        (event === 'conversation_updated' && payload.conversation?.status === 'resolved');
+        (event === 'conversation_status_changed' &&
+          (payload.status === 'resolved' || payload.conversation?.status === 'resolved')) ||
+        (event === 'conversation_updated' &&
+          (payload.status === 'resolved' || payload.conversation?.status === 'resolved'));
 
       if (isResolveEvent) {
-        this.logger.debug(
-          `Resolve webhook payload: ${JSON.stringify(payload)}`,
+        await this.handleConversationResolved(
+          payload.conversation?.id ?? payload.id,
         );
-        await this.handleConversationResolved(payload.conversation?.id ?? payload.id);
       }
     } catch (error) {
       this.logger.error(
