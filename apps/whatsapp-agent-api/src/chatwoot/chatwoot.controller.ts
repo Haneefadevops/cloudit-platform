@@ -35,7 +35,8 @@ export class ChatwootController {
 
       if (
         event === 'conversation_resolved' ||
-        (event === 'conversation_status_changed' && payload.conversation?.status === 'resolved')
+        (event === 'conversation_status_changed' && payload.conversation?.status === 'resolved') ||
+        (event === 'conversation_updated' && payload.conversation?.status === 'resolved')
       ) {
         await this.handleConversationResolved(payload.conversation?.id ?? payload.id);
       }
