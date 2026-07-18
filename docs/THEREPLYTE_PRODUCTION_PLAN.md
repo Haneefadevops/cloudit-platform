@@ -286,6 +286,14 @@ The WhatsApp webhook verification endpoint accepts either the global `META_VERIF
 
 The TheReplyte dashboard **Agents** page has been removed. Agents are now created and managed inside each client's Chatwoot account.
 
+### Phase 2 — Knowledge Base / RAG
+
+- Added `documents` table with `pgvector` embeddings per client.
+- Knowledge base upload UI supports plain text, `.txt`, `.pdf`, and `.docx` files.
+- Incoming WhatsApp messages trigger a vector search; top matching chunks are injected into the Kimi prompt as context.
+- If no relevant context is found, the AI uses the client's fallback message and triggers handoff.
+- When a conversation is handed off to a human agent, the full bot/customer message history is pushed to the Chatwoot conversation so the agent has full context.
+
 ## Success Criteria
 
 - A non-technical staff member can create a client in TheReplyte dashboard without touching the server.

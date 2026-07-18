@@ -9,6 +9,7 @@ interface GenerateReplyInput {
     systemPrompt?: string;
     aiTemperature?: number | null;
     maxTokens?: number | null;
+    fallbackMessage?: string;
   };
   customer: {
     name?: string | null;
@@ -16,6 +17,7 @@ interface GenerateReplyInput {
   };
   message: string;
   history?: string;
+  knowledgeContext?: string;
 }
 
 interface GenerateReplyOutput {
@@ -32,14 +34,18 @@ export class AiService {
   constructor(private readonly configService: ConfigService) {}
 
   async generateReply(input: GenerateReplyInput): Promise<GenerateReplyOutput> {
-    const { client, customer, message, history } = input;
+    const { client, customer, message, history, knowledgeContext } = input;
 
-    const systemPrompt = this.buildSystemPrompt(client, customer);
+    const systemPrompt = this.buildSystemPrompt(client, customer, knowledgeContext);
+
+    const userContent = knowledgeContext
+      ? `Use the KNOWLEDGE BASE below to answer. If the answer is not in the knowledge base, reply with the fallback message and set handoff to true.\n\nCustomer message: ${message}`
+      : message;
 
     const messages = [
       { role: 'system' as const, content: systemPrompt },
       ...(history ? [{ role: 'user' as const, content: `Recent conversation:\n${history}` }] : []),
-      { role: 'user' as const, content: message },
+      { role: 'user' as const, content: userContent },
     ];
 
     try {
@@ -105,6 +111,7 @@ export class AiService {
   private buildSystemPrompt(
     client: GenerateReplyInput['client'],
     customer: GenerateReplyInput['customer'],
+    knowledgeContext?: string,
   ): string {
     const profile = client.businessProfile || {};
     const products = Array.isArray(client.products) ? client.products : [];
@@ -115,6 +122,14 @@ export class AiService {
           `- ${p.name || 'Product'}: ${p.price ? `LKR ${p.price}` : 'Price not available'} (${p.stock > 0 ? 'In stock' : 'Out of stock'})`,
       )
       .join('\n');
+
+    const fallback =
+      client.fallbackMessage ||
+      "I'm sorry, I didn't understand that. Let me connect you with our team.";
+
+    const knowledgeSection = knowledgeContext
+      ? `KNOWLEDGE BASE:\n${knowledgeContext}\n\nFALLBACK MESSAGE (use exactly when the answer is not in the knowledge base):\n${fallback}`
+      : `FALLBACK MESSAGE (use exactly when you cannot answer):\n${fallback}`;
 
     return `${client.systemPrompt || 'You are a helpful AI assistant.'}
 
@@ -127,13 +142,16 @@ BUSINESS INFO:
 PRODUCTS:
 ${productList || 'No products listed'}
 
+${knowledgeSection}
+
 RULES:
 1. Be friendly and professional
 2. Answer in the same language the customer uses (Sinhala, English, or mix)
-3. If you don't know something, say "Let me connect you with our team" and set handoff to true
-4. Never make up prices, stock levels, or policies
-5. For orders, ask: product, quantity, address, phone
-6. For complaints or refund requests, immediately set handoff to true
+3. Answer ONLY from the KNOWLEDGE BASE and BUSINESS INFO above
+4. If the answer is not in the knowledge base, reply with the FALLBACK MESSAGE exactly and set handoff to true
+5. Never make up prices, stock levels, or policies
+6. For orders, ask: product, quantity, address, phone
+7. For complaints or refund requests, immediately set handoff to true
 
 CUSTOMER CONTEXT:
 - Name: ${customer.name || 'New customer'}

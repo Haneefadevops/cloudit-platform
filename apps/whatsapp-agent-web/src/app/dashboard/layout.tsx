@@ -14,6 +14,7 @@ export default function DashboardLayout({
     { href: '/dashboard/conversations', label: 'Conversations' },
     { href: '/dashboard/clients', label: 'Clients' },
     { href: '/dashboard/ai-settings', label: 'AI Settings' },
+    { href: '/dashboard/knowledge-base', label: 'Knowledge Base' },
     { href: '/dashboard/analytics', label: 'Analytics' },
   ];
 

@@ -12,6 +12,7 @@ import { ChatwootModule } from './chatwoot/chatwoot.module';
 import { AiModule } from './ai/ai.module';
 import { HealthModule } from './health/health.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { KnowledgeBaseModule } from './knowledge-base/knowledge-base.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     AiModule,
     HealthModule,
     AnalyticsModule,
+    KnowledgeBaseModule,
   ],
 })
 export class AppModule {}

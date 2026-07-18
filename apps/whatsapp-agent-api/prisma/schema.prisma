@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
 }
 
 model Client {
@@ -62,6 +64,7 @@ model Client {
   customers     Customer[]
   conversations Conversation[]
   users         User[]
+  documents     Document[]
 
   @@map("clients")
 }
@@ -155,4 +158,22 @@ model HandoffLog {
 
   @@index([conversationId])
   @@map("handoff_logs")
+}
+
+model Document {
+  id          String   @id @default(uuid())
+  title       String
+  content     String
+  contentType String   @default("text") // text, pdf, docx, txt
+  embedding   Unsupported("vector(1536)")?
+  chunkIndex  Int      @default(0)
+  metadata    Json?    @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@map("documents")
 }

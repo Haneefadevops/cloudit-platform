@@ -190,17 +190,26 @@ export class ChatwootService {
     inboxId: number,
     contactId: number,
     content?: string,
+    history?: Array<{ content: string; senderType: string }>,
   ): Promise<ChatwootConversation> {
     const payload: Record<string, unknown> = {
       inbox_id: inboxId,
       contact_id: contactId,
       status: 'open',
     };
-    if (content) {
+
+    if (history && history.length > 0) {
+      payload.messages = history.map((msg) => ({
+        content: msg.content,
+        message_type: msg.senderType === 'customer' ? 'incoming' : 'outgoing',
+        private: false,
+      }));
+    } else if (content) {
       payload.messages = [
         { content, message_type: 'incoming', private: false },
       ];
     }
+
     return this.request<ChatwootConversation>(
       `/api/v1/accounts/${accountId}/conversations`,
       {

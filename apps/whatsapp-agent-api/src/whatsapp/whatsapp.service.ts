@@ -7,6 +7,7 @@ import { CustomersService } from '../customers/customers.service';
 import { ClientsService } from '../clients/clients.service';
 import { WhatsAppSenderService } from '../whatsapp-sender/whatsapp-sender.service';
 import { ChatwootService } from '../chatwoot/chatwoot.service';
+import { KnowledgeBaseService } from '../knowledge-base/knowledge-base.service';
 
 interface MetaMessage {
   from: string;
@@ -40,6 +41,7 @@ export class WhatsAppService {
     private readonly clientsService: ClientsService,
     private readonly senderService: WhatsAppSenderService,
     private readonly chatwootService: ChatwootService,
+    private readonly knowledgeBaseService: KnowledgeBaseService,
   ) {}
 
   async handleIncomingWebhook(payload: unknown): Promise<void> {
@@ -183,7 +185,26 @@ export class WhatsAppService {
       .map((msg) => `${msg.senderType}: ${msg.content}`)
       .join('\n');
 
-    // 8. Call Kimi AI
+    // 8. Search knowledge base for relevant context
+    let knowledgeContext = '';
+    try {
+      const searchResults = await this.knowledgeBaseService.search(
+        client.id,
+        messageBody,
+        3,
+      );
+      if (searchResults.length > 0) {
+        knowledgeContext = searchResults
+          .map((r) => `- ${r.content}`)
+          .join('\n---\n');
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Knowledge base search failed: ${(error as Error).message}`,
+      );
+    }
+
+    // 9. Call Kimi AI
     const aiResult = await this.aiService.generateReply({
       client: {
         name: client.name,
@@ -192,6 +213,7 @@ export class WhatsAppService {
         systemPrompt: client.systemPrompt || undefined,
         aiTemperature: client.aiTemperature,
         maxTokens: client.maxTokens,
+        fallbackMessage: client.fallbackMessage || undefined,
       },
       customer: {
         name: customer.name,
@@ -199,6 +221,7 @@ export class WhatsAppService {
       },
       message: messageBody,
       history,
+      knowledgeContext,
     });
 
     // 9. Store AI message
@@ -258,12 +281,24 @@ export class WhatsAppService {
 
       let chatwootConversationId = conversation.chatwootConversationId;
       if (!chatwootConversationId) {
+        // Fetch full conversation history so the human agent has context
+        const historyMessages = await this.prisma.message.findMany({
+          where: { conversationId: conversation.id },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        const history = historyMessages.map((msg) => ({
+          content: msg.content,
+          senderType: msg.senderType,
+        }));
+
         const chatwootConversation =
           await this.chatwootService.createConversation(
             client.chatwootAccountId,
             client.chatwootInboxId,
             chatwootContactId,
             content,
+            history,
           );
         chatwootConversationId = chatwootConversation.id;
         await this.prisma.conversation.update({
