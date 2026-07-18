@@ -4,8 +4,8 @@ import { resolve } from 'node:path'
 const adminFile = resolve(__dirname, '../.auth/admin.json')
 
 setup('authenticate as admin', async ({ page }) => {
-  // Allow time for the live API throttle window to reset if a previous run
-  // exhausted its request budget.
+  // Keep setup stable by authenticating through the same admin auth proxy
+  // the UI uses, then save the browser context storage state for tests.
   setup.setTimeout(180000)
 
   const email = process.env.E2E_ADMIN_EMAIL
@@ -13,56 +13,51 @@ setup('authenticate as admin', async ({ page }) => {
 
   if (!email || !password) {
     throw new Error(
-      'E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD must be set in e2e/.env'
+      'E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD must be set in e2e/.env',
     )
   }
 
-  let attempts = 0
-  const maxAttempts = 3
+  let authenticated = false
+  let lastError = ''
 
-  while (attempts < maxAttempts) {
-    attempts++
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const loginRes = await page.context().request.post('/api/auth/login', {
+      data: { email, password },
+    })
+    const loginBody = (await loginRes.json().catch(() => null)) as {
+      ok?: boolean
+      error?: string
+      message?: string
+    } | null
 
-    await page.goto('/login')
-
-    // Wait for the branded login form
-    await expect(page.getByRole('heading', { name: /welcome back/i })).toBeVisible()
-
-    const emailInput = page.getByPlaceholder(/you@company\.lk/i)
-    const passwordInput = page.locator('input[type="password"]')
-    const submitButton = page.getByRole('button', { name: /sign in/i })
-
-    await emailInput.fill(email)
-    await passwordInput.fill(password)
-
-    // Ensure the submit button is interactive before clicking
-    await expect(submitButton).toBeVisible()
-    await expect(submitButton).toBeEnabled()
-
-    await submitButton.click()
-
-    try {
-      await page.waitForURL(/\/$/, { timeout: 15000 })
+    if (loginRes.ok() && loginBody?.ok) {
+      authenticated = true
       break
-    } catch {
-      const bodyText = await page.locator('body').textContent().catch(() => '')
-      const throttled = bodyText?.includes('Too Many Requests') ?? false
-      if (throttled && attempts < maxAttempts) {
-        // Wait for the throttle window to roll over before retrying.
-        await page.waitForTimeout(65000)
-      }
+    }
+
+    lastError =
+      loginBody?.error || loginBody?.message || `HTTP ${loginRes.status()}`
+
+    if (loginRes.status() === 429 && attempt < 3) {
+      await page.waitForTimeout(65000)
     }
   }
 
-  if (!page.url().endsWith('/')) {
-    throw new Error('Failed to authenticate as admin')
+  if (!authenticated) {
+    throw new Error(`Failed to authenticate as admin: ${lastError}`)
   }
 
-  // Dashboard should render
-  await expect(
-    page.getByRole('heading', { name: /good afternoon|good morning|dashboard/i }).first()
-  ).toBeVisible({ timeout: 15000 })
-  await expect(page.getByText('Loading…')).toHaveCount(0, { timeout: 15000 })
+  const meRes = await page.context().request.get('/api/auth/me')
+  const meBody = (await meRes.json().catch(() => null)) as {
+    ok?: boolean
+    data?: { role?: string }
+  } | null
+
+  expect(meRes.ok()).toBe(true)
+  expect(meBody?.ok).toBe(true)
+  expect(meBody?.data?.role).toMatch(
+    /owner|super_admin|admin|manager|hr_admin|finance|dept_manager|branch_manager/,
+  )
 
   await page.context().storageState({ path: adminFile })
 })

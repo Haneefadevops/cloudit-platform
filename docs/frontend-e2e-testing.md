@@ -57,12 +57,23 @@ e2e/
    E2E_BASE_URL=https://to-admin.cloudit.lk
    E2E_ADMIN_EMAIL=pltadmin@cloudit.lk
    E2E_ADMIN_PASSWORD=<your-password>
+   E2E_API_URL=https://api-touchorbit.cloudit.lk
+   E2E_SEED_EMPLOYEE_EMAIL=e2e.employee@touchorbit.test
+   E2E_SEED_EMPLOYEE_PASSWORD=<known-test-password>
    ```
 
 4. Run the tests:
 
    ```bash
    npm run e2e:test
+   ```
+
+   Useful focused runs:
+
+   ```bash
+   npm run e2e:seed
+   npm run e2e:test:admin
+   npm run e2e:test:employees
    ```
 
    To run in headed mode (see the browser):
@@ -85,6 +96,13 @@ e2e/
 - Asserts the dashboard finishes loading (no endless spinner).
 - Saves the authenticated browser state so other tests skip re-login.
 
+### Seed Data (`seed.setup.ts`)
+
+- Logs into the TouchOrbit API using the configured admin credentials.
+- Creates or reuses a stable employee from `E2E_SEED_EMPLOYEE_EMAIL`.
+- Resets that employee to `E2E_SEED_EMPLOYEE_PASSWORD`.
+- Stores the seeded employee id/email in `e2e/.auth/seed.json` for functional tests.
+
 ### Login (`tests/admin/login.spec.ts`)
 
 - Invalid credentials show an error and stay on `/login`.
@@ -92,6 +110,13 @@ e2e/
 ### Dashboard (`tests/admin/dashboard.spec.ts`)
 
 - Dashboard loads and shows the user's greeting and key widgets: Today's Attendance, Headcount, Pending Leave.
+
+### Employees (`tests/admin/employees.spec.ts`)
+
+- Loads the employee list.
+- Verifies search finds the seeded employee.
+- Opens employee preview/detail flows against known seeded data.
+- Keeps validation, import, export, filtering, and view-mode checks in the same suite.
 
 ## Recommended Next Tests
 
@@ -144,8 +169,11 @@ jobs:
       - run: npm run e2e:test
         env:
           E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+          E2E_API_URL: ${{ vars.E2E_API_URL }}
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
           E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          E2E_SEED_EMPLOYEE_EMAIL: ${{ vars.E2E_SEED_EMPLOYEE_EMAIL }}
+          E2E_SEED_EMPLOYEE_PASSWORD: ${{ secrets.E2E_SEED_EMPLOYEE_PASSWORD }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -158,5 +186,6 @@ jobs:
 - Tests run sequentially (`workers: 1`) because they share the saved auth state.
 - If you change the admin password, delete `e2e/.auth/admin.json` and re-run `auth.setup.ts`.
 - The `e2e/.env` file is gitignored. Never commit real credentials.
+- The seed employee should live in a non-customer test tenant or staging tenant. Avoid running mutating E2E against production customer data.
 - The dashboard test blocks Next.js speculative RSC prefetches (`?_rsc=`) to avoid hammering the live API throttle with auth checks for routes we are not testing.
 - `auth.setup.ts` retries the UI login and waits out a `429 Too Many Requests` throttle window when necessary.

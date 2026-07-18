@@ -6,6 +6,8 @@ import { resolve } from 'node:path'
 config({ path: resolve(__dirname, '.env') })
 
 const baseURL = process.env.E2E_BASE_URL || 'https://to-admin.cloudit.lk'
+const employeeBaseURL =
+  process.env.E2E_EMPLOYEE_BASE_URL || 'https://to-employee.cloudit.lk'
 
 export default defineConfig({
   testDir: './tests',
@@ -27,14 +29,29 @@ export default defineConfig({
   projects: [
     { name: 'setup', testMatch: /auth\.setup\.ts/ },
     {
+      name: 'seed',
+      testMatch: /seed\.setup\.ts/,
+      dependencies: ['setup'],
+    },
+    {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
         storageState: resolve(__dirname, '.auth/admin.json'),
       },
-      dependencies: ['setup'],
+      dependencies: ['seed'],
       teardown: 'teardown',
-      testIgnore: /login\.spec\.ts/,
+      testIgnore: /(login\.spec\.ts|seed\.setup\.ts|employee\/)/,
+    },
+    {
+      name: 'employee-chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: employeeBaseURL,
+      },
+      dependencies: ['seed'],
+      teardown: 'teardown',
+      testMatch: /employee\/.*\.spec\.ts/,
     },
     {
       name: 'chromium-no-auth',

@@ -7,6 +7,7 @@ import { CustomersModule } from '../customers/customers.module';
 import { ClientsModule } from '../clients/clients.module';
 import { WhatsAppSenderModule } from '../whatsapp-sender/whatsapp-sender.module';
 import { ChatwootModule } from '../chatwoot/chatwoot.module';
+import { KnowledgeBaseModule } from '../knowledge-base/knowledge-base.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ChatwootModule } from '../chatwoot/chatwoot.module';
     ClientsModule,
     WhatsAppSenderModule,
     ChatwootModule,
+    KnowledgeBaseModule,
   ],
   controllers: [WhatsAppController],
   providers: [WhatsAppService],
