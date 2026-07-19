@@ -109,21 +109,27 @@ export class ConversationsService {
         const recentMessages = await this.prisma.message.findMany({
           where: { conversationId: conversation.id },
           orderBy: { createdAt: 'asc' },
-          take: 20,
+          take: 50,
         });
 
-        const contextLines = recentMessages
-          .map((m) => `${m.senderType}: ${m.content}`)
-          .join('\n');
+        const history = recentMessages.map((m) => ({
+          content: m.content,
+          senderType: m.senderType,
+        }));
 
-        const initialContent = `Handed off to human agent.\n\nReason: ${reason}\n\nRecent conversation:\n${contextLines}`;
+        // Add the handoff context as the final message so the agent sees why it was escalated
+        history.push({
+          content: `🤖 Handed off to human agent.\n\nReason: ${reason}`,
+          senderType: 'agent',
+        });
 
         const chatwootConversation =
           await this.chatwootService.createConversation(
             client.chatwootAccountId,
             client.chatwootInboxId,
             chatwootContactId,
-            initialContent,
+            undefined,
+            history,
           );
         chatwootConversationId = chatwootConversation.id;
         await this.prisma.conversation.update({
