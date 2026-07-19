@@ -13,6 +13,7 @@ import { AiModule } from './ai/ai.module';
 import { HealthModule } from './health/health.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { KnowledgeBaseModule } from './knowledge-base/knowledge-base.module';
+import { CannedResponsesModule } from './canned-responses/canned-responses.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { KnowledgeBaseModule } from './knowledge-base/knowledge-base.module';
     HealthModule,
     AnalyticsModule,
     KnowledgeBaseModule,
+    CannedResponsesModule,
   ],
 })
 export class AppModule {}

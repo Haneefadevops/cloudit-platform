@@ -66,10 +66,11 @@ model Client {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  customers     Customer[]
-  conversations Conversation[]
-  users         User[]
-  documents     Document[]
+  customers       Customer[]
+  conversations   Conversation[]
+  users           User[]
+  documents       Document[]
+  cannedResponses CannedResponse[]
 
   @@map("clients")
 }
@@ -168,6 +169,21 @@ model HandoffLog {
 
   @@index([conversationId])
   @@map("handoff_logs")
+}
+
+model CannedResponse {
+  id        String   @id @default(uuid())
+  shortcut  String   // typed as "/shortcut" by agents in Chatwoot
+  title     String
+  content   String   // supports {{customer_name}}, {{business_name}}, {{agent_name}}
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, shortcut])
+  @@map("canned_responses")
 }
 
 model Document {

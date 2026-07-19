@@ -8,13 +8,32 @@ import { ClientsService } from '../clients/clients.service';
 import { WhatsAppSenderService } from '../whatsapp-sender/whatsapp-sender.service';
 import { ChatwootService } from '../chatwoot/chatwoot.service';
 import { KnowledgeBaseService } from '../knowledge-base/knowledge-base.service';
+import { MediaService, IncomingMediaType } from './media.service';
+
+interface MetaMedia {
+  id: string;
+  mime_type?: string;
+  caption?: string;
+  filename?: string;
+}
 
 interface MetaMessage {
   from: string;
   id: string;
   type: string;
   text?: { body: string };
+  image?: MetaMedia;
+  audio?: MetaMedia;
+  voice?: MetaMedia;
+  document?: MetaMedia;
   timestamp: string;
+}
+
+interface IncomingMedia {
+  type: IncomingMediaType;
+  mediaId: string;
+  caption?: string;
+  filename?: string;
 }
 
 interface MetaEntry {
@@ -42,6 +61,7 @@ export class WhatsAppService {
     private readonly senderService: WhatsAppSenderService,
     private readonly chatwootService: ChatwootService,
     private readonly knowledgeBaseService: KnowledgeBaseService,
+    private readonly mediaService: MediaService,
   ) {}
 
   async handleIncomingWebhook(payload: unknown): Promise<void> {
@@ -54,19 +74,56 @@ export class WhatsAppService {
         const messages = value.messages || [];
 
         for (const message of messages) {
-          if (message.type !== 'text' || !message.text?.body) {
+          const contactName = value.contacts?.[0]?.profile?.name;
+
+          if (message.type === 'text' && message.text?.body) {
+            await this.handleIncomingMessage({
+              phoneNumberId,
+              from: message.from,
+              messageBody: message.text.body,
+              contactName,
+            });
             continue;
           }
 
-          await this.handleIncomingMessage({
-            phoneNumberId,
-            from: message.from,
-            messageBody: message.text.body,
-            contactName: value.contacts?.[0]?.profile?.name,
-          });
+          const media = this.extractMedia(message);
+          if (media) {
+            await this.handleIncomingMessage({
+              phoneNumberId,
+              from: message.from,
+              messageBody: '',
+              contactName,
+              media,
+            });
+          }
         }
       }
     }
+  }
+
+  private extractMedia(message: MetaMessage): IncomingMedia | null {
+    if (message.type === 'image' && message.image?.id) {
+      return {
+        type: 'image',
+        mediaId: message.image.id,
+        caption: message.image.caption,
+      };
+    }
+    if (message.type === 'audio' && message.audio?.id) {
+      return { type: 'audio', mediaId: message.audio.id };
+    }
+    if (message.type === 'voice' && message.voice?.id) {
+      return { type: 'audio', mediaId: message.voice.id };
+    }
+    if (message.type === 'document' && message.document?.id) {
+      return {
+        type: 'document',
+        mediaId: message.document.id,
+        caption: message.document.caption,
+        filename: message.document.filename,
+      };
+    }
+    return null;
   }
 
   private async handleIncomingMessage(input: {
@@ -74,8 +131,10 @@ export class WhatsAppService {
     from: string;
     messageBody: string;
     contactName?: string;
+    media?: IncomingMedia;
   }): Promise<void> {
-    const { phoneNumberId, from, messageBody, contactName } = input;
+    const { phoneNumberId, from, contactName } = input;
+    let { messageBody } = input;
 
     // 1. Find the client by WhatsApp phone number ID
     const client = await this.clientsService.findByPhoneNumberId(phoneNumberId);
@@ -86,6 +145,19 @@ export class WhatsAppService {
 
     if (client.status !== 'active') {
       this.logger.warn(`Client ${client.id} is not active`);
+      return;
+    }
+
+    // Convert incoming media (voice/image/document) to text for the AI flow
+    if (input.media) {
+      messageBody = await this.mediaService.mediaToText({
+        ...input.media,
+        accessToken: client.metaAccessToken,
+      });
+    }
+
+    if (!messageBody) {
+      this.logger.warn('Skipping message with no processable content');
       return;
     }
 

@@ -286,6 +286,16 @@ The WhatsApp webhook verification endpoint accepts either the global `META_VERIF
 
 The TheReplyte dashboard **Agents** page has been removed. Agents are now created and managed inside each client's Chatwoot account.
 
+### Phase 4 — Media Handling & Canned Responses
+
+- **Media messages**: incoming WhatsApp images, voice notes, and documents are downloaded from the Meta Graph API and converted to text for the normal AI pipeline (`MediaService`):
+  - Voice notes → Whisper transcription (`WHISPER_API_URL`/`WHISPER_API_KEY`/`WHISPER_MODEL`, falls back to `EMBEDDING_API_KEY`).
+  - Images → description + visible-text extraction via Kimi vision (`KIMI_VISION_MODEL`, default `kimi-latest`). Captions are included.
+  - Documents (pdf/docx/txt) → extracted text (truncated at 2000 chars).
+  - Unprocessable media becomes a placeholder note so the AI/handoff flow still works.
+- **Canned responses**: per-client templates (`canned_responses` table, CRUD at `/api/canned-responses/:clientId`, admin-only). Dashboard page at `/dashboard/canned-responses`. Agents type `/shortcut` in Chatwoot; the webhook expands it to the template with `{{customer_name}}`, `{{business_name}}`, `{{agent_name}}` variables before forwarding to WhatsApp.
+- Migration: `20260719160000_add_canned_responses`.
+
 ### Phase 3 — Operating Hours, Welcome Message, Analytics & CSAT
 
 - **Operating hours enforced at runtime**: incoming messages outside the client's `operatingHoursStart`/`operatingHoursEnd` (evaluated in the client's `timezone`) or on a `closedDays` weekday receive the new `outsideHoursMessage`, and the conversation is handed off (`triggeredBy: 'system'`) so it is queued in Chatwoot for the next business day. Overnight ranges (e.g. 22:00–02:00) are supported.

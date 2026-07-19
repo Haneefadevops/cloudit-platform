@@ -91,12 +91,17 @@ export class ChatwootController {
       return;
     }
 
+    // Expand canned-response shortcuts (e.g. "/greeting") into templates
+    const finalContent = content.startsWith('/')
+      ? await this.expandCannedResponse(content, conversation, data.sender?.name)
+      : content;
+
     // Store agent reply
     await this.prisma.message.create({
       data: {
         conversationId: conversation.id,
         senderType: 'agent',
-        content,
+        content: finalContent,
       },
     });
 
@@ -107,12 +112,44 @@ export class ChatwootController {
         whatsappPhoneNumberId: conversation.client.whatsappPhoneNumberId,
       },
       to: conversation.customer.phoneNumber,
-      message: content,
+      message: finalContent,
     });
 
     this.logger.log(
       `Agent reply forwarded to ${conversation.customer.phoneNumber} for conversation ${conversation.id}`,
     );
+  }
+
+  /**
+   * Expands "/shortcut" agent messages using the client's canned responses.
+   * Supported variables: {{customer_name}}, {{business_name}}, {{agent_name}}.
+   * Returns the original content when no matching template exists.
+   */
+  private async expandCannedResponse(
+    content: string,
+    conversation: {
+      clientId: string;
+      client: { name: string };
+      customer: { name?: string | null };
+    },
+    agentName?: string,
+  ): Promise<string> {
+    const shortcut = content.slice(1).split(/\s+/)[0]?.toLowerCase();
+    if (!shortcut) return content;
+
+    const template = await this.prisma.cannedResponse.findUnique({
+      where: { clientId_shortcut: { clientId: conversation.clientId, shortcut } },
+    });
+    if (!template) {
+      this.logger.warn(`No canned response found for shortcut "/${shortcut}"`);
+      return content;
+    }
+
+    return template.content
+      .replace(/\{\{\s*customer_name\s*\}\}/gi, conversation.customer.name || 'there')
+      .replace(/\{\{\s*business_name\s*\}\}/gi, conversation.client.name)
+      .replace(/\{\{\s*client_name\s*\}\}/gi, conversation.client.name)
+      .replace(/\{\{\s*agent_name\s*\}\}/gi, agentName || 'Support Team');
   }
 
   private async handleConversationResolved(chatwootConversationId?: number) {

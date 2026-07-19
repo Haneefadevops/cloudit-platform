@@ -15,6 +15,7 @@ export default function DashboardLayout({
     { href: '/dashboard/clients', label: 'Clients' },
     { href: '/dashboard/ai-settings', label: 'AI Settings' },
     { href: '/dashboard/knowledge-base', label: 'Knowledge Base' },
+    { href: '/dashboard/canned-responses', label: 'Canned Responses' },
     { href: '/dashboard/analytics', label: 'Analytics' },
   ];
 

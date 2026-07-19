@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { WhatsAppController } from './whatsapp.controller';
 import { WhatsAppService } from './whatsapp.service';
+import { MediaService } from './media.service';
 import { AiModule } from '../ai/ai.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { CustomersModule } from '../customers/customers.module';
@@ -20,7 +21,7 @@ import { KnowledgeBaseModule } from '../knowledge-base/knowledge-base.module';
     KnowledgeBaseModule,
   ],
   controllers: [WhatsAppController],
-  providers: [WhatsAppService],
+  providers: [WhatsAppService, MediaService],
   exports: [WhatsAppService],
 })
 export class WhatsAppModule {}
