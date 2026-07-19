@@ -155,26 +155,6 @@ export class WhatsAppService {
       return;
     }
 
-    // 5.5 Outside operating hours: auto-respond and queue for human follow-up
-    if (!this.isWithinOperatingHours(client)) {
-      this.logger.log(
-        `Client ${client.id} is outside operating hours. Queuing conversation ${conversation.id} for human follow-up.`,
-      );
-      await this.conversationsService.handoffToHuman({
-        conversationId: conversation.id,
-        triggeredBy: 'system',
-        reason: 'Customer messaged outside operating hours',
-      });
-      await this.senderService.sendMessage({
-        client,
-        to: from,
-        message:
-          client.outsideHoursMessage ||
-          'Thank you for contacting us! We are currently outside our business hours. Please leave your message and our team will get back to you as soon as we open.',
-      });
-      return;
-    }
-
     // 6. Check for handoff keywords (client-configurable)
     const lowerMessage = messageBody.toLowerCase();
     const handoffKeywords = client.handoffKeywords
@@ -206,18 +186,27 @@ export class WhatsAppService {
     );
 
     if (wantsHuman) {
+      const outsideHours = !this.isWithinOperatingHours(client);
+      const reason = outsideHours
+        ? 'Customer requested human agent outside operating hours'
+        : `Customer requested human agent or used trigger keyword: "${messageBody}"`;
+
       await this.conversationsService.handoffToHuman({
         conversationId: conversation.id,
-        triggeredBy: 'customer',
-        reason: `Customer requested human agent or used trigger keyword: "${messageBody}"`,
+        triggeredBy: outsideHours ? 'system' : 'customer',
+        reason,
       });
+
+      const handoffMessage = outsideHours
+        ? client.outsideHoursMessage ||
+          'Thank you for contacting us! We are currently outside our business hours. Please leave your message and our team will get back to you as soon as we open.'
+        : client.fallbackMessage ||
+          'We will connect you to one of our available agents.';
 
       await this.senderService.sendMessage({
         client,
         to: from,
-        message:
-          client.fallbackMessage ||
-          'We will connect you to one of our available agents.',
+        message: handoffMessage,
       });
       return;
     }
@@ -494,6 +483,32 @@ export class WhatsAppService {
       to: from,
       message: thankYou,
     });
+
+    // Post the rating as a private note in Chatwoot so the agent can see it
+    try {
+      const conversationWithClient = await this.prisma.conversation.findUnique({
+        where: { id: pending.id },
+        include: { client: true, customer: true },
+      });
+
+      if (
+        conversationWithClient?.chatwootConversationId &&
+        conversationWithClient.client.chatwootAccountId
+      ) {
+        const csatNote = `Customer rated the conversation ${rating}/5${feedback ? `\nFeedback: ${feedback}` : ''}`;
+        await this.chatwootService.sendMessage(
+          conversationWithClient.client.chatwootAccountId,
+          conversationWithClient.chatwootConversationId,
+          csatNote,
+          'outgoing',
+          true,
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to post CSAT note to Chatwoot: ${(error as Error).message}`,
+      );
+    }
 
     this.logger.log(
       `Captured CSAT rating ${rating} for conversation ${pending.id}`,
