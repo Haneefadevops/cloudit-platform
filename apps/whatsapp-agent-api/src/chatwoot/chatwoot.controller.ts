@@ -8,6 +8,7 @@ interface ChatwootMessagePayload {
   id?: number;
   content?: string;
   message_type?: string;
+  private?: boolean;
   status?: string;
   conversation?: { id?: number; status?: string };
   sender?: { id?: number; name?: string; email?: string };
@@ -70,6 +71,13 @@ export class ChatwootController {
 
     if (!conversationId || !content) {
       this.logger.warn('Skipping agent reply: missing conversation or content');
+      return;
+    }
+
+    if (data.private) {
+      this.logger.log(
+        `Skipping private note in Chatwoot conversation ${conversationId}`,
+      );
       return;
     }
 
