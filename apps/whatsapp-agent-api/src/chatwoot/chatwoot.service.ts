@@ -192,32 +192,49 @@ export class ChatwootService {
     content?: string,
     history?: Array<{ content: string; senderType: string }>,
   ): Promise<ChatwootConversation> {
-    const payload: Record<string, unknown> = {
-      inbox_id: inboxId,
-      contact_id: contactId,
-      status: 'open',
-    };
-
-    if (history && history.length > 0) {
-      payload.messages = history.map((msg) => ({
-        content: msg.content,
-        message_type: msg.senderType === 'customer' ? 'incoming' : 'outgoing',
-        private: false,
-      }));
-    } else if (content) {
-      payload.messages = [
-        { content, message_type: 'incoming', private: false },
-      ];
-    }
-
-    return this.request<ChatwootConversation>(
+    // Create the conversation first
+    const conversation = await this.request<ChatwootConversation>(
       `/api/v1/accounts/${accountId}/conversations`,
       {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          inbox_id: inboxId,
+          contact_id: contactId,
+          status: 'open',
+        }),
       },
       this.adminApiKey,
     );
+
+    // Populate history messages one by one — Chatwoot does not always accept
+    // the messages array on conversation creation.
+    if (history && history.length > 0) {
+      for (const msg of history) {
+        try {
+          await this.sendMessage(
+            accountId,
+            conversation.id,
+            msg.content,
+            msg.senderType === 'customer' ? 'incoming' : 'outgoing',
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Failed to add history message to Chatwoot conversation ${conversation.id}: ${(error as Error).message}`,
+          );
+        }
+      }
+    }
+
+    if (content) {
+      await this.sendMessage(
+        accountId,
+        conversation.id,
+        content,
+        'incoming',
+      );
+    }
+
+    return conversation;
   }
 
   async sendMessage(

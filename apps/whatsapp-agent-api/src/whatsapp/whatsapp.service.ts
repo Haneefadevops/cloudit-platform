@@ -297,7 +297,7 @@ export class WhatsAppService {
             client.chatwootAccountId,
             client.chatwootInboxId,
             chatwootContactId,
-            content,
+            undefined,
             history,
           );
         chatwootConversationId = chatwootConversation.id;
