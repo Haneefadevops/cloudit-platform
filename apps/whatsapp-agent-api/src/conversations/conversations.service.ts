@@ -77,7 +77,7 @@ export class ConversationsService {
     });
 
     // Push handoff to Chatwoot if the client is connected
-    await this.pushHandoffToChatwoot(conversationId, reason);
+    await this.pushHandoffToChatwoot(conversationId, triggeredBy, reason);
 
     // Optional n8n alert for urgent handoffs
     await this.notifyUrgentHandoff(conversationId, reason, triggeredBy);
@@ -87,6 +87,7 @@ export class ConversationsService {
 
   private async pushHandoffToChatwoot(
     conversationId: string,
+    triggeredBy: string,
     reason: string,
   ) {
     const conversation = await this.prisma.conversation.findUnique({
@@ -159,6 +160,11 @@ export class ConversationsService {
         // Apply handoff labels in Chatwoot
         const labels = ['ai-handoff'];
         const lowerReason = reason.toLowerCase();
+        if (triggeredBy === 'system' && lowerReason.includes('outside operating hours')) {
+          labels.push('after-hours');
+        } else {
+          labels.push('in-hours');
+        }
         if (URGENT_KEYWORDS.some((k) => lowerReason.includes(k))) {
           labels.push('urgent');
         }
