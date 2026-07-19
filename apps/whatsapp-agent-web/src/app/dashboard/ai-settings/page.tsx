@@ -18,6 +18,9 @@ interface Client {
   operatingHoursStart?: string | null;
   operatingHoursEnd?: string | null;
   closedDays?: string | null;
+  outsideHoursMessage?: string | null;
+  csatEnabled?: boolean | null;
+  csatMessage?: string | null;
 }
 
 const inputStyle: React.CSSProperties = {
@@ -74,6 +77,9 @@ function AiSettingsForm() {
     operatingHoursStart: '',
     operatingHoursEnd: '',
     closedDays: '',
+    outsideHoursMessage: '',
+    csatEnabled: true,
+    csatMessage: '',
   });
 
   const token =
@@ -121,6 +127,9 @@ function AiSettingsForm() {
       operatingHoursStart: client.operatingHoursStart || '',
       operatingHoursEnd: client.operatingHoursEnd || '',
       closedDays: client.closedDays || '',
+      outsideHoursMessage: client.outsideHoursMessage || '',
+      csatEnabled: client.csatEnabled ?? true,
+      csatMessage: client.csatMessage || '',
     });
   }, [selectedId, clients]);
 
@@ -142,6 +151,9 @@ function AiSettingsForm() {
       operatingHoursStart: form.operatingHoursStart || null,
       operatingHoursEnd: form.operatingHoursEnd || null,
       closedDays: form.closedDays || null,
+      outsideHoursMessage: form.outsideHoursMessage || null,
+      csatEnabled: form.csatEnabled,
+      csatMessage: form.csatMessage || null,
     };
 
     try {
@@ -346,6 +358,14 @@ function AiSettingsForm() {
                 }
                 style={inputStyle}
               />
+              <input
+                placeholder="Outside-hours message (sent when closed)"
+                value={form.outsideHoursMessage}
+                onChange={(e) =>
+                  setForm({ ...form, outsideHoursMessage: e.target.value })
+                }
+                style={inputStyle}
+              />
             </div>
           </div>
 
@@ -378,6 +398,43 @@ function AiSettingsForm() {
                 }
                 style={inputStyle}
               />
+              <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+                Outside operating hours, customers receive the outside-hours
+                message and the conversation is queued for a human agent.
+              </p>
+            </div>
+          </div>
+
+          <div style={sectionStyle}>
+            <div style={sectionTitleStyle}>Customer Satisfaction (CSAT)</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 14,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.csatEnabled}
+                  onChange={(e) =>
+                    setForm({ ...form, csatEnabled: e.target.checked })
+                  }
+                />
+                Send a rating request after a conversation is resolved
+              </label>
+              {form.csatEnabled && (
+                <input
+                  placeholder="CSAT message (ask for a 1-5 rating)"
+                  value={form.csatMessage}
+                  onChange={(e) =>
+                    setForm({ ...form, csatMessage: e.target.value })
+                  }
+                  style={inputStyle}
+                />
+              )}
             </div>
           </div>
 

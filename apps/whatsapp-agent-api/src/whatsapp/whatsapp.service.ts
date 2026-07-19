@@ -96,16 +96,45 @@ export class WhatsAppService {
       name: contactName,
     });
 
+    // 2.5 If the customer is replying to a CSAT rating request, capture it
+    const csatHandled = await this.handleCsatResponse(
+      client,
+      customer,
+      messageBody,
+      from,
+    );
+    if (csatHandled) return;
+
     // 3. Find or create conversation
     let conversation = await this.conversationsService.findActiveByCustomer(
       customer.id,
     );
 
     if (!conversation) {
+      // Send the welcome message on the customer's first-ever conversation
+      const previousConversations = await this.prisma.conversation.count({
+        where: { customerId: customer.id },
+      });
+
       conversation = await this.conversationsService.create({
         clientId: client.id,
         customerId: customer.id,
       });
+
+      if (previousConversations === 0 && client.welcomeMessage) {
+        await this.prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            senderType: 'bot',
+            content: client.welcomeMessage,
+          },
+        });
+        await this.senderService.sendMessage({
+          client,
+          to: from,
+          message: client.welcomeMessage,
+        });
+      }
     }
 
     // 4. Store customer message
@@ -123,6 +152,26 @@ export class WhatsAppService {
         `Conversation ${conversation.id} is with human agent. Forwarding to Chatwoot.`,
       );
       await this.forwardToChatwoot(client, customer, conversation, messageBody);
+      return;
+    }
+
+    // 5.5 Outside operating hours: auto-respond and queue for human follow-up
+    if (!this.isWithinOperatingHours(client)) {
+      this.logger.log(
+        `Client ${client.id} is outside operating hours. Queuing conversation ${conversation.id} for human follow-up.`,
+      );
+      await this.conversationsService.handoffToHuman({
+        conversationId: conversation.id,
+        triggeredBy: 'system',
+        reason: 'Customer messaged outside operating hours',
+      });
+      await this.senderService.sendMessage({
+        client,
+        to: from,
+        message:
+          client.outsideHoursMessage ||
+          'Thank you for contacting us! We are currently outside our business hours. Please leave your message and our team will get back to you as soon as we open.',
+      });
       return;
     }
 
@@ -326,6 +375,130 @@ export class WhatsAppService {
         `Failed to forward message to Chatwoot: ${(error as Error).message}`,
       );
     }
+  }
+
+  /**
+   * Checks the client's operating hours (in the client's timezone) and closed days.
+   * Returns true when the business is currently open. Fails open (true) when
+   * hours are not configured or the timezone is invalid.
+   */
+  private isWithinOperatingHours(client: {
+    operatingHoursStart?: string | null;
+    operatingHoursEnd?: string | null;
+    closedDays?: string | null;
+    timezone?: string | null;
+  }): boolean {
+    const { operatingHoursStart, operatingHoursEnd, closedDays } = client;
+    if (!operatingHoursStart || !operatingHoursEnd) return true;
+
+    let localNow: Date;
+    try {
+      localNow = new Date(
+        new Date().toLocaleString('en-US', {
+          timeZone: client.timezone || 'UTC',
+        }),
+      );
+      if (isNaN(localNow.getTime())) return true;
+    } catch {
+      return true;
+    }
+
+    const dayName = localNow
+      .toLocaleDateString('en-US', { weekday: 'long' })
+      .toLowerCase();
+    const closed = (closedDays || '')
+      .split(',')
+      .map((d) => d.trim().toLowerCase())
+      .filter(Boolean);
+    if (closed.includes(dayName)) return false;
+
+    const [sh, sm] = operatingHoursStart.split(':').map(Number);
+    const [eh, em] = operatingHoursEnd.split(':').map(Number);
+    if ([sh, sm, eh, em].some((n) => isNaN(n))) return true;
+
+    const minutes = localNow.getHours() * 60 + localNow.getMinutes();
+    const startMinutes = sh * 60 + sm;
+    const endMinutes = eh * 60 + em;
+
+    // Supports overnight ranges (e.g. 22:00 - 02:00)
+    if (startMinutes <= endMinutes) {
+      return minutes >= startMinutes && minutes < endMinutes;
+    }
+    return minutes >= startMinutes || minutes < endMinutes;
+  }
+
+  /**
+   * Captures a 1-5 rating when the customer replies to a CSAT request sent
+   * after their conversation was resolved. Returns true when the message was
+   * consumed as a rating and the normal flow should stop.
+   */
+  private async handleCsatResponse(
+    client: { id: string; metaAccessToken: string; whatsappPhoneNumberId: string },
+    customer: { id: string },
+    messageBody: string,
+    from: string,
+  ): Promise<boolean> {
+    const pending = await this.prisma.conversation.findFirst({
+      where: { customerId: customer.id, csatPending: true },
+      orderBy: { resolvedAt: 'desc' },
+    });
+    if (!pending) return false;
+
+    const ratingMatch = messageBody.trim().match(/^([1-5])\b/);
+
+    if (!ratingMatch) {
+      // Customer started a new topic instead of rating; expire the request
+      await this.prisma.conversation.update({
+        where: { id: pending.id },
+        data: { csatPending: false },
+      });
+      return false;
+    }
+
+    const rating = Number(ratingMatch[1]);
+    const feedback = messageBody.trim().slice(1).trim() || null;
+
+    await this.prisma.conversation.update({
+      where: { id: pending.id },
+      data: { csatPending: false, csatRating: rating, csatFeedback: feedback },
+    });
+
+    await this.prisma.handoffLog.updateMany({
+      where: { conversationId: pending.id, customerSatisfaction: null },
+      data: { customerSatisfaction: rating },
+    });
+
+    await this.prisma.message.create({
+      data: {
+        conversationId: pending.id,
+        senderType: 'customer',
+        content: messageBody,
+      },
+    });
+
+    const thankYou =
+      rating >= 4
+        ? 'Thank you for your feedback! We are glad we could help.'
+        : 'Thank you for your feedback. We will use it to improve our service.';
+
+    await this.prisma.message.create({
+      data: {
+        conversationId: pending.id,
+        senderType: 'bot',
+        content: thankYou,
+      },
+    });
+
+    await this.senderService.sendMessage({
+      client,
+      to: from,
+      message: thankYou,
+    });
+
+    this.logger.log(
+      `Captured CSAT rating ${rating} for conversation ${pending.id}`,
+    );
+    return true;
   }
 
   async sendWhatsAppMessage(input: {

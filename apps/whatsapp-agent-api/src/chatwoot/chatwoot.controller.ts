@@ -120,15 +120,55 @@ export class ChatwootController {
 
     const conversation = await this.prisma.conversation.findFirst({
       where: { chatwootConversationId },
+      include: { client: true, customer: true },
     });
 
-    if (!conversation) return;
+    if (!conversation || conversation.status === 'resolved') return;
+
+    const resolvedAt = new Date();
 
     await this.prisma.conversation.update({
       where: { id: conversation.id },
-      data: { status: 'resolved', resolvedAt: new Date() },
+      data: { status: 'resolved', resolvedAt },
+    });
+
+    await this.prisma.handoffLog.updateMany({
+      where: { conversationId: conversation.id, resolvedAt: null },
+      data: { resolvedAt },
     });
 
     this.logger.log(`Conversation ${conversation.id} resolved from Chatwoot`);
+
+    // Send CSAT rating request to the customer
+    if (conversation.client.csatEnabled) {
+      const csatMessage =
+        conversation.client.csatMessage ||
+        'Thank you for chatting with us! How would you rate your experience? Please reply with a number from 1 (poor) to 5 (excellent).';
+      try {
+        await this.senderService.sendMessage({
+          client: {
+            metaAccessToken: conversation.client.metaAccessToken,
+            whatsappPhoneNumberId: conversation.client.whatsappPhoneNumberId,
+          },
+          to: conversation.customer.phoneNumber,
+          message: csatMessage,
+        });
+        await this.prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            senderType: 'bot',
+            content: csatMessage,
+          },
+        });
+        await this.prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { csatPending: true },
+        });
+      } catch (error) {
+        this.logger.error(
+          `Failed to send CSAT request for conversation ${conversation.id}: ${(error as Error).message}`,
+        );
+      }
+    }
   }
 }

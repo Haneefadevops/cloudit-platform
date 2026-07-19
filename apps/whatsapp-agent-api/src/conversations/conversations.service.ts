@@ -52,12 +52,27 @@ export class ConversationsService {
       },
     });
 
+    // Response time: seconds from the last customer message to the handoff
+    const lastCustomerMessage = await this.prisma.message.findFirst({
+      where: { conversationId, senderType: 'customer' },
+      orderBy: { createdAt: 'desc' },
+    });
+    const responseTimeSeconds = lastCustomerMessage
+      ? Math.max(
+          0,
+          Math.round(
+            (Date.now() - lastCustomerMessage.createdAt.getTime()) / 1000,
+          ),
+        )
+      : null;
+
     await this.prisma.handoffLog.create({
       data: {
         conversationId,
         triggeredBy,
         reason,
         assignedAgentId: assignedToId,
+        responseTimeSeconds,
       },
     });
 

@@ -46,6 +46,11 @@ model Client {
   operatingHoursStart   String?  @default("09:00")
   operatingHoursEnd     String?  @default("17:00")
   closedDays            String?  @default("Saturday,Sunday")
+  outsideHoursMessage   String?  @default("Thank you for contacting us! We are currently outside our business hours. Please leave your message and our team will get back to you as soon as we open.")
+
+  // Customer satisfaction (CSAT)
+  csatEnabled           Boolean  @default(true)
+  csatMessage           String?  @default("Thank you for chatting with us! How would you rate your experience? Please reply with a number from 1 (poor) to 5 (excellent).")
 
   // Meta webhook
   verifyToken           String?  @default(uuid())
@@ -116,6 +121,11 @@ model Conversation {
   createdAt               DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   resolvedAt      DateTime?
+
+  // CSAT state (set when resolved, filled when customer replies with a rating)
+  csatPending             Boolean   @default(false)
+  csatRating              Int?
+  csatFeedback            String?
 
   clientId     String
   client       Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)

@@ -286,6 +286,14 @@ The WhatsApp webhook verification endpoint accepts either the global `META_VERIF
 
 The TheReplyte dashboard **Agents** page has been removed. Agents are now created and managed inside each client's Chatwoot account.
 
+### Phase 3 — Operating Hours, Welcome Message, Analytics & CSAT
+
+- **Operating hours enforced at runtime**: incoming messages outside the client's `operatingHoursStart`/`operatingHoursEnd` (evaluated in the client's `timezone`) or on a `closedDays` weekday receive the new `outsideHoursMessage`, and the conversation is handed off (`triggeredBy: 'system'`) so it is queued in Chatwoot for the next business day. Overnight ranges (e.g. 22:00–02:00) are supported.
+- **Welcome message**: sent on a customer's first-ever conversation, before the AI reply.
+- **CSAT**: when a conversation is resolved in Chatwoot, the customer receives a 1–5 rating request (`csatMessage`, toggleable per client via `csatEnabled`). The next numeric reply is stored on the conversation (`csatRating`/`csatFeedback`) and copied to `HandoffLog.customerSatisfaction`; any non-rating reply expires the request and starts a normal conversation.
+- **Analytics**: `GET /api/analytics/overview` now accepts an optional `clientId` filter and additionally returns `avgResolutionTimeMinutes`, `avgHandoffResponseSeconds` (from `HandoffLog.responseTimeSeconds`, now populated at handoff time), and `csat` (average + response count). The dashboard Analytics page has a client selector and the new metric cards.
+- Migration: `20260719150000_add_phase3_operating_hours_csat`.
+
 ### Phase 2 — Knowledge Base / RAG
 
 - Added `documents` table with `pgvector` embeddings per client.

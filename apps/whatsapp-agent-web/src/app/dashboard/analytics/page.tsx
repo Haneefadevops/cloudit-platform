@@ -12,20 +12,49 @@ interface Analytics {
   conversationsToday: number;
   topHandoffReasons: { reason: string; count: number }[];
   dailyVolume: { date: string; count: number }[];
+  avgResolutionTimeMinutes: number | null;
+  avgHandoffResponseSeconds: number | null;
+  csat: { average: number | null; responses: number };
 }
+
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
+const formatDuration = (minutes: number | null) => {
+  if (minutes == null) return '-';
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  return `${hours}h ${mins}m`;
+};
 
 export default function AnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null);
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
 
   useEffect(() => {
-    fetch('/api/analytics/overview', {
+    fetch('/api/clients', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((list) => setClients(Array.isArray(list) ? list : []))
+      .catch(() => setClients([]));
+  }, []);
+
+  useEffect(() => {
+    setData(null);
+    const query = selectedClientId ? `?clientId=${selectedClientId}` : '';
+    fetch(`/api/analytics/overview${query}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
       .then(setData);
-  }, []);
+  }, [selectedClientId]);
 
   if (!data) {
     return <div>Loading analytics...</div>;
@@ -52,6 +81,27 @@ export default function AnalyticsPage() {
     <div>
       <h1>Analytics</h1>
 
+      <div style={{ marginTop: 12, maxWidth: 320 }}>
+        <select
+          value={selectedClientId}
+          onChange={(e) => setSelectedClientId(e.target.value)}
+          style={{
+            padding: 8,
+            borderRadius: 4,
+            border: '1px solid #d1d5db',
+            fontSize: 14,
+            width: '100%',
+          }}
+        >
+          <option value="">All clients</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div
         style={{
           display: 'flex',
@@ -67,6 +117,21 @@ export default function AnalyticsPage() {
         {statCard('Total Messages', data.totalMessages)}
         {statCard('Handoffs Today', data.handoffsToday)}
         {statCard('Conversations Today', data.conversationsToday)}
+        {statCard(
+          'Avg Resolution Time',
+          formatDuration(data.avgResolutionTimeMinutes),
+        )}
+        {statCard(
+          'Avg Handoff Response',
+          data.avgHandoffResponseSeconds == null
+            ? '-'
+            : `${data.avgHandoffResponseSeconds}s`,
+        )}
+        {statCard(
+          'CSAT Average',
+          data.csat.average == null ? '-' : `${data.csat.average} / 5`,
+        )}
+        {statCard('CSAT Responses', data.csat.responses)}
       </div>
 
       <div style={{ marginTop: 32 }}>
