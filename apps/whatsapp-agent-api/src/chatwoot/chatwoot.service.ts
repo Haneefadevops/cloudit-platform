@@ -208,14 +208,16 @@ export class ChatwootService {
 
     // Populate history messages one by one — Chatwoot does not always accept
     // the messages array on conversation creation.
+    // Mark these as private notes so Chatwoot does not echo them back to WhatsApp.
     if (history && history.length > 0) {
       for (const msg of history) {
         try {
           await this.sendMessage(
             accountId,
             conversation.id,
-            msg.content,
-            msg.senderType === 'customer' ? 'incoming' : 'outgoing',
+            `${msg.senderType === 'customer' ? 'Customer' : 'AI'}: ${msg.content}`,
+            'outgoing',
+            true,
           );
         } catch (error) {
           this.logger.warn(
@@ -230,7 +232,8 @@ export class ChatwootService {
         accountId,
         conversation.id,
         content,
-        'incoming',
+        'outgoing',
+        true,
       );
     }
 
@@ -242,6 +245,7 @@ export class ChatwootService {
     conversationId: number,
     content: string,
     messageType: 'incoming' | 'outgoing' = 'incoming',
+    isPrivate = false,
   ): Promise<ChatwootMessage> {
     return this.request<ChatwootMessage>(
       `/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
@@ -250,7 +254,7 @@ export class ChatwootService {
         body: JSON.stringify({
           content,
           message_type: messageType,
-          private: false,
+          private: isPrivate,
         }),
       },
       this.adminApiKey,

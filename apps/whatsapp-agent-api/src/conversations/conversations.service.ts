@@ -119,7 +119,7 @@ export class ConversationsService {
 
         // Add the handoff context as the final message so the agent sees why it was escalated
         history.push({
-          content: `🤖 Handed off to human agent.\n\nReason: ${reason}`,
+          content: `AI handoff triggered. ${reason}`,
           senderType: 'agent',
         });
 

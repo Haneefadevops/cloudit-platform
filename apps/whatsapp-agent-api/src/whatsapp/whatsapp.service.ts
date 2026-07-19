@@ -168,7 +168,7 @@ export class WhatsAppService {
         to: from,
         message:
           client.fallbackMessage ||
-          'I understand. Let me connect you with one of our team members. They will be with you shortly.',
+          'We will connect you to one of our available agents.',
       });
       return;
     }
