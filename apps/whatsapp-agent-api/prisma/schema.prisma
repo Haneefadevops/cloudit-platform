@@ -41,7 +41,7 @@ model Client {
   confidenceThreshold   Float?   @default(0.7)
   aiEnabled             Boolean  @default(true)
   welcomeMessage        String?  @default("Hello! How can we help you today?")
-  fallbackMessage       String?  @default("I'm sorry, I didn't understand that. Let me connect you with our team.")
+  fallbackMessage       String?  @default("We will connect you to one of our available agents.")
   handoffKeywords       String?  @default("human,agent,person,manager,supervisor")
   operatingHoursStart   String?  @default("09:00")
   operatingHoursEnd     String?  @default("17:00")
