@@ -15,6 +15,8 @@ interface Analytics {
   avgResolutionTimeMinutes: number | null;
   avgHandoffResponseSeconds: number | null;
   csat: { average: number | null; responses: number };
+  tokens: { prompt: number; completion: number; total: number };
+  estimatedCostUsd: number;
 }
 
 interface ClientOption {
@@ -132,6 +134,13 @@ export default function AnalyticsPage() {
           data.csat.average == null ? '-' : `${data.csat.average} / 5`,
         )}
         {statCard('CSAT Responses', data.csat.responses)}
+        {statCard('Tokens (prompt)', data.tokens?.prompt ?? 0)}
+        {statCard('Tokens (completion)', data.tokens?.completion ?? 0)}
+        {statCard('Tokens (total)', data.tokens?.total ?? 0)}
+        {statCard(
+          'Estimated cost',
+          `$${(data.estimatedCostUsd ?? 0).toFixed(2)}`,
+        )}
       </div>
 
       <div style={{ marginTop: 32 }}>

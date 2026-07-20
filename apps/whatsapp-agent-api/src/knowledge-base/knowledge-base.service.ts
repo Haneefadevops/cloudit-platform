@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -289,5 +294,101 @@ export class KnowledgeBaseService {
       DELETE FROM "documents"
       WHERE "id" = ${documentId} AND "clientId" = ${clientId}
     `;
+  }
+
+  private htmlToText(html: string): string {
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#0?39;|&apos;/gi, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  async crawlUrl(clientId: string, url: string) {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new BadRequestException('Invalid URL');
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw new BadRequestException('Only HTTP and HTTPS URLs are supported');
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    const MAX_BYTES = 2 * 1024 * 1024;
+
+    try {
+      const response = await fetch(parsed.toString(), {
+        signal: controller.signal,
+        redirect: 'follow',
+      });
+      if (!response.ok) {
+        throw new BadRequestException(
+          `Failed to fetch URL: HTTP ${response.status}`,
+        );
+      }
+
+      const contentLength = Number(response.headers.get('content-length') || 0);
+      if (contentLength > MAX_BYTES) {
+        throw new BadRequestException('Page too large (max 2MB)');
+      }
+
+      let html = '';
+      if (response.body) {
+        const body = response.body as any;
+        const chunks: Buffer[] = [];
+        let received = 0;
+        for await (const chunk of body) {
+          const len = chunk.byteLength ?? chunk.length ?? 0;
+          received += len;
+          if (received > MAX_BYTES) {
+            throw new BadRequestException('Page too large (max 2MB)');
+          }
+          chunks.push(Buffer.from(chunk));
+        }
+        html = Buffer.concat(chunks).toString('utf-8');
+      } else {
+        html = await response.text();
+      }
+
+      const text = this.htmlToText(html);
+      if (!text) {
+        throw new UnprocessableEntityException(
+          'Could not extract readable text from the URL',
+        );
+      }
+
+      const created = (await this.createDocument(clientId, url, text, 'url')) as any[];
+      return {
+        documentId: created[0]?.[0]?.id,
+        characters: text.length,
+        chunks: created.length,
+      };
+    } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof UnprocessableEntityException
+      ) {
+        throw error;
+      }
+      if ((error as Error).name === 'AbortError') {
+        throw new BadRequestException('URL fetch timed out after 10 seconds');
+      }
+      throw new BadRequestException(
+        `Failed to fetch URL: ${(error as Error).message}`,
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 }

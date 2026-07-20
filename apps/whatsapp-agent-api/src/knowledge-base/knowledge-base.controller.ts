@@ -14,6 +14,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { KnowledgeBaseService } from './knowledge-base.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { SearchDocumentsDto } from './dto/search-documents.dto';
+import { CrawlUrlDto } from './dto/crawl-url.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
 
@@ -73,5 +74,13 @@ export class KnowledgeBaseController {
     @Param('documentId') documentId: string,
   ) {
     return this.knowledgeBaseService.remove(clientId, documentId);
+  }
+
+  @Post(':clientId/crawl')
+  crawl(
+    @Param('clientId') clientId: string,
+    @Body() dto: CrawlUrlDto,
+  ) {
+    return this.knowledgeBaseService.crawlUrl(clientId, dto.url);
   }
 }

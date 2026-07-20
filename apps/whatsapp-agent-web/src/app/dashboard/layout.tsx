@@ -17,6 +17,7 @@ export default function DashboardLayout({
     { href: '/dashboard/knowledge-base', label: 'Knowledge Base' },
     { href: '/dashboard/canned-responses', label: 'Canned Responses' },
     { href: '/dashboard/analytics', label: 'Analytics' },
+    { href: '/dashboard/playground', label: 'Playground' },
   ];
 
   return (

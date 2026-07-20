@@ -304,9 +304,21 @@ export class WhatsAppService {
         3,
       );
       if (searchResults.length > 0) {
-        knowledgeContext = searchResults
-          .map((r) => `- ${r.content}`)
-          .join('\n---\n');
+        // The search returns cosine similarity in [0, 1] (1 = identical). The
+        // confidence threshold is a minimum similarity; scores below it are
+        // treated as no relevant context, so the AI falls back to the client
+        // fallback message and triggers handoff.
+        const bestScore = searchResults[0].similarity;
+        const threshold = client.confidenceThreshold ?? 0;
+        if (threshold > 0 && bestScore < threshold) {
+          this.logger.log(
+            `KB best score ${bestScore.toFixed(4)} below client confidence threshold ${threshold}; treating as no relevant context`,
+          );
+        } else {
+          knowledgeContext = searchResults
+            .map((r) => `- ${r.content}`)
+            .join('\n---\n');
+        }
       }
     } catch (error) {
       this.logger.warn(
@@ -324,6 +336,7 @@ export class WhatsAppService {
         aiTemperature: client.aiTemperature,
         maxTokens: client.maxTokens,
         fallbackMessage: client.fallbackMessage || undefined,
+        language: client.language,
       },
       customer: {
         name: customer.name,

@@ -116,6 +116,7 @@ model Conversation {
   id                      String    @id @default(uuid())
   status                  String    @default("bot") // bot, human, resolved, archived
   handoffReason           String?
+  summary                 String?   // AI-generated summary, created on handoff
   chatwootConversationId  Int?
   chatwootContactId       Int?
   chatwootInboxId         Int?

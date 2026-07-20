@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChatwootService } from '../chatwoot/chatwoot.service';
+import { AiService } from '../ai/ai.service';
 
 const URGENT_KEYWORDS = ['urgent', 'complaint', 'refund', 'missing', 'wrong', 'cancel', 'not received'];
 
@@ -13,6 +14,7 @@ export class ConversationsService {
     private readonly prisma: PrismaService,
     private readonly chatwootService: ChatwootService,
     private readonly configService: ConfigService,
+    private readonly aiService: AiService,
   ) {}
 
   async findActiveByCustomer(customerId: string) {
@@ -157,7 +159,32 @@ export class ConversationsService {
           },
         });
 
-        // Apply handoff labels in Chatwoot
+        // Generate and save a summary, then post it as a private note to Chatwoot
+        try {
+          const summary = await this.aiService.summarizeConversation(
+            history.map((m) => ({ role: m.senderType, content: m.content })),
+          );
+          await this.prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { summary },
+          });
+          await this.chatwootService.sendMessage(
+            client.chatwootAccountId,
+            chatwootConversationId,
+            `AI Conversation Summary:\n${summary}`,
+            'outgoing',
+            true,
+          );
+          this.logger.log(
+            `Saved and posted summary for conversation ${conversation.id}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Failed to generate or post summary: ${(error as Error).message}`,
+          );
+        }
+
+        // Apply handoff labels in Chatwoot (rule-based + AI-suggested)
         const labels = ['ai-handoff'];
         const lowerReason = reason.toLowerCase();
         if (triggeredBy === 'system' && lowerReason.includes('outside operating hours')) {
@@ -168,6 +195,23 @@ export class ConversationsService {
         if (URGENT_KEYWORDS.some((k) => lowerReason.includes(k))) {
           labels.push('urgent');
         }
+
+        try {
+          const labelText = history
+            .map((m) => `${m.senderType}: ${m.content}`)
+            .join('\n');
+          const aiLabels = await this.aiService.suggestLabels(labelText);
+          for (const label of aiLabels) {
+            if (!labels.includes(label)) {
+              labels.push(label);
+            }
+          }
+        } catch (error) {
+          this.logger.error(
+            `AI label suggestion failed: ${(error as Error).message}`,
+          );
+        }
+
         await this.chatwootService.addLabelsToConversation(
           client.chatwootAccountId,
           chatwootConversationId,

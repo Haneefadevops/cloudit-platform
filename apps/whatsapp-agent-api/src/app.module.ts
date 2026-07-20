@@ -14,6 +14,7 @@ import { HealthModule } from './health/health.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { KnowledgeBaseModule } from './knowledge-base/knowledge-base.module';
 import { CannedResponsesModule } from './canned-responses/canned-responses.module';
+import { PlaygroundModule } from './playground/playground.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { CannedResponsesModule } from './canned-responses/canned-responses.modul
     AnalyticsModule,
     KnowledgeBaseModule,
     CannedResponsesModule,
+    PlaygroundModule,
   ],
 })
 export class AppModule {}

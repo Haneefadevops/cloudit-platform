@@ -1,4 +1,5 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -7,7 +8,10 @@ import { AdminGuard } from '../common/guards/admin.guard';
 @Controller('analytics')
 @UseGuards(JwtAuthGuard, AdminGuard)
 export class AnalyticsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Get('overview')
   async overview(@Query('clientId') clientId?: string) {
@@ -35,6 +39,7 @@ export class AnalyticsController {
       avgResolutionTimeMinutes,
       avgHandoffResponseSeconds,
       csat,
+      tokenUsage,
     ] = await Promise.all([
       this.prisma.conversation.count({ where: clientFilter }),
       this.prisma.conversation.count({
@@ -58,6 +63,7 @@ export class AnalyticsController {
       this.getAvgResolutionTimeMinutes(clientId),
       this.getAvgHandoffResponseSeconds(clientId),
       this.getCsatStats(clientId),
+      this.getTokenUsage(clientId),
     ]);
 
     return {
@@ -73,6 +79,8 @@ export class AnalyticsController {
       avgResolutionTimeMinutes,
       avgHandoffResponseSeconds,
       csat,
+      tokens: tokenUsage.tokens,
+      estimatedCostUsd: tokenUsage.estimatedCostUsd,
     };
   }
 
@@ -143,5 +151,50 @@ export class AnalyticsController {
       average: row?.avg == null ? null : Math.round(row.avg * 100) / 100,
       responses: Number(row?.count ?? 0),
     };
+  }
+
+  private async getTokenUsage(clientId?: string) {
+    const rows = await this.prisma.$queryRaw<
+      { prompt: number; completion: number; total: number }[]
+    >`
+      SELECT
+        COALESCE(SUM(CASE
+          WHEN jsonb_typeof(m."kimiMetadata"->'usage') = 'object'
+            AND (m."kimiMetadata"->'usage'->>'prompt_tokens') ~ '^[0-9]+$'
+          THEN (m."kimiMetadata"->'usage'->>'prompt_tokens')::bigint ELSE 0 END), 0) AS prompt,
+        COALESCE(SUM(CASE
+          WHEN jsonb_typeof(m."kimiMetadata"->'usage') = 'object'
+            AND (m."kimiMetadata"->'usage'->>'completion_tokens') ~ '^[0-9]+$'
+          THEN (m."kimiMetadata"->'usage'->>'completion_tokens')::bigint ELSE 0 END), 0) AS completion,
+        COALESCE(SUM(CASE
+          WHEN jsonb_typeof(m."kimiMetadata"->'usage') = 'object'
+            AND (m."kimiMetadata"->'usage'->>'total_tokens') ~ '^[0-9]+$'
+          THEN (m."kimiMetadata"->'usage'->>'total_tokens')::bigint ELSE 0 END), 0) AS total
+      FROM messages m
+      JOIN conversations c ON c.id = m."conversationId"
+      WHERE m."senderType" = 'bot'
+      ${clientId ? Prisma.sql`AND c."clientId" = ${clientId}` : Prisma.empty}
+    `;
+
+    const tokens = {
+      prompt: Number(rows[0]?.prompt ?? 0),
+      completion: Number(rows[0]?.completion ?? 0),
+      total: Number(rows[0]?.total ?? 0),
+    };
+
+    const inputPrice = parseFloat(
+      this.configService.get<string>('AI_INPUT_PRICE_PER_1M_TOKENS') || '0',
+    ) || 0;
+    const outputPrice = parseFloat(
+      this.configService.get<string>('AI_OUTPUT_PRICE_PER_1M_TOKENS') || '0',
+    ) || 0;
+    const estimatedCostUsd =
+      Math.round(
+        ((tokens.prompt / 1_000_000) * inputPrice +
+          (tokens.completion / 1_000_000) * outputPrice) *
+          1_000_000,
+      ) / 1_000_000;
+
+    return { tokens, estimatedCostUsd };
   }
 }

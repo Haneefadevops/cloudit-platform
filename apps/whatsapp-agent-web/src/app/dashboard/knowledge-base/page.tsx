@@ -39,6 +39,7 @@ export default function KnowledgeBasePage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [crawlUrl, setCrawlUrl] = useState('');
   const [files, setFiles] = useState<FileList | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -101,6 +102,34 @@ export default function KnowledgeBasePage() {
         await fetchDocuments(selectedId);
       } else {
         showInfo('Failed to add document');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCrawl = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedId || !crawlUrl.trim()) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/knowledge-base/${selectedId}/crawl`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ url: crawlUrl.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showInfo(
+          `Crawled ${data.characters?.toLocaleString() || 0} characters into ${data.chunks || 0} chunks`,
+        );
+        setCrawlUrl('');
+        await fetchDocuments(selectedId);
+      } else {
+        showInfo(data.error || data.message || 'Failed to crawl website');
       }
     } finally {
       setLoading(false);
@@ -254,6 +283,38 @@ export default function KnowledgeBasePage() {
             >
               {loading ? 'Uploading...' : 'Upload Files'}
             </button>
+          </form>
+
+          <form
+            onSubmit={handleCrawl}
+            style={{
+              background: 'white',
+              padding: 16,
+              borderRadius: 8,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            }}
+          >
+            <h3 style={{ marginTop: 0, fontSize: 16 }}>Crawl Website</h3>
+            <p style={{ color: '#6b7280', fontSize: 13, margin: '0 0 8px' }}>
+              Extract content from a public website URL.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="url"
+                placeholder="https://example.com/faq"
+                value={crawlUrl}
+                onChange={(e) => setCrawlUrl(e.target.value)}
+                required
+                style={inputStyle}
+              />
+              <button
+                type="submit"
+                disabled={loading || !crawlUrl.trim()}
+                style={buttonStyle('#7c3aed')}
+              >
+                {loading ? 'Crawling...' : 'Crawl'}
+              </button>
+            </div>
           </form>
 
           <div
