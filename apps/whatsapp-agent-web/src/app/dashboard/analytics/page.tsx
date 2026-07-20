@@ -139,7 +139,7 @@ export default function AnalyticsPage() {
         {statCard('Tokens (total)', data.tokens?.total ?? 0)}
         {statCard(
           'Estimated cost',
-          `$${(data.estimatedCostUsd ?? 0).toFixed(2)}`,
+          `$${(data.estimatedCostUsd ?? 0) < 0.01 && (data.estimatedCostUsd ?? 0) > 0 ? (data.estimatedCostUsd ?? 0).toFixed(4) : (data.estimatedCostUsd ?? 0).toFixed(2)}`,
         )}
       </div>
 
