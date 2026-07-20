@@ -27,7 +27,7 @@ export default function LoginPage() {
     }
 
     localStorage.setItem('token', data.access_token);
-    router.push('/dashboard/conversations');
+    router.push('/dashboard/clients');
   };
 
   return (

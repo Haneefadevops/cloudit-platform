@@ -11,7 +11,6 @@ export default function DashboardLayout({
   const pathname = usePathname();
 
   const nav = [
-    { href: '/dashboard/conversations', label: 'Conversations' },
     { href: '/dashboard/clients', label: 'Clients' },
     { href: '/dashboard/ai-settings', label: 'AI Settings' },
     { href: '/dashboard/knowledge-base', label: 'Knowledge Base' },
