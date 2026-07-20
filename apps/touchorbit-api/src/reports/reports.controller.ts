@@ -74,16 +74,55 @@ export class ReportsController {
     return this.reportResponse(data, filters);
   }
 
-  @Get("roster")
+  @Get(["roster", "adherence"])
   @RequireModule("touchorbit", "reports")
   @ApiOperation({ summary: "Get roster report" })
-  async roster(
+  async adherence(
     @CurrentOrganization() organizationId: string,
     @Query() query: unknown,
   ) {
     const filters = this.parseFilters(query);
     const data = await this.reportsService.roster(organizationId, filters);
     return this.reportResponse(data, filters);
+  }
+
+  @Get("overtime")
+  @RequireModule("touchorbit", "reports")
+  async overtime(
+    @CurrentOrganization() organizationId: string,
+    @Query() query: unknown,
+  ) {
+    const filters = this.parseFilters(query);
+    return this.reportResponse(
+      await this.reportsService.overtime(organizationId, filters),
+      filters,
+    );
+  }
+
+  @Get("late")
+  @RequireModule("touchorbit", "reports")
+  async late(
+    @CurrentOrganization() organizationId: string,
+    @Query() query: unknown,
+  ) {
+    const filters = this.parseFilters(query);
+    return this.reportResponse(
+      await this.reportsService.late(organizationId, filters),
+      filters,
+    );
+  }
+
+  @Get("expense")
+  @RequireModule("touchorbit", "reports")
+  async expense(
+    @CurrentOrganization() organizationId: string,
+    @Query() query: unknown,
+  ) {
+    const filters = this.parseFilters(query);
+    return this.reportResponse(
+      await this.reportsService.expense(organizationId, filters),
+      filters,
+    );
   }
 
   private parseFilters(query: unknown) {

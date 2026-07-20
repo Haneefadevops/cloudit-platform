@@ -192,6 +192,127 @@ export class ReportsService {
     return result.rows;
   }
 
+  async overtime(organizationId: string, filters: ReportFilters) {
+    const { params, employeeConditions } = this.employeeFilter(
+      organizationId,
+      filters,
+      "e",
+    );
+    const conditions = [
+      "ot.organization_id = $1::uuid",
+      "ot.date BETWEEN $2::date AND $3::date",
+      "ot.status <> 'rejected'",
+      ...employeeConditions,
+    ];
+    const result = await this.databaseService.query(
+      `SELECT e.id AS employee_id,
+              concat_ws(' ', e.first_name, e.last_name) AS employee_name,
+              d.name AS department_name, ot.date AS overtime_date,
+              ot.hours AS overtime_hours, ot.status AS overtime_status,
+              (ra.shift_id IS NOT NULL) AS had_roster_shift,
+              s.name AS shift_name, s.start_time AS scheduled_start,
+              s.end_time AS scheduled_end,
+              CASE WHEN ra.shift_id IS NULL THEN 'unscheduled_day' ELSE 'scheduled_day' END AS flag
+       FROM overtime_records ot
+       JOIN employees e ON e.id = ot.employee_id
+       LEFT JOIN departments d ON d.id = e.department_id
+       LEFT JOIN roster_assignments ra
+         ON ra.employee_id = ot.employee_id
+        AND ra.organization_id = ot.organization_id
+        AND ra.date = ot.date
+       LEFT JOIN shifts s ON s.id = ra.shift_id
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY flag DESC, ot.date DESC`,
+      params,
+    );
+    return result.rows;
+  }
+
+  async late(organizationId: string, filters: ReportFilters) {
+    const { params, employeeConditions } = this.employeeFilter(
+      organizationId,
+      filters,
+      "e",
+    );
+    const conditions = [
+      "e.organization_id = $1::uuid",
+      "e.termination_date IS NULL",
+      ...employeeConditions,
+    ];
+    const result = await this.databaseService.query(
+      `WITH first_clockins AS (
+         SELECT ce.employee_id, ce.timestamp::date AS work_date,
+                MIN(ce.timestamp) AS actual_clock_in
+         FROM clock_events ce
+         WHERE ce.organization_id = $1::uuid
+           AND ce.event_type = 'clock_in'
+           AND ce.timestamp::date BETWEEN $2::date AND $3::date
+         GROUP BY ce.employee_id, ce.timestamp::date
+       ), late_rows AS (
+         SELECT e.id AS employee_id,
+                concat_ws(' ', e.first_name, e.last_name) AS employee_name,
+                d.name AS department_name, fc.work_date,
+                to_char(fc.work_date, 'Dy') AS day_of_week,
+                s.name AS shift_name, s.start_time AS scheduled_start,
+                fc.actual_clock_in,
+                round(EXTRACT(EPOCH FROM (fc.actual_clock_in::time - s.start_time)) / 60)::int AS minutes_late
+         FROM employees e
+         LEFT JOIN departments d ON d.id = e.department_id
+         JOIN first_clockins fc ON fc.employee_id = e.id
+         JOIN roster_assignments ra
+           ON ra.employee_id = e.id
+          AND ra.organization_id = e.organization_id
+          AND ra.date = fc.work_date
+         JOIN shifts s ON s.id = ra.shift_id
+         JOIN organizations o ON o.id = e.organization_id
+         WHERE ${conditions.join(" AND ")}
+           AND EXTRACT(EPOCH FROM (fc.actual_clock_in::time - s.start_time)) / 60
+               > COALESCE(o.late_threshold_minutes, 5)
+       )
+       SELECT *,
+              CASE WHEN minutes_late > 30 THEN 'severe'
+                   WHEN minutes_late > 15 THEN 'moderate'
+                   ELSE 'mild' END AS severity,
+              COUNT(*) OVER (PARTITION BY employee_id)::int AS repeat_count
+       FROM late_rows
+       ORDER BY work_date DESC, minutes_late DESC`,
+      params,
+    );
+    return result.rows;
+  }
+
+  async expense(organizationId: string, filters: ReportFilters) {
+    const { params, employeeConditions } = this.employeeFilter(
+      organizationId,
+      filters,
+      "e",
+    );
+    const conditions = [
+      "ec.organization_id = $1::uuid",
+      "ec.claim_date BETWEEN $2::date AND $3::date",
+      ...employeeConditions,
+    ];
+    if (filters.status) {
+      params.push(filters.status);
+      conditions.push(`ec.status = $${params.length}`);
+    }
+    const result = await this.databaseService.query(
+      `SELECT ec.id, ec.employee_id,
+              concat_ws(' ', e.first_name, e.last_name) AS employee_name,
+              d.name AS department_name, ec.claim_date,
+              cat.name AS category_name, ec.amount, ec.currency,
+              ec.description, ec.status
+       FROM expense_claims ec
+       JOIN employees e ON e.id = ec.employee_id
+       LEFT JOIN departments d ON d.id = e.department_id
+       LEFT JOIN expense_categories cat ON cat.id = ec.category_id
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY ec.claim_date DESC, employee_name`,
+      params,
+    );
+    return result.rows;
+  }
+
   private async attendanceSummary(
     organizationId: string,
     filters: ReportFilters,
