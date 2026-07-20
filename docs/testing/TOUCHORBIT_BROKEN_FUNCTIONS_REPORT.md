@@ -888,7 +888,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0042 - Leave Approval Chain Save Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Settings
@@ -904,11 +904,11 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/settings-functional.spec.ts --grep "F24\\.2"`
 - **Last tested:** 2026-07-14
-- **Notes:** Applies to new leave approval routing, so it is go-live sensitive.
+- **Notes:** Phase 10 adds organization-scoped local GET/PATCH approval-config endpoints and migrates leave, overtime, and expense approval-chain reads/writes off Supabase. API/admin builds pass; the deployed F24.2 test still fails until these changes are deployed.
 
 ### BF-0043 - Branch Create Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Settings
@@ -924,11 +924,11 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/settings-functional.spec.ts --grep "F24\\.3"`
 - **Last tested:** 2026-07-14
-- **Notes:** This blocks managing office/location structure from production UI.
+- **Notes:** Phase 10 adds local branch create/update/soft-delete endpoints with organization scoping and migrates the settings UI writes to them. API/admin builds pass; the deployed F24.3 test still fails until these changes are deployed.
 
 ### BF-0044 - Department Create Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Settings
@@ -944,7 +944,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/settings-functional.spec.ts --grep "F24\\.4"`
 - **Last tested:** 2026-07-14
-- **Notes:** This blocks managing organization structure from production UI.
+- **Notes:** Phase 10 adds local department create/update/soft-delete endpoints with organization and branch validation, and migrates the settings UI writes to them. API/admin builds pass; the deployed F24.4 test still fails until these changes are deployed.
 
 ### BF-0045 - Employee Profile Phone Update Cannot Start
 
@@ -1201,6 +1201,12 @@ Add every failed/skipped/unverified function below using this template.
 | 2026-07-20 | Local build           | `npm.cmd run build --workspace=apps/touchorbit-admin-web`                                                                              | Passed  | Build output                                                                                                                                                                                                                                                                                                                                                                                           | Phase 9 report routing, response normalization, and empty-state handling compile; pre-existing lint warnings remain.                                                                                                           |
 | 2026-07-20 | Production TouchOrbit | `npx.cmd playwright test --config=e2e\\playwright.config.ts --project=chromium tests/admin/reports-functional.spec.ts`                 | Blocked | No report cases ran                                                                                                                                                                                                                                                                                                                                                                                    | Sandbox attempt could not reach production login (`EACCES`); approved retry produced no output and was stopped after exceeding the expected suite duration. Deployment retest remains pending.                                 |
 
+| 2026-07-20 | Local build | `npm.cmd run build --workspace=apps/touchorbit-api` | Passed | Build output | Phase 10 organization structure, approval config, security, expense-policy, leave-policy sync, and notification-preference APIs compile. |
+| 2026-07-20 | Local build | `npm.cmd run build --workspace=apps/touchorbit-admin-web` | Passed | Build output | Phase 10 settings UI local-API migrations compile; pre-existing lint warnings remain. |
+| 2026-07-20 | Local test | `npm.cmd test --workspace=apps/touchorbit-api -- --runInBand` | Passed | Jest output | Existing API test suite passed: 1 suite, 1 test. |
+| 2026-07-20 | Local test discovery | `npx.cmd playwright test --config=e2e\\playwright.config.ts --project=chromium tests/admin/settings-functional.spec.ts --list` | Passed | Playwright list output | Six settings workflows discovered, including new security-role and notification-preference persistence coverage. |
+| 2026-07-20 | Production TouchOrbit | `npx.cmd playwright test --config=e2e\\playwright.config.ts --project=chromium tests/admin/settings-functional.spec.ts` | Failed | `e2e/test-results/admin-settings-functional-*` | Pre-deployment Phase 10 retest: F24.1 passed; F24.2-F24.4 remained broken on the current deployment; new F24.5/F24.6 returned 404 because the local endpoints are not deployed yet. |
+
 ## Open Items By Portal
 
 ### Admin Portal
@@ -1214,10 +1220,6 @@ Add every failed/skipped/unverified function below using this template.
 - BF-0014 - Admin geofence create causes client-side exception.
 - BF-0018 - Leave balance adjustment API fails with parameter type error.
 - BF-0024 - Admin shift template status toggle does not complete.
-- BF-0041 - Core settings save does not persist.
-- BF-0042 - Leave approval chain save does not complete.
-- BF-0043 - Branch create does not complete.
-- BF-0044 - Department create does not complete.
 
 ### Employee Portal
 

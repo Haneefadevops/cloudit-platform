@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { apiGet, apiPatch, loginToApi } from '../helpers/touchorbit-api'
+import { apiGet, apiPatch, apiPost, loginToApi } from '../helpers/touchorbit-api'
 
 type OrganizationSettingsPayload = {
   organization?: {
@@ -7,6 +7,17 @@ type OrganizationSettingsPayload = {
     late_threshold_minutes?: number
   }
   overtimePolicy?: Record<string, unknown> | null
+}
+
+type SecurityPayload = {
+  users: Array<{ id: string; role: string }>
+  roles: Array<{ user_id: string; system_role: string }>
+}
+
+type NotificationPreference = {
+  notification_type: string
+  email_enabled: boolean
+  push_enabled: boolean
 }
 
 test.describe('Admin settings functional workflows', () => {
@@ -101,5 +112,46 @@ test.describe('Admin settings functional workflows', () => {
 
     await expect(page.getByText(/Department created/i).first()).toBeVisible({ timeout: 15000 })
     await expect(page.getByText(departmentName)).toBeVisible({ timeout: 15000 })
+  })
+
+  test('F24.5 persists a security role through the local API', async ({ request }) => {
+    const token = await loginToApi(request)
+    const security = await apiGet<SecurityPayload>(request, token, '/organizations/security')
+    const target = security.users.find(user => user.role !== 'owner')
+    test.skip(!target, 'No non-owner user is available for a safe role persistence check')
+
+    const explicit = security.roles.find(role => role.user_id === target!.id)?.system_role
+    const legacyRole = target!.role
+    const originalRole = explicit || (
+      ['admin', 'hr_admin', 'finance'].includes(legacyRole) ? 'admin' :
+      ['manager', 'dept_manager', 'branch_manager'].includes(legacyRole) ? 'manager' :
+      legacyRole === 'super_admin' ? 'super_admin' : 'employee'
+    )
+    await apiPatch(request, token, `/organizations/security/roles/${target!.id}`, {
+      system_role: originalRole,
+    })
+
+    const saved = await apiGet<SecurityPayload>(request, token, '/organizations/security')
+    expect(saved.roles.find(role => role.user_id === target!.id)?.system_role).toBe(originalRole)
+  })
+
+  test('F24.6 persists notification preferences through the local API', async ({ request }) => {
+    const token = await loginToApi(request)
+    const type = 'leave_submitted'
+    const preferences = await apiGet<NotificationPreference[]>(request, token, '/notifications/preferences')
+    const original = preferences.find(preference => preference.notification_type === type) || {
+      notification_type: type,
+      email_enabled: true,
+      push_enabled: true,
+    }
+    const updated = { ...original, email_enabled: !original.email_enabled }
+
+    try {
+      await apiPost(request, token, '/notifications/preferences', { preferences: [updated] })
+      const saved = await apiGet<NotificationPreference[]>(request, token, '/notifications/preferences')
+      expect(saved.find(preference => preference.notification_type === type)?.email_enabled).toBe(updated.email_enabled)
+    } finally {
+      await apiPost(request, token, '/notifications/preferences', { preferences: [original] }).catch(() => undefined)
+    }
   })
 })

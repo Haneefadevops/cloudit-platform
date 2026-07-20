@@ -95,4 +95,15 @@ export class NotificationsService {
       client.release();
     }
   }
+
+  async findPreferences(organizationId: string, userId: string) {
+    const result = await this.databaseService.query(
+      `SELECT notification_type, email_enabled, push_enabled
+       FROM notification_preferences
+       WHERE organization_id = $1::uuid AND user_id = $2::uuid
+       ORDER BY notification_type`,
+      [organizationId, userId],
+    );
+    return result.rows;
+  }
 }

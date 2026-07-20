@@ -132,4 +132,15 @@ export class NotificationsController {
     );
     return { ok: true, data: rows };
   }
+
+  @Get("preferences")
+  @RequireModule("touchorbit", "notifications")
+  @ApiOperation({ summary: "Get notification preferences" })
+  async getPreferences(
+    @CurrentOrganization() organizationId: string,
+    @CurrentUser("id") userId: string,
+  ) {
+    const rows = await this.notificationsService.findPreferences(organizationId, userId);
+    return { ok: true, data: rows };
+  }
 }

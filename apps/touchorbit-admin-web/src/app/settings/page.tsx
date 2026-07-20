@@ -289,11 +289,9 @@ export default function SettingsPage() {
   async function loadApprovalConfig() {
     setApprovalLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('expense_approval_config')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .single()
+      const result = await api.get<any>('/organizations/approval-config/expense')
+      if (!result.ok) throw new Error(result.error)
+      const data = result.data
       
       if (data) {
         setApprovalConfig({
@@ -315,11 +313,9 @@ export default function SettingsPage() {
   async function loadLeaveApprovalConfig() {
     setLeaveApprovalLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('leave_approval_config')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .single()
+      const result = await api.get<any>('/organizations/approval-config/leave')
+      if (!result.ok) throw new Error(result.error)
+      const data = result.data
       
       if (data) {
         setLeaveApprovalConfig({
@@ -341,11 +337,9 @@ export default function SettingsPage() {
   async function loadOvertimeApprovalConfig() {
     setOvertimeApprovalLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('overtime_approval_config')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .single()
+      const result = await api.get<any>('/organizations/approval-config/overtime')
+      if (!result.ok) throw new Error(result.error)
+      const data = result.data
       
       if (data) {
         setOvertimeApprovalConfig({
@@ -367,15 +361,8 @@ export default function SettingsPage() {
   async function handleSaveApprovalConfig() {
     setApprovalSaving(true)
     try {
-      const { error } = await supabase
-        .from('expense_approval_config')
-        .upsert({
-          organization_id: organizationId,
-          ...approvalConfig,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'organization_id' })
-
-      if (error) throw error
+      const result = await api.patch('/organizations/approval-config/expense', approvalConfig)
+      if (!result.ok) throw new Error(result.error)
       toast.success('Approval chain updated')
     } catch (error) {
       console.error('Error saving approval config:', error)
@@ -388,15 +375,8 @@ export default function SettingsPage() {
   async function handleSaveLeaveApprovalConfig() {
     setLeaveApprovalSaving(true)
     try {
-      const { error } = await supabase
-        .from('leave_approval_config')
-        .upsert({
-          organization_id: organizationId,
-          ...leaveApprovalConfig,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'organization_id' })
-
-      if (error) throw error
+      const result = await api.patch('/organizations/approval-config/leave', leaveApprovalConfig)
+      if (!result.ok) throw new Error(result.error)
       toast.success('Leave approval chain updated')
     } catch (error) {
       console.error('Error saving leave approval config:', error)
@@ -409,15 +389,8 @@ export default function SettingsPage() {
   async function handleSaveOvertimeApprovalConfig() {
     setOvertimeApprovalSaving(true)
     try {
-      const { error } = await supabase
-        .from('overtime_approval_config')
-        .upsert({
-          organization_id: organizationId,
-          ...overtimeApprovalConfig,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'organization_id' })
-
-      if (error) throw error
+      const result = await api.patch('/organizations/approval-config/overtime', overtimeApprovalConfig)
+      if (!result.ok) throw new Error(result.error)
       toast.success('Overtime approval chain updated')
     } catch (error) {
       console.error('Error saving overtime approval config:', error)
@@ -439,32 +412,17 @@ export default function SettingsPage() {
   async function loadSecurityData() {
     setSecurityLoading(true)
     try {
-      const [
-        { data: users },
-        { data: roles },
-        { data: permissionRows },
-        { data: groups },
-        { data: groupPermRows },
-        { data: userGroupRows },
-        { data: auditRows },
-      ] = await Promise.all([
-        supabase.from('users').select('id, email, first_name, last_name, role').eq('organization_id', organizationId).order('first_name'),
-        supabase.from('user_security_roles').select('*').eq('organization_id', organizationId),
-        supabase.from('permissions').select('*').order('module').order('action'),
-        supabase.from('permission_groups').select('*').or(`organization_id.eq.${organizationId},organization_id.is.null`).order('name'),
-        supabase.from('permission_group_permissions').select('*'),
-        supabase.from('user_permission_groups').select('*').eq('organization_id', organizationId),
-        supabase.from('security_audit_log').select('*').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(30),
-      ])
-
-      setSecurityUsers(users || [])
-      setSecurityRoles(roles || [])
-      setPermissions(permissionRows || [])
-      setPermissionGroups(groups || [])
-      setGroupPermissions(groupPermRows || [])
-      setUserPermissionGroups(userGroupRows || [])
-      setSecurityAuditLog(auditRows || [])
-      setSelectedGroupId((current) => current || groups?.[0]?.id || '')
+      const result = await api.get<any>('/organizations/security')
+      if (!result.ok) throw new Error(result.error)
+      const data = result.data || {}
+      setSecurityUsers(data.users || [])
+      setSecurityRoles(data.roles || [])
+      setPermissions(data.permissions || [])
+      setPermissionGroups(data.groups || [])
+      setGroupPermissions(data.groupPermissions || [])
+      setUserPermissionGroups(data.assignments || [])
+      setSecurityAuditLog(data.audit || [])
+      setSelectedGroupId((current) => current || data.groups?.[0]?.id || '')
     } catch (error) {
       console.error('Error loading security data:', error)
       toast.error('Failed to load security roles')
@@ -479,30 +437,9 @@ export default function SettingsPage() {
       return
     }
 
-    const legacyRole = systemRole
-    const { error: roleError } = await supabase
-      .from('user_security_roles')
-      .upsert({
-        organization_id: organizationId,
-        user_id: targetUserId,
-        system_role: systemRole,
-        created_by: userId,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'organization_id,user_id' })
-
-    if (roleError) {
+    const result = await api.patch(`/organizations/security/roles/${targetUserId}`, { system_role: systemRole })
+    if (!result.ok) {
       toast.error('Failed to update security role')
-      return
-    }
-
-    const { error: userError } = await supabase
-      .from('users')
-      .update({ role: legacyRole })
-      .eq('id', targetUserId)
-      .eq('organization_id', organizationId)
-
-    if (userError) {
-      toast.error('Security role saved, but legacy role sync failed')
       return
     }
 
@@ -516,24 +453,16 @@ export default function SettingsPage() {
       return
     }
 
-    const { data, error } = await supabase
-      .from('permission_groups')
-      .insert({
-        organization_id: organizationId,
-        name: groupForm.name.trim(),
-        description: groupForm.description.trim() || null,
-        created_by: userId,
-      })
-      .select('id')
-      .single()
-
-    if (error) {
+    const result = await api.post<any>('/organizations/security/permission-groups', {
+      name: groupForm.name.trim(), description: groupForm.description.trim() || null,
+    })
+    if (!result.ok) {
       toast.error('Failed to create permission group')
       return
     }
 
     setGroupForm({ name: '', description: '' })
-    setSelectedGroupId(data.id)
+    setSelectedGroupId(result.data?.id || '')
     toast.success('Permission group created')
     loadSecurityData()
   }
@@ -547,12 +476,10 @@ export default function SettingsPage() {
       return
     }
 
-    const query = supabase.from('permission_group_permissions')
-    const { error } = enabled
-      ? await query.insert({ group_id: selectedGroupId, permission_key: permissionKey })
-      : await query.delete().eq('group_id', selectedGroupId).eq('permission_key', permissionKey)
-
-    if (error) {
+    const result = await api.patch(`/organizations/security/permission-groups/${selectedGroupId}/permissions`, {
+      permission_key: permissionKey, enabled,
+    })
+    if (!result.ok) {
       toast.error('Failed to update group permission')
       return
     }
@@ -571,16 +498,13 @@ export default function SettingsPage() {
       return
     }
 
-    const { error } = await supabase.from('user_permission_groups').insert({
-      organization_id: organizationId,
+    const result = await api.post('/organizations/security/assignments', {
       user_id: assignUserId,
       group_id: assignGroupId,
       scope_type: assignScopeType,
       scope_id: assignScopeType === 'organization' || assignScopeType === 'self' ? null : assignScopeId,
-      created_by: userId,
     })
-
-    if (error) {
+    if (!result.ok) {
       toast.error('Failed to assign permission group')
       return
     }
@@ -593,8 +517,8 @@ export default function SettingsPage() {
   }
 
   async function handleRemovePermissionGroupAssignment(assignmentId: string) {
-    const { error } = await supabase.from('user_permission_groups').delete().eq('id', assignmentId)
-    if (error) {
+    const result = await api.del(`/organizations/security/assignments/${assignmentId}`)
+    if (!result.ok) {
       toast.error('Failed to remove assignment')
       return
     }
@@ -621,10 +545,7 @@ export default function SettingsPage() {
     setPolicySaving(categoryId)
     try {
       const toNum = (v: any) => (v === '' || v === null || v === undefined) ? null : Number(v)
-      const { error } = await supabase
-        .from('expense_policies')
-        .upsert({
-          organization_id: organizationId,
+      const result = await api.patch('/organizations/expense-policy', {
           category_id: categoryId,
           scope_type: activePolicyTab,
           scope_id: activePolicyTab === 'organization' ? organizationId : selectedScopeId,
@@ -632,12 +553,8 @@ export default function SettingsPage() {
           limit_per_month: toNum(policyData.limit_per_month),
           auto_approve_below: toNum(policyData.auto_approve_below),
           receipt_required: policyData.receipt_required,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'organization_id, category_id, scope_type, scope_id'
         })
-
-      if (error) throw error
+      if (!result.ok) throw new Error(result.error)
       toast.success('Policy updated')
       loadExpensePolicies()
     } catch (error) {
@@ -661,14 +578,14 @@ export default function SettingsPage() {
   async function handleSaveBranch(e: React.FormEvent) {
     e.preventDefault()
     try {
-      const data = { ...branchForm, organization_id: organizationId }
+      const data = { ...branchForm }
       if (editingBranch) {
-        const { error } = await supabase.from('branches').update(data).eq('id', editingBranch.id)
-        if (error) throw error
+        const result = await api.patch(`/organizations/branches/${editingBranch.id}`, data)
+        if (!result.ok) throw new Error(result.error)
         toast.success('Branch updated')
       } else {
-        const { error } = await supabase.from('branches').insert(data)
-        if (error) throw error
+        const result = await api.post('/organizations/branches', data)
+        if (!result.ok) throw new Error(result.error)
         toast.success('Branch created')
       }
       setShowBranchDialog(false)
@@ -686,15 +603,14 @@ export default function SettingsPage() {
       const data = {
         ...departmentForm,
         branch_id: departmentForm.branch_id || null,
-        organization_id: organizationId
       }
       if (editingDepartment) {
-        const { error } = await supabase.from('departments').update(data).eq('id', editingDepartment.id)
-        if (error) throw error
+        const result = await api.patch(`/organizations/departments/${editingDepartment.id}`, data)
+        if (!result.ok) throw new Error(result.error)
         toast.success('Department updated')
       } else {
-        const { error } = await supabase.from('departments').insert(data)
-        if (error) throw error
+        const result = await api.post('/organizations/departments', data)
+        if (!result.ok) throw new Error(result.error)
         toast.success('Department created')
       }
       setShowDepartmentDialog(false)
@@ -794,16 +710,14 @@ export default function SettingsPage() {
     setSyncLoading(true)
     try {
       const year = new Date().getFullYear()
-      const { data: count, error } = await supabase.rpc('sync_leave_policy_to_employees', {
-        p_org_id: organizationId,
-        p_year: year,
-        p_annual_days: settings.annual_leave_days,
-        p_casual_days: settings.casual_leave_days,
-        p_sick_days: settings.sick_leave_days
+      const result = await api.post<{ count: number }>('/organizations/sync-leave-policy', {
+        year,
+        annual_days: settings.annual_leave_days,
+        casual_days: settings.casual_leave_days,
+        sick_days: settings.sick_leave_days,
       })
-
-      if (error) throw error
-      toast.success(`Policy synced for ${count} employee balances`)
+      if (!result.ok) throw new Error(result.error)
+      toast.success(`Policy synced for ${result.data?.count || 0} employee balances`)
       setShowSyncDialog(false)
     } catch (error: any) {
       console.error('Sync error:', error)

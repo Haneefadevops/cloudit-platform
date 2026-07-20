@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Mail, Bell, Save, Check } from 'lucide-react'
+import { api } from '@/lib/api'
 
 interface Preference {
   notification_type: string
@@ -51,11 +52,10 @@ export function NotificationPreferences() {
   async function loadPreferences() {
     setLoading(true)
     try {
-      const res = await fetch('/api/notifications/preferences')
-      if (!res.ok) throw new Error('Failed')
-      const json = await res.json()
+      const result = await api.get<Preference[]>('/notifications/preferences')
+      if (!result.ok) throw new Error(result.error)
       const map: Record<string, Preference> = {}
-      ;(json.data || []).forEach((p: Preference) => {
+      ;(result.data || []).forEach((p: Preference) => {
         map[p.notification_type] = p
       })
       // Ensure all known types have an entry
@@ -86,12 +86,8 @@ export function NotificationPreferences() {
         email_enabled: p.email_enabled,
         push_enabled: p.push_enabled,
       }))
-      const res = await fetch('/api/notifications/preferences', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preferences: payload }),
-      })
-      if (!res.ok) throw new Error('Failed')
+      const result = await api.post('/notifications/preferences', { preferences: payload })
+      if (!result.ok) throw new Error(result.error)
       toast.success('Preferences saved')
     } catch {
       toast.error('Failed to save preferences')

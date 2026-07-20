@@ -1,8 +1,11 @@
 import {
   BadRequestException,
   Controller,
+  Delete,
   Get,
+  Param,
   Patch,
+  Post,
   Body,
   UseGuards,
 } from "@nestjs/common";
@@ -10,6 +13,7 @@ import { ApiTags, ApiOperation } from "@nestjs/swagger";
 import { SessionAuthGuard } from "../common/guards/session-auth.guard";
 import { RequireModule } from "../common/decorators/require-module.decorator";
 import { CurrentOrganization } from "../common/decorators/current-organization.decorator";
+import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { OrganizationsService } from "./organizations.service";
 import { z } from "zod";
 
@@ -46,6 +50,50 @@ const updateSettingsSchema = z.object({
     .optional(),
 });
 
+const structureSchema = z.object({
+  name: z.string().trim().min(1),
+  code: z.string().trim().nullable().optional(),
+  city: z.string().trim().nullable().optional(),
+  address: z.string().trim().nullable().optional(),
+  branch_id: z.string().uuid().nullable().optional(),
+});
+
+const approvalConfigSchema = z.object({
+  auto_approve_below_days: z.number().optional(),
+  level1_min_days: z.number().optional(),
+  level2_min_days: z.number().optional(),
+  level3_min_days: z.number().optional(),
+  auto_approve_below_hours: z.number().optional(),
+  level1_min_hours: z.number().optional(),
+  level2_min_hours: z.number().optional(),
+  level3_min_hours: z.number().optional(),
+  auto_approve_below: z.number().optional(),
+  level1_min_amount: z.number().optional(),
+  level2_min_amount: z.number().optional(),
+  level3_min_amount: z.number().optional(),
+  parallel_approval: z.boolean().optional(),
+  skip_if_no_manager: z.boolean().optional(),
+});
+
+const systemRoleSchema = z.object({
+  system_role: z.enum(["owner", "super_admin", "admin", "manager", "employee"]),
+});
+const permissionGroupSchema = z.object({ name: z.string().trim().min(1), description: z.string().trim().nullable().optional() });
+const permissionToggleSchema = z.object({ permission_key: z.string().min(1), enabled: z.boolean() });
+const permissionAssignmentSchema = z.object({
+  user_id: z.string().uuid(), group_id: z.string().uuid(),
+  scope_type: z.enum(["organization", "branch", "department", "self"]),
+  scope_id: z.string().uuid().nullable().optional(),
+});
+const expensePolicySchema = z.object({
+  category_id: z.string().uuid(), scope_type: z.enum(["organization", "branch", "department", "employee"]),
+  scope_id: z.string().uuid(), limit_per_claim: z.number().nullable(), limit_per_month: z.number().nullable(),
+  auto_approve_below: z.number().nullable(), receipt_required: z.boolean(),
+});
+const syncLeavePolicySchema = z.object({
+  year: z.number().int(), annual_days: z.number(), casual_days: z.number(), sick_days: z.number(),
+});
+
 @ApiTags("organizations")
 @Controller("organizations")
 @UseGuards(SessionAuthGuard)
@@ -75,6 +123,141 @@ export class OrganizationsController {
     const rows =
       await this.organizationsService.findDepartments(organizationId);
     return { ok: true, data: rows };
+  }
+
+  @Post("branches")
+  @RequireModule("touchorbit", "organizations")
+  async createBranch(@CurrentOrganization() organizationId: string, @Body() body: unknown) {
+    const parsed = structureSchema.pick({ name: true, code: true, city: true, address: true }).safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid branch payload");
+    return { ok: true, data: await this.organizationsService.createBranch(organizationId, parsed.data) };
+  }
+
+  @Patch("branches/:id")
+  @RequireModule("touchorbit", "organizations")
+  async updateBranch(@CurrentOrganization() organizationId: string, @Param("id") id: string, @Body() body: unknown) {
+    const parsed = structureSchema.pick({ name: true, code: true, city: true, address: true }).safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid branch payload");
+    return { ok: true, data: await this.organizationsService.updateBranch(organizationId, id, parsed.data) };
+  }
+
+  @Delete("branches/:id")
+  @RequireModule("touchorbit", "organizations")
+  async deleteBranch(@CurrentOrganization() organizationId: string, @Param("id") id: string) {
+    return { ok: true, data: await this.organizationsService.deleteBranch(organizationId, id) };
+  }
+
+  @Post("departments")
+  @RequireModule("touchorbit", "organizations")
+  async createDepartment(@CurrentOrganization() organizationId: string, @Body() body: unknown) {
+    const parsed = structureSchema.pick({ name: true, code: true, branch_id: true }).safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid department payload");
+    return { ok: true, data: await this.organizationsService.createDepartment(organizationId, parsed.data) };
+  }
+
+  @Patch("departments/:id")
+  @RequireModule("touchorbit", "organizations")
+  async updateDepartment(@CurrentOrganization() organizationId: string, @Param("id") id: string, @Body() body: unknown) {
+    const parsed = structureSchema.pick({ name: true, code: true, branch_id: true }).safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid department payload");
+    return { ok: true, data: await this.organizationsService.updateDepartment(organizationId, id, parsed.data) };
+  }
+
+  @Delete("departments/:id")
+  @RequireModule("touchorbit", "organizations")
+  async deleteDepartment(@CurrentOrganization() organizationId: string, @Param("id") id: string) {
+    return { ok: true, data: await this.organizationsService.deleteDepartment(organizationId, id) };
+  }
+
+  @Get("approval-config/:type")
+  @RequireModule("touchorbit", "organizations")
+  async getApprovalConfig(@CurrentOrganization() organizationId: string, @Param("type") type: string) {
+    return { ok: true, data: await this.organizationsService.getApprovalConfig(organizationId, type) };
+  }
+
+  @Patch("approval-config/:type")
+  @RequireModule("touchorbit", "organizations")
+  async updateApprovalConfig(@CurrentOrganization() organizationId: string, @Param("type") type: string, @Body() body: unknown) {
+    const parsed = approvalConfigSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid approval config payload");
+    return { ok: true, data: await this.organizationsService.updateApprovalConfig(organizationId, type, parsed.data) };
+  }
+
+  @Get("security")
+  @RequireModule("touchorbit", "organizations")
+  async getSecurity(@CurrentOrganization() organizationId: string) {
+    return { ok: true, data: await this.organizationsService.getSecurity(organizationId) };
+  }
+
+  @Patch("security/roles/:userId")
+  @RequireModule("touchorbit", "organizations")
+  async updateSecurityRole(
+    @CurrentOrganization() organizationId: string,
+    @CurrentUser("id") actorUserId: string,
+    @Param("userId") targetUserId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = systemRoleSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid security role payload");
+    return { ok: true, data: await this.organizationsService.updateSecurityRole(organizationId, actorUserId, targetUserId, parsed.data.system_role) };
+  }
+
+  @Post("security/permission-groups")
+  @RequireModule("touchorbit", "organizations")
+  async createPermissionGroup(
+    @CurrentOrganization() organizationId: string,
+    @CurrentUser("id") actorUserId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = permissionGroupSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid permission group payload");
+    return { ok: true, data: await this.organizationsService.createPermissionGroup(organizationId, actorUserId, parsed.data) };
+  }
+
+  @Patch("security/permission-groups/:groupId/permissions")
+  @RequireModule("touchorbit", "organizations")
+  async toggleGroupPermission(
+    @CurrentOrganization() organizationId: string,
+    @Param("groupId") groupId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = permissionToggleSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid permission payload");
+    return { ok: true, data: await this.organizationsService.toggleGroupPermission(organizationId, groupId, parsed.data.permission_key, parsed.data.enabled) };
+  }
+
+  @Post("security/assignments")
+  @RequireModule("touchorbit", "organizations")
+  async assignPermissionGroup(
+    @CurrentOrganization() organizationId: string,
+    @CurrentUser("id") actorUserId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = permissionAssignmentSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid permission assignment payload");
+    return { ok: true, data: await this.organizationsService.assignPermissionGroup(organizationId, actorUserId, parsed.data) };
+  }
+
+  @Delete("security/assignments/:id")
+  @RequireModule("touchorbit", "organizations")
+  async removePermissionGroup(@CurrentOrganization() organizationId: string, @Param("id") id: string) {
+    return { ok: true, data: await this.organizationsService.removePermissionGroup(organizationId, id) };
+  }
+
+  @Patch("expense-policy")
+  @RequireModule("touchorbit", "organizations")
+  async updateExpensePolicy(@CurrentOrganization() organizationId: string, @Body() body: unknown) {
+    const parsed = expensePolicySchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid expense policy payload");
+    return { ok: true, data: await this.organizationsService.updateExpensePolicy(organizationId, parsed.data) };
+  }
+
+  @Post("sync-leave-policy")
+  @RequireModule("touchorbit", "organizations")
+  async syncLeavePolicy(@CurrentOrganization() organizationId: string, @Body() body: unknown) {
+    const parsed = syncLeavePolicySchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid leave policy payload");
+    return { ok: true, data: await this.organizationsService.syncLeavePolicy(organizationId, parsed.data) };
   }
 
   @Get("settings")
