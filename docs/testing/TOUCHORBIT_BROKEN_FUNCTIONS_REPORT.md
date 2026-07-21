@@ -160,7 +160,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0007 - Employee Org Chart Shows Skeleton Without Content
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Org Chart
@@ -176,7 +176,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/pages.spec.ts`
 - **Last tested:** 2026-07-21
-- **Notes:** Phase 11 replaces the hanging browser Supabase RPC with a tenant-scoped local API hierarchy query, Dexie cache fallback, and explicit empty state. The pre-deployment production retest still shows the old skeleton behavior pending deployment.
+- **Notes:** Phase 12 full employee regression passed `E2 page loads: /org-chart`; the local API hierarchy or meaningful empty state now renders.
 
 ### BF-0008 - Employee Payslips Route Is Flaky And Sometimes Redirects To Login
 
@@ -456,7 +456,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0021 - Admin Calendar Task Create Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Calendar / Tasks
@@ -542,7 +542,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0025 - Employee Personal Training Edit Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** Medium
 - **Portal:** Employee
 - **Module:** Training
@@ -558,7 +558,7 @@ Add every failed/skipped/unverified function below using this template.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/training-functional.spec.ts`
 - **Last tested:** 2026-07-21
-- **Notes:** Phase 11 normalizes stored timestamps to `YYYY-MM-DD` before populating edit date controls. The pre-deployment production retest still reproduces the stale-title failure pending deployment; the E2E cleanup hook removed generated records.
+- **Notes:** Phase 12 full employee regression passed the complete create/edit/delete personal-training workflow.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -606,7 +606,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0028 - Admin Attendance Correction Approve Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Attendance Corrections
@@ -628,7 +628,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0029 - Admin Document Template Create Does Not Submit
 
-- **Status:** Open
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Documents
@@ -648,7 +648,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0030 - Admin Document Template Edit Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** Medium
 - **Portal:** Admin
 - **Module:** Documents
@@ -668,7 +668,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0031 - Admin Document Template Delete Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** Medium
 - **Portal:** Admin
 - **Module:** Documents
@@ -688,7 +688,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0032 - Employee Assigned Documents Do Not Display
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Documents
@@ -703,12 +703,12 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Keep assigned-document reads on the local API identity path and retest against the deployed `/employees/me` document filtering behavior.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/documents-functional.spec.ts --grep "EF21\\.1"`
-- **Last tested:** 2026-07-17 local build
-- **Notes:** Employee document page remains on the local API path and employee web build passed after the signing flow was moved fully off Supabase storage. Deployment E2E retest is pending.
+- **Last tested:** 2026-07-21
+- **Notes:** Phase 12 corrected an ambiguous heading assertion and the deployed employee document view test passed.
 
 ### BF-0033 - Employee Document Signing Cannot Be Completed
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Documents
@@ -723,12 +723,12 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Fix employee document visibility first, replace signature upload with a local API path, and retest the full sign flow.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/documents-functional.spec.ts --grep "EF21\\.2"`
-- **Last tested:** 2026-07-17 local build
-- **Notes:** Employee signing now stores the canvas signature data URL through the local document PATCH API, updates the open viewer with the signed response, and avoids Supabase storage. Employee web build passed. Deployment E2E retest is pending.
+- **Last tested:** 2026-07-21
+- **Notes:** Phase 12 deployed retest passed document signing and verified the signed state.
 
 ### BF-0034 - Attendance Report Crashes After Generate
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Reports
@@ -748,7 +748,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0035 - Leave Report Crashes After Generate
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Reports
@@ -768,7 +768,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0036 - Payroll Report Crashes After Generate
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Reports
@@ -788,7 +788,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0037 - Roster Adherence Report Returns HTTP 500
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Reports
@@ -808,7 +808,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0038 - Overtime Report Returns HTTP 500
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Reports
@@ -828,7 +828,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0039 - Late Arrivals Report Returns HTTP 500
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Reports
@@ -848,7 +848,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0040 - Expense Report Returns HTTP 500
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Reports
@@ -888,7 +888,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0042 - Leave Approval Chain Save Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Settings
@@ -908,7 +908,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0043 - Branch Create Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Settings
@@ -928,7 +928,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0044 - Department Create Does Not Complete
 
-- **Status:** Ready For Retest
+- **Status:** Fixed
 - **Severity:** High
 - **Portal:** Admin
 - **Module:** Settings
@@ -1068,7 +1068,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0051 - Employee Self Performance Review Cannot Be Submitted
 
-- **Status:** Fixed
+- **Status:** Open
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Performance
@@ -1083,12 +1083,12 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Migrate pending self-review lookup and submit action to the local performance API (`POST /performance/reviews/:id/self`), ensure profile loads with optional review data, and retest self-review status transition.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/performance-functional.spec.ts`
-- **Last tested:** 2026-07-15
-- **Notes:** Deployed EF27.1 retest passed. Pending reviews load, the dialog stays above mobile navigation, submission succeeds, and the review advances to `pending_manager`.
+- **Last tested:** 2026-07-21
+- **Notes:** Reopened by the Phase 12 full employee gate: all three attempts failed because the seeded `pending_self` review did not render on the employee profile.
 
 ### BF-0052 - Employee Attendance Page Is Flaky And Renders No Content
 
-- **Status:** Open
+- **Status:** Fixed
 - **Severity:** Medium
 - **Portal:** Employee
 - **Module:** Attendance
@@ -1105,6 +1105,41 @@ Add every failed/skipped/unverified function below using this template.
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/pages.spec.ts --grep attendance`
 - **Last tested:** 2026-07-15
 - **Notes:** Classified as flaky because the Playwright retry passed; still tracked because a blank page is a production risk.
+
+### BF-0053 - Admin Encashment Approve And Reject Return 404
+
+- **Status:** Open
+- **Severity:** High
+- **Portal:** Admin
+- **Module:** Leave / Encashment
+- **Route:** `/encashment`
+- **Function:** Approve or reject a pending encashment request
+- **Test file:** `e2e/tests/admin/encashment-functional.spec.ts`
+- **Test name:** `F7.3 approves a seeded encashment request from the admin UI`, `F7.4 rejects a seeded encashment request from the admin UI`
+- **Expected:** The admin decision action should return success, update request status, and show the corresponding success message.
+- **Actual:** After correcting the ambiguous employee-search selector, both approve and reject actions consistently POST to the request route and receive HTTP `404`.
+- **Evidence:** `e2e/test-results/admin-encashment-functional-*/error-context.md` and Phase 12 Playwright output.
+- **Likely cause:** The admin UI decision URL or method does not match the deployed encashment review API contract.
+- **Fix plan:** Align the admin decision call with the local API controller, add API contract coverage, and rerun both decision cases.
+- **Owner:** Unassigned
+- **Retest command:** `npx.cmd playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/encashment-functional.spec.ts`
+- **Last tested:** 2026-07-21
+- **Notes:** Request seeding and list filtering succeed; only the approve/reject decision contract remains broken.
+
+## Phase 12 Go-Live Gate
+
+**Decision: NO-GO as of 2026-07-21.** Authentication, core page loading, reports, settings, employee requests, corrections, documents, search, training, and mobile-width smoke coverage are substantially healthy, but open High-severity blockers mean the documented go-live criteria are not met.
+
+| Required cross-portal flow | Gate result | Evidence |
+| --- | --- | --- |
+| Employee leave submit -> admin review -> employee notification/history | Partial | Employee submit and admin approve/reject tests passed independently; the final employee notification/history transition was not proven as one correlated request. |
+| Employee overtime submit -> admin review -> employee notification/history | Partial | Employee submit passed; the complete review and correlated notification/history chain is not covered, and admin manual overtime remains broken under BF-0022. |
+| Employee correction submit -> admin review -> attendance/history | Partial | Employee submit and admin approval passed independently; the final attendance/history transition was not correlated end to end. |
+| Admin document send -> employee view/sign -> admin signed status | Partial | Admin send and employee view/sign passed; the final admin signed-status assertion is not covered. |
+| Admin roster publish -> employee acknowledge/flag -> admin state | Blocked | Admin roster assignment/state verification fails under BF-0026, so publish and acknowledgement cannot be certified. |
+| Admin payroll process -> employee payslip | Blocked | Payroll processing still fails under BF-0050, so downstream payslip availability cannot be certified. |
+
+Additional final-gate blockers: BF-0004 dashboard widget persistence, BF-0019 expense category create/edit, BF-0047/BF-0048 employee calendar tasks, BF-0051 employee self-review, and BF-0053 encashment decisions. Employee availability and notifications passed only after retry and remain flaky release risks.
 
 ## Run History
 
@@ -1216,37 +1251,34 @@ Add every failed/skipped/unverified function below using this template.
 | 2026-07-21 | Production TouchOrbit | `npx.cmd playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/training-functional.spec.ts tests/employee/search-functional.spec.ts tests/employee/mobile-critical.spec.ts` | Failed | `e2e/test-results/employee-training-*`, `e2e/test-results/employee-search-*` | Six mobile-width critical routes passed. Training edit and API-backed search remained pre-deployment failures pending rollout of the Phase 11 frontend. |
 | 2026-07-21 | Production TouchOrbit | `npx.cmd playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/audit.spec.ts --grep "22.3"` | Passed | Playwright output | Corrected audit export permission/row-state assertion passed: 4 tests including setup/seed/teardown. |
 
+| 2026-07-21 | Production TouchOrbit | `npm.cmd run e2e:seed` | Passed | Playwright output | Approved network retry passed setup and seed: 2 tests passed. |
+| 2026-07-21 | Production TouchOrbit | `npm.cmd run e2e:test:admin` | Failed | `e2e/test-results/`, `playwright-report/` | Phase 12 full admin gate: 82 passed, 8 failed, 1 flaky. Reports, settings, leave decisions, corrections, documents, employees, and core pages passed; dashboard, encashment, expense category, manual overtime, payroll processing, roster assignment, and one shift selector failed. |
+| 2026-07-21 | Production TouchOrbit | `npm.cmd run e2e:test:employee` | Failed | `e2e/test-results/`, `playwright-report/` | Phase 12 full employee gate: 40 passed, 4 failed, 2 flaky. Requests, corrections, expenses, pages, org chart, search, training, profile, and document signing passed; calendar tasks, document-view selector, and self review failed. |
+| 2026-07-21 | Production TouchOrbit | `npx.cmd playwright test ... encashment-functional.spec.ts shifts-functional.spec.ts documents-functional.spec.ts` | Failed | `e2e/test-results/` | Corrected strict selectors: shift CRUD/status and employee document view/sign passed; encashment approve/reject consistently returned HTTP 404. |
+
 ## Open Items By Portal
 
 ### Admin Portal
 
-- BF-0005 - Employee detail page stays on Loading Profile.
-- BF-0009 - Admin Add Employee submit does not complete.
-- BF-0011 - Admin leave approve calls missing endpoint.
-- BF-0012 - Admin leave reject calls missing endpoint.
-- BF-0013 - Admin announcement create does not complete.
-- BF-0014 - Admin geofence create causes client-side exception.
-- BF-0018 - Leave balance adjustment API fails with parameter type error.
-- BF-0024 - Admin shift template status toggle does not complete.
+- BF-0004 - Dashboard widget removal does not persist.
+- BF-0019 - Expense category create/edit does not complete.
+- BF-0022 - Manual overtime entry does not complete.
+- BF-0026 - Roster assignment state is not returned after create.
+- BF-0050 - Payroll process workflow does not complete.
+- BF-0053 - Encashment approve/reject returns HTTP 404.
 
 ### Employee Portal
 
-- BF-0010 - Employee leave submit does not complete.
-- BF-0015 - Employee comp-off submit does not complete.
-- BF-0016 - Employee encashment submit does not complete.
-- BF-0020 - Employee expense claim has no category options.
-- BF-0023 - Employee overtime submit does not complete.
-- BF-0027 - Employee attendance correction submit does not complete.
-- BF-0045 - Employee profile phone update cannot start.
-- BF-0046 - Employee profile emergency contacts do not render.
 - BF-0047 - Employee calendar task create crashes page.
 - BF-0048 - Employee calendar pending task cannot be completed.
+- BF-0049 - Employee availability save is flaky.
 - BF-0051 - Employee self performance review cannot be submitted.
-- BF-0052 - Employee attendance page is flaky and renders no content.
 
 ### Cross-Portal Workflows
 
-No broken cross-portal workflows recorded yet.
+- Leave, overtime, corrections, and documents are only partially certified because their final correlated downstream state was not asserted.
+- Roster publish/acknowledgement is blocked by BF-0026.
+- Payroll-to-payslip is blocked by BF-0050.
 
 ## Rules For Updating This Report
 

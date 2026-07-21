@@ -39,7 +39,7 @@ test.describe('Admin shift template functional workflows', () => {
     await expect(page.getByText(/Shift created/i)).toBeVisible({ timeout: 15000 })
     await expect(page.getByText(originalName)).toBeVisible({ timeout: 15000 })
 
-    const card = page.locator('div').filter({ hasText: originalName }).filter({ hasText: /active/i }).first()
+    const card = page.locator('[data-testid^="shift-card-"]').filter({ hasText: originalName })
     await card.getByRole('button', { name: /edit/i }).click()
     await expect(page.getByText(/Edit Shift/i)).toBeVisible()
     const label = page.getByPlaceholder(/morning operational/i)
@@ -57,7 +57,7 @@ test.describe('Admin shift template functional workflows', () => {
     await expect(page.getByText(/Shift updated/i)).toBeVisible({ timeout: 15000 })
     await expect(page.getByText(updatedName)).toBeVisible({ timeout: 15000 })
 
-    const updatedCard = page.locator('div').filter({ hasText: updatedName }).filter({ hasText: /active/i }).first()
+    const updatedCard = page.locator('[data-testid^="shift-card-"]').filter({ hasText: updatedName })
     page.once('dialog', dialog => dialog.accept())
     const deleteResponse = page.waitForResponse(
       response =>

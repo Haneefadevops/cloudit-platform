@@ -81,7 +81,7 @@ test.describe('Employee documents functional workflows', () => {
       await expect(page).not.toHaveURL(/\/login/)
       await expect(page.getByText(title)).toBeVisible({ timeout: 15000 })
       await page.getByText(title).click()
-      await expect(page.getByRole('heading', { name: title })).toBeVisible()
+      await expect(page.getByRole('heading', { name: title }).last()).toBeVisible()
       await expect(page.getByText(/Please review and sign/i)).toBeVisible()
     } finally {
       await apiDel<{ id: string }>(request, token, `/documents/${document.id}`).catch(() => undefined)

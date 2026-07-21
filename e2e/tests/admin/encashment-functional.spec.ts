@@ -54,7 +54,7 @@ test.describe('Admin encashment functional workflows', () => {
 
     await page.goto('/encashment')
     await expect(page.getByText(/Leave Encashment/i)).toBeVisible({ timeout: 15000 })
-    await page.getByPlaceholder(/search employee/i).fill('E2E')
+    await page.getByPlaceholder('Search employee...').fill('E2E')
     await expect(page.getByText('E2E Employee').first()).toBeVisible({ timeout: 15000 })
 
     const decisionResponse = page.waitForResponse(
@@ -81,7 +81,7 @@ test.describe('Admin encashment functional workflows', () => {
 
     await page.goto('/encashment')
     await expect(page.getByText(/Leave Encashment/i)).toBeVisible({ timeout: 15000 })
-    await page.getByPlaceholder(/search employee/i).fill('E2E')
+    await page.getByPlaceholder('Search employee...').fill('E2E')
     await expect(page.getByText('E2E Employee').first()).toBeVisible({ timeout: 15000 })
 
     const decisionResponse = page.waitForResponse(
