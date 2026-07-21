@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { offlineDB } from '@/lib/offline-db'
 import type { OrgChartData } from '@/components/ui-touchorbit'
 
@@ -11,28 +11,24 @@ const CACHE_KEY = 'org-chart'
 async function fetchOrgChart(employeeId: string | null): Promise<OrgChartData> {
   if (!employeeId) return []
 
-  const { data, error } = await supabase.rpc('get_org_chart', {
-    p_root_id: null,
-    p_branch_id: null,
-  })
-
-  if (error) {
+  const result = await api.get<OrgChartData>('/employees/org-chart')
+  if (!result.ok) {
     // Try offline cache on error
     const cached = await offlineDB.orgChart.get(CACHE_KEY)
     if (cached) return cached.data as OrgChartData
-    throw error
+    throw new Error(result.error || 'Unable to load org chart')
   }
 
-  const result = (data ?? []) as OrgChartData
+  const data = result.data ?? []
 
   // Write to cache
   await offlineDB.orgChart.put({
     id: CACHE_KEY,
-    data: result,
+    data,
     cachedAt: new Date().toISOString(),
   })
 
-  return result
+  return data
 }
 
 export function useOrgChart() {

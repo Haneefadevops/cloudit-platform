@@ -100,14 +100,14 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0004 - Dashboard Widget Remove Does Not Persist Or Hide Removed Widget
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** Medium
 - **Portal:** Admin
 - **Module:** Dashboard
 - **Route:** `/`
 - **Function:** Remove dashboard widget and save layout
 - **Test file:** `e2e/tests/admin/dashboard.spec.ts`
-- **Test name:** `2.6 remove widget from dashboard`
+- **Test name:** `2.6 remove widget from dashboard persists after reload`
 - **Expected:** In customize mode, removing the `Recent Clock-Ins` widget and clicking Save should hide the widget from the dashboard.
 - **Actual:** After Remove and Save, `Recent Clock-Ins` remains visible.
 - **Evidence:** `e2e/test-results/admin-dashboard-Dashboard-2-6-remove-widget-from-dashboard-chromium-retry2/test-failed-1.png`, `e2e/test-results/admin-dashboard-Dashboard-2-6-remove-widget-from-dashboard-chromium-retry2/error-context.md`.
@@ -115,8 +115,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Inspect dashboard customize mode, verify save API request and payload, add stable accessible labels/data hooks if needed, fix persistence/render refresh, then rerun the dashboard module.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts tests/admin/dashboard.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** Other dashboard functions in this module passed.
+- **Last tested:** 2026-07-21
+- **Notes:** Phase 11 adds organization/user-scoped `GET/PATCH/DELETE /api/dashboard/layout` persistence, retains local storage as an offline fallback, and verifies removal after reload. The pre-deployment production retest still shows the widget because these routes and UI changes are not deployed yet.
 
 ### BF-0005 - Employee Detail Page Stays On Loading Profile
 
@@ -160,7 +160,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0007 - Employee Org Chart Shows Skeleton Without Content
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** High
 - **Portal:** Employee
 - **Module:** Org Chart
@@ -175,8 +175,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Inspect employee org chart data hook/API response, add empty/error handling, verify seeded employee appears or a clear empty state renders, and retest Employee Module E2.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/pages.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** The page remained authenticated; this is a render/data issue rather than direct login redirect.
+- **Last tested:** 2026-07-21
+- **Notes:** Phase 11 replaces the hanging browser Supabase RPC with a tenant-scoped local API hierarchy query, Dexie cache fallback, and explicit empty state. The pre-deployment production retest still shows the old skeleton behavior pending deployment.
 
 ### BF-0008 - Employee Payslips Route Is Flaky And Sometimes Redirects To Login
 
@@ -542,7 +542,7 @@ Add every failed/skipped/unverified function below using this template.
 
 ### BF-0025 - Employee Personal Training Edit Does Not Complete
 
-- **Status:** Open
+- **Status:** Ready For Retest
 - **Severity:** Medium
 - **Portal:** Employee
 - **Module:** Training
@@ -557,8 +557,8 @@ Add every failed/skipped/unverified function below using this template.
 - **Fix plan:** Normalize `start_date` and `end_date` before setting edit form state, clear stale success toasts or wait on the actual PATCH response, refresh the list after update, then rerun the employee training functional module.
 - **Owner:** Unassigned
 - **Retest command:** `npx playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/training-functional.spec.ts`
-- **Last tested:** 2026-07-14
-- **Notes:** Employee personal training create succeeded. Delete was not reached because edit failed first; the E2E cleanup hook removes leftover `E2E Personal Training` records via API.
+- **Last tested:** 2026-07-21
+- **Notes:** Phase 11 normalizes stored timestamps to `YYYY-MM-DD` before populating edit date controls. The pre-deployment production retest still reproduces the stale-title failure pending deployment; the E2E cleanup hook removed generated records.
 
 Add every failed/skipped/unverified function below using this template.
 
@@ -1207,11 +1207,19 @@ Add every failed/skipped/unverified function below using this template.
 | 2026-07-20 | Local test discovery | `npx.cmd playwright test --config=e2e\\playwright.config.ts --project=chromium tests/admin/settings-functional.spec.ts --list` | Passed | Playwright list output | Six settings workflows discovered, including new security-role and notification-preference persistence coverage. |
 | 2026-07-20 | Production TouchOrbit | `npx.cmd playwright test --config=e2e\\playwright.config.ts --project=chromium tests/admin/settings-functional.spec.ts` | Failed | `e2e/test-results/admin-settings-functional-*` | Pre-deployment Phase 10 retest: F24.1 passed; F24.2-F24.4 remained broken on the current deployment; new F24.5/F24.6 returned 404 because the local endpoints are not deployed yet. |
 
+| 2026-07-21 | Local build | `npm.cmd run build --workspace=apps/touchorbit-api` | Passed | Build output | Phase 11 dashboard-layout and employee org-chart API routes compile. |
+| 2026-07-21 | Local build | `npm.cmd run build --workspace=apps/touchorbit-admin-web` | Passed | Build output | Phase 11 dashboard persistence integration and audit coverage compile; pre-existing lint warnings remain. |
+| 2026-07-21 | Local build | `npm.cmd run build --workspace=apps/touchorbit-employee-web` | Passed | Build output | Phase 11 org-chart, training-date, and API-backed search changes compile; pre-existing lint warnings remain. |
+| 2026-07-21 | Local test | `npm.cmd test --workspace=apps/touchorbit-api -- --runInBand` | Passed | Jest output | Existing API suite passed: 1 suite, 1 test. |
+| 2026-07-21 | Production TouchOrbit | `npx.cmd playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/dashboard.spec.ts tests/admin/audit.spec.ts` | Failed | `e2e/test-results/admin-dashboard-*`, `e2e/test-results/admin-audit-*` | Pre-deployment Phase 11 run: audit load/filter passed; export passed after selector correction; dashboard removal still reproduced BF-0004 on the old deployment. |
+| 2026-07-21 | Production TouchOrbit | `npx.cmd playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/pages.spec.ts --grep "org-chart"` | Failed | `e2e/test-results/employee-pages-Employee-pr-4dcd0-*` | Pre-deployment org-chart retest still reproduced BF-0007 on the old deployment. |
+| 2026-07-21 | Production TouchOrbit | `npx.cmd playwright test --config=e2e/playwright.config.ts --project=employee-chromium tests/employee/training-functional.spec.ts tests/employee/search-functional.spec.ts tests/employee/mobile-critical.spec.ts` | Failed | `e2e/test-results/employee-training-*`, `e2e/test-results/employee-search-*` | Six mobile-width critical routes passed. Training edit and API-backed search remained pre-deployment failures pending rollout of the Phase 11 frontend. |
+| 2026-07-21 | Production TouchOrbit | `npx.cmd playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/audit.spec.ts --grep "22.3"` | Passed | Playwright output | Corrected audit export permission/row-state assertion passed: 4 tests including setup/seed/teardown. |
+
 ## Open Items By Portal
 
 ### Admin Portal
 
-- BF-0004 - Dashboard widget remove does not persist or hide removed widget.
 - BF-0005 - Employee detail page stays on Loading Profile.
 - BF-0009 - Admin Add Employee submit does not complete.
 - BF-0011 - Admin leave approve calls missing endpoint.
@@ -1223,13 +1231,11 @@ Add every failed/skipped/unverified function below using this template.
 
 ### Employee Portal
 
-- BF-0007 - Employee org chart shows skeleton without content.
 - BF-0010 - Employee leave submit does not complete.
 - BF-0015 - Employee comp-off submit does not complete.
 - BF-0016 - Employee encashment submit does not complete.
 - BF-0020 - Employee expense claim has no category options.
 - BF-0023 - Employee overtime submit does not complete.
-- BF-0025 - Employee personal training edit does not complete.
 - BF-0027 - Employee attendance correction submit does not complete.
 - BF-0045 - Employee profile phone update cannot start.
 - BF-0046 - Employee profile emergency contacts do not render.

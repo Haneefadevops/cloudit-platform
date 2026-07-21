@@ -201,4 +201,48 @@ export class DashboardService {
     );
     return result.rows;
   }
+
+  async getLayout(organizationId: string, userId: string) {
+    const result = await this.databaseService.query(
+      `SELECT widgets, layout_lg, layout_md, layout_sm
+       FROM user_dashboard_layouts
+       WHERE organization_id = $1::uuid AND user_id = $2::uuid`,
+      [organizationId, userId],
+    );
+    const row = result.rows[0];
+    return row
+      ? { widgets: row.widgets, layouts: { lg: row.layout_lg, md: row.layout_md, sm: row.layout_sm } }
+      : null;
+  }
+
+  async saveLayout(organizationId: string, userId: string, config: any) {
+    const widgets = Array.isArray(config?.widgets) ? config.widgets : [];
+    const layouts = config?.layouts ?? {};
+    await this.databaseService.query(
+      `INSERT INTO user_dashboard_layouts
+         (organization_id, user_id, widgets, layout_lg, layout_md, layout_sm, updated_at)
+       VALUES ($1::uuid, $2::uuid, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, now())
+       ON CONFLICT (user_id) DO UPDATE SET
+         organization_id = EXCLUDED.organization_id, widgets = EXCLUDED.widgets,
+         layout_lg = EXCLUDED.layout_lg, layout_md = EXCLUDED.layout_md,
+         layout_sm = EXCLUDED.layout_sm, updated_at = now()`,
+      [
+        organizationId,
+        userId,
+        JSON.stringify(widgets),
+        JSON.stringify(layouts.lg ?? []),
+        JSON.stringify(layouts.md ?? []),
+        JSON.stringify(layouts.sm ?? []),
+      ],
+    );
+    return { saved: true };
+  }
+
+  async resetLayout(organizationId: string, userId: string) {
+    await this.databaseService.query(
+      `DELETE FROM user_dashboard_layouts WHERE organization_id = $1::uuid AND user_id = $2::uuid`,
+      [organizationId, userId],
+    );
+    return { reset: true };
+  }
 }

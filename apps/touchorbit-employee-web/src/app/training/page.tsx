@@ -18,6 +18,9 @@ const formatTime = (timeString: string | null) => {
   return `${hour12}:${minutes} ${ampm}`
 }
 
+const dateInputValue = (value: string | null | undefined) =>
+  value ? value.slice(0, 10) : ''
+
 interface Training {
   id: string
   training_name: string
@@ -254,7 +257,7 @@ export default function TrainingPage() {
                          <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-tighter mt-0.5">{new Date(t.start_date).toLocaleDateString('en-GB', { day:'2-digit', month:'short' })} — {new Date(t.end_date).toLocaleDateString('en-GB', { day:'2-digit', month:'short' })}</p>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <button onClick={() => { setEditingTraining(t); setFormData({ training_name: t.training_name, description: t.description || '', start_date: t.start_date, end_date: t.end_date }); setIsDialogOpen(true); }} className="p-1.5 hover:bg-[#F3E8FF] text-[#D1D5DB] hover:text-[#534AB7] rounded-lg transition-all"><Pencil size={14} /></button>
+                         <button onClick={() => { setEditingTraining(t); setFormData({ training_name: t.training_name, description: t.description || '', start_date: dateInputValue(t.start_date), end_date: dateInputValue(t.end_date) }); setIsDialogOpen(true); }} className="p-1.5 hover:bg-[#F3E8FF] text-[#D1D5DB] hover:text-[#534AB7] rounded-lg transition-all"><Pencil size={14} /></button>
                          <button onClick={() => handleDelete(t.id)} className="p-1.5 hover:bg-red-50 text-[#D1D5DB] hover:text-red-500 rounded-lg transition-all"><Trash2 size={14} /></button>
                       </div>
                    </div>

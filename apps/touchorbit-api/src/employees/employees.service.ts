@@ -537,6 +537,52 @@ export class EmployeesService {
     return result.rows[0];
   }
 
+  async findOrgChart(organizationId: string, userId: string) {
+    const result = await this.databaseService.query(
+      `WITH RECURSIVE eligible AS (
+         SELECT e.id, e.manager_id, e.first_name, e.last_name,
+                concat_ws(' ', e.first_name, e.last_name) AS full_name,
+                e.photo_url, e.job_title, e.date_of_birth, e.hire_date,
+                e.department_id, e.branch_id, e.user_id, e.employee_number
+         FROM employees e
+         WHERE e.organization_id = $1::uuid
+           AND e.termination_date IS NULL
+           AND COALESCE(e.employment_status, 'active') <> 'terminated'
+       ), tree AS (
+         SELECT root.*, 0::int AS depth, ARRAY[root.id]::uuid[] AS path_ids,
+                ARRAY[root.full_name]::text[] AS path_names,
+                lower(COALESCE(root.employee_number, '') || ':' || root.full_name || ':' || root.id::text) AS sort_path
+         FROM eligible root
+         WHERE root.manager_id IS NULL
+            OR NOT EXISTS (SELECT 1 FROM eligible manager WHERE manager.id = root.manager_id)
+         UNION ALL
+         SELECT child.*, parent.depth + 1, parent.path_ids || child.id,
+                parent.path_names || child.full_name,
+                parent.sort_path || '>' || lower(COALESCE(child.employee_number, '') || ':' || child.full_name || ':' || child.id::text)
+         FROM eligible child JOIN tree parent ON child.manager_id = parent.id
+         WHERE child.id <> ALL(parent.path_ids)
+       ), direct_counts AS (
+         SELECT manager_id, COUNT(*)::int AS count FROM eligible
+         WHERE manager_id IS NOT NULL GROUP BY manager_id
+       )
+       SELECT tree.id AS employee_id, tree.manager_id, tree.first_name, tree.last_name,
+              tree.full_name, tree.photo_url, tree.job_title, tree.date_of_birth,
+              tree.hire_date, tree.department_id, d.name AS department_name,
+              d.code AS department_code, d.parent_department_id, tree.branch_id,
+              b.name AS branch_name, tree.depth, tree.path_ids, tree.path_names,
+              tree.sort_path, COALESCE(dc.count, 0) AS direct_reports_count,
+              COALESCE(dc.count, 0) > 0 AS has_children,
+              tree.user_id = $2::uuid AS is_current_user
+       FROM tree
+       LEFT JOIN departments d ON d.id = tree.department_id AND d.organization_id = $1::uuid
+       LEFT JOIN branches b ON b.id = tree.branch_id AND b.organization_id = $1::uuid
+       LEFT JOIN direct_counts dc ON dc.manager_id = tree.id
+       ORDER BY tree.sort_path`,
+      [organizationId, userId],
+    );
+    return result.rows;
+  }
+
   async findHistory(organizationId: string, id: string) {
     const result = await this.databaseService.query(
       `SELECT h.*

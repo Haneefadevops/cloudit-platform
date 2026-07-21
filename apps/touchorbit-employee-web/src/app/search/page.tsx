@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { EmployeeLayout } from '@/components/employee-layout'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { 
   Search, 
   ChevronRight, 
@@ -17,6 +17,7 @@ interface EmployeeResult {
   first_name: string
   last_name: string
   department: string
+  department_name?: string
   job_title: string
   employment_status: string
 }
@@ -67,13 +68,11 @@ export default function SearchPage() {
   const performSearch = async (q: string) => {
     setLoading(true)
     try {
-      const { data } = await supabase
-        .from('employees')
-        .select('id, first_name, last_name, department, job_title, employment_status')
-        .eq('organization_id', organizationId)
-        .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
-        .limit(20)
-      setResults(data || [])
+      const response = await api.get<EmployeeResult[]>(
+        `/employees?search=${encodeURIComponent(q.trim())}&limit=20`,
+      )
+      if (!response.ok) throw new Error(response.error || 'Search failed')
+      setResults(response.data || [])
     } catch (error) {
       console.error(error)
     } finally {
@@ -167,7 +166,7 @@ export default function SearchPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[13.5px] font-bold text-[#1A1727]">{r.first_name} {r.last_name}</div>
-                        <div className="text-[11px] text-[#9CA3AF]">{r.department || r.job_title || '—'}</div>
+                        <div className="text-[11px] text-[#9CA3AF]">{r.department_name || r.department || r.job_title || '—'}</div>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                         {isActive ? 'Active' : 'Inactive'}

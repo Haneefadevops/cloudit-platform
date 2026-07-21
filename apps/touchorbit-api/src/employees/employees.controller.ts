@@ -143,6 +143,17 @@ export class EmployeesController {
     return { ok: true, data: row };
   }
 
+  @Get("org-chart")
+  @RequireModule("touchorbit", "employees")
+  @ApiOperation({ summary: "Get employee-safe organization chart" })
+  async orgChart(
+    @CurrentOrganization() organizationId: string,
+    @AuthUser() user: AuthContext,
+  ) {
+    const rows = await this.employeesService.findOrgChart(organizationId, user.id);
+    return { ok: true, data: rows };
+  }
+
   @Get(":id")
   @RequireModule("touchorbit", "employees")
   @ApiOperation({ summary: "Get a single employee" })

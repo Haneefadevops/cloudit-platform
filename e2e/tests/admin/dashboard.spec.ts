@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { ensureAuthenticated } from '../helpers/auth'
+import { apiDel, loginToApi } from '../helpers/touchorbit-api'
 
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page }) => {
@@ -41,7 +42,7 @@ test.describe('Dashboard', () => {
     await expect(drawer).toBeVisible({ timeout: 5000 })
   })
 
-  test('2.6 remove widget from dashboard', async ({ page }) => {
+  test('2.6 remove widget from dashboard persists after reload', async ({ page, request }) => {
     const widget = page.getByText(/Recent Clock-Ins/i).first()
     await expect(widget).toBeVisible()
 
@@ -60,6 +61,17 @@ test.describe('Dashboard', () => {
 
     // After removal the widget should no longer be visible.
     await expect(page.getByText(/Recent Clock-Ins/i).first()).not.toBeVisible({ timeout: 5000 })
+
+    await page.reload()
+    await expect(page.getByText(/Recent Clock-Ins/i).first()).not.toBeVisible({ timeout: 10000 })
+
+    const token = await loginToApi(request)
+    await apiDel(request, token, '/dashboard/layout')
+    await page.evaluate(() => {
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith('touchorbit:dashboard:'))
+        .forEach((key) => localStorage.removeItem(key))
+    })
   })
 
   test('2.7 sidebar navigation links navigate to correct routes', async ({ page }) => {

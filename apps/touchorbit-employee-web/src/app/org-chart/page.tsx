@@ -21,6 +21,7 @@ export default function EmployeeOrgChartPage() {
 
   const chartData = data ?? offlineData ?? []
   const showLoading = isLoading && !offlineData
+  const showEmpty = !showLoading && !isError && chartData.length === 0
 
   // Map supabase user id to employee id if possible
   // For now we use the userId as a fallback; the mock data has 'e005' as current user
@@ -38,6 +39,14 @@ export default function EmployeeOrgChartPage() {
               <div className="text-xs text-gray-500 mt-1">
                 Check your connection and try again
               </div>
+            </div>
+          </div>
+        )}
+        {showEmpty && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center">
+            <div className="text-center px-6">
+              <div className="text-sm font-medium text-gray-900">No organization structure yet</div>
+              <div className="text-xs text-gray-500 mt-1">Employees will appear here once reporting lines are configured.</div>
             </div>
           </div>
         )}
