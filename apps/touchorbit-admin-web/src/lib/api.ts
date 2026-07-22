@@ -43,18 +43,30 @@ async function apiCall<T>(method: string, path: string, body?: unknown): Promise
           window.location.href = '/login'
         }
       }
-      const message =
+      const rawMessage =
         (payload && typeof payload === 'object' && (payload as any).message) ||
         (payload && typeof payload === 'object' && (payload as any).error) ||
         'Unauthorized'
+      const message =
+        typeof rawMessage === 'string'
+          ? rawMessage
+          : typeof rawMessage?.message === 'string'
+            ? rawMessage.message
+            : 'Unauthorized'
       return { ok: false, error: message }
     }
 
     if (!response.ok) {
-      const message =
+      const rawMessage =
         (payload && typeof payload === 'object' && (payload as any).message) ||
         (payload && typeof payload === 'object' && (payload as any).error) ||
         response.statusText
+      const message =
+        typeof rawMessage === 'string'
+          ? rawMessage
+          : typeof rawMessage?.message === 'string'
+            ? rawMessage.message
+            : response.statusText || 'Request failed'
       return { ok: false, error: message }
     }
 

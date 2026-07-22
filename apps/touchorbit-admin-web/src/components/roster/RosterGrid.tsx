@@ -62,6 +62,13 @@ interface RosterGridProps {
   weekStart?: string
 }
 
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function formatTime(time: string | null) {
   if (!time) return ''
   const [h, m] = time.split(':')
@@ -118,7 +125,7 @@ export function RosterGrid({
                 {weekStart && <OvertimeBar employeeId={emp.id} weekStart={weekStart} />}
               </td>
               {weekDays.map((day, idx) => {
-                const dateStr = day.toISOString().split('T')[0]
+                const dateStr = formatLocalDate(day)
                 const entry = rosterData.find(r => r.employee_id === emp.id && r.date === dateStr)
                 const isSaving = savingId === `${emp.id}-${dateStr}`
                 const hasUnscheduledOT = overtimeRecords.some(ot => ot.employee_id === emp.id && ot.date === dateStr) && !entry?.shift_template_id

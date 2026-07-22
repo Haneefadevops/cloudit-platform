@@ -43,6 +43,15 @@ test.describe('Dashboard', () => {
   })
 
   test('2.6 remove widget from dashboard persists after reload', async ({ page, request }) => {
+    const token = await loginToApi(request)
+    await apiDel(request, token, '/dashboard/layout').catch(() => undefined)
+    await page.evaluate(() => {
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith('touchorbit:dashboard:'))
+        .forEach((key) => localStorage.removeItem(key))
+    })
+    await page.reload()
+
     const widgetCard = page.getByTestId('dashboard-widget-recent-clock-ins')
     await expect(widgetCard).toBeVisible()
 
@@ -59,12 +68,11 @@ test.describe('Dashboard', () => {
     await page.getByRole('button', { name: /save/i }).first().click()
 
     // After removal the widget should no longer be visible.
-    await expect(page.getByText(/Recent Clock-Ins/i).first()).not.toBeVisible({ timeout: 5000 })
+    await expect(widgetCard).not.toBeVisible({ timeout: 5000 })
 
     await page.reload()
-    await expect(page.getByText(/Recent Clock-Ins/i).first()).not.toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('dashboard-widget-recent-clock-ins')).not.toBeVisible({ timeout: 10000 })
 
-    const token = await loginToApi(request)
     await apiDel(request, token, '/dashboard/layout')
     await page.evaluate(() => {
       Object.keys(localStorage)
@@ -110,7 +118,8 @@ test.describe('Dashboard', () => {
     const markAllRead = page.locator('body').getByText(/mark all read/i).first()
     if (await markAllRead.isVisible().catch(() => false)) {
       await markAllRead.click()
-      await expect(page.locator('body').getByText(/no notifications/i).first()).toBeVisible({ timeout: 5000 })
+      await expect(markAllRead).not.toBeVisible({ timeout: 5000 })
+      await expect(page.locator('header').getByText('9+')).not.toBeVisible({ timeout: 5000 })
     }
   })
 

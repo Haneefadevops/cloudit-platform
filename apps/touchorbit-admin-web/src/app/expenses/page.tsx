@@ -144,26 +144,15 @@ export default function ExpensesAdminPage() {
       setCategories(categoryResult.data || [])
 
       // 2. Load Claims — scoped by role
-      let query = supabase
-        .from('expense_claims')
-        .select(`*, employee:employees(first_name, last_name, department, department_id, branch_id), category:expense_categories(name)`)
-        .eq('organization_id', organizationId)
-        .order('created_at', { ascending: false })
-
-      // Role-based restrictions on what they can see initially
-      if (isFinance) {
-        // Finance can see awaiting_finance and reimbursed
-      } else if (isDeptManager || isBranchManager) {
-        // Managers see their scoped employees
-        if (scopeType === 'dept' && scopeId) {
-          query = query.eq('employee.department_id', scopeId)
-        } else if (scopeType === 'branch' && scopeId) {
-          query = query.eq('employee.branch_id', scopeId)
-        }
+      const claimsResult = await api.get<ExpenseClaim[]>('/expenses')
+      if (!claimsResult.ok) throw new Error(claimsResult.error || 'Failed to load expense claims')
+      let claimData = claimsResult.data || []
+      if (scopeType === 'dept' && scopeId) {
+        claimData = claimData.filter(claim => claim.employee?.department_id === scopeId)
+      } else if (scopeType === 'branch' && scopeId) {
+        claimData = claimData.filter(claim => claim.employee?.branch_id === scopeId)
       }
-
-      const { data: claimData } = await query
-      setClaims(claimData || [])
+      setClaims(claimData)
     } catch (error) {
       console.error('Error loading expenses:', error)
       toast.error('Failed to load expense data')

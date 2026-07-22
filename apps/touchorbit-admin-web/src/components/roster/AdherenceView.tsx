@@ -23,6 +23,13 @@ interface AdherenceViewProps {
   adherenceData: AdherenceEntry[]
 }
 
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const statusConfigs: Record<string, { label: string; color: string }> = {
   on_time: { label: 'On Time', color: 'bg-green-100 text-green-700' },
   late: { label: 'Late', color: 'bg-amber-100 text-amber-700' },
@@ -60,7 +67,7 @@ export function AdherenceView({ employees, weekDays, adherenceData }: AdherenceV
                 <div className="text-[10px] font-black text-[#9CA3AF] uppercase tracking-widest">{emp.department || 'No Dept'}</div>
               </td>
               {weekDays.map((day, idx) => {
-                const dateStr = day.toISOString().split('T')[0]
+                const dateStr = formatLocalDate(day)
                 const entry = adherenceData.find(d => d.employee_id === emp.id && d.date === dateStr)
                 if (!entry) return <td key={idx} className="px-2 py-3 border-r border-[#F8F7F9] text-center text-[#D1D5DB]">-</td>
 

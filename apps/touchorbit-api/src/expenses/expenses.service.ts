@@ -23,6 +23,13 @@ export class ExpensesService {
     }
     const result = await this.databaseService.query(
       `SELECT ec.*,
+              json_build_object(
+                'first_name', e.first_name,
+                'last_name', e.last_name,
+                'department', e.department,
+                'department_id', e.department_id,
+                'branch_id', e.branch_id
+              ) AS employee,
               CASE WHEN cat.id IS NULL THEN NULL
                    ELSE json_build_object('name', cat.name) END AS category
        FROM expense_claims ec

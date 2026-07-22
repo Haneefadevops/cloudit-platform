@@ -101,7 +101,7 @@ export default function ProcessPayrollPage() {
   const loadEmployees = async () => {
     if (!organizationId) return
 
-    const result = await api.get<Employee[]>(`/employees?status=active&limit=1000`)
+    const result = await api.get<Employee[]>(`/employees?status=active&limit=500`)
     if (!result.ok) {
       console.error('Error loading employees:', result.error)
       toast.error(result.error || 'Failed to load employees')

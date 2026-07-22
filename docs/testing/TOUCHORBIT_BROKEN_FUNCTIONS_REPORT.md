@@ -1157,6 +1157,18 @@ The following release-blocker remediations are implemented locally and are **Rea
 
 The go-live decision remains **NO-GO pending deployment and production retest** of these changes plus the required correlated cross-portal workflows.
 
+### Post-Deployment Blocker Remediation (2026-07-22)
+
+The first deployed stabilization retest exposed five failures. This follow-up batch resolves their root causes:
+
+- Dashboard persistence now has isolated test setup/cleanup and widget-scoped assertions; the focused production retest passed.
+- Notification mark-all-read coverage now verifies the real contract (notifications remain in history but unread controls and badges disappear); the corrected production suite passed.
+- Expense categories and claims load through the local API so a stalled direct database query cannot leave the category grid behind a permanent loading state.
+- Payroll employee loading uses the supported API page limit, and structured API errors are normalized to strings before reaching React.
+- Roster week, cell, copy, publish, and adherence dates now preserve local calendar dates instead of shifting through UTC; functional test date helpers use the same contract.
+
+Admin web and API builds pass after regenerating the local TouchOrbit Prisma client, and the API Jest suite passes. Expense, payroll, and roster remain **Ready For Deployment Retest** and must not be marked Fixed until their deployed suites pass.
+
 ## Run History
 
 | Date       | Environment           | Command                                                                                                                                | Result  | Report/Artifact                                                                                                                                                                                                                                                                                                                                                                                        | Notes                                                                                                                                                                                                                          |
@@ -1275,6 +1287,10 @@ The go-live decision remains **NO-GO pending deployment and production retest** 
 | 2026-07-22 | Local build | npm.cmd run build --workspace=@cloudit/touchorbit-admin-web | Passed | Build output | Dashboard, expense, overtime, payroll, encashment, and modal hardening compile; pre-existing lint warnings remain. |
 | 2026-07-22 | Local build | npm.cmd run build --workspace=@cloudit/touchorbit-employee-web | Passed | Build output | Calendar task refresh/modal, profile review, and notification loading changes compile; pre-existing lint warnings remain. |
 | 2026-07-22 | Local test | npm.cmd test --workspace=@cloudit/touchorbit-api -- --runInBand | Passed | Jest output | Existing API suite passed: 1 suite, 1 test. |
+| 2026-07-22 | Production TouchOrbit | npx.cmd playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/dashboard.spec.ts --retries=0 | Partial | Playwright output | Corrected notification mark-all-read passed; initial widget assertion was refined to the widget container rather than matching duplicate visible text. |
+| 2026-07-22 | Production TouchOrbit | npx.cmd playwright test --config=e2e/playwright.config.ts --project=chromium tests/admin/dashboard.spec.ts --grep 2.6 --retries=0 | Passed | Playwright output | Dashboard widget removal persisted after reload with isolated server/local layout cleanup. |
+| 2026-07-22 | Local build | npm.cmd run build --workspace=@cloudit/touchorbit-admin-web | Passed | Build output | Five-blocker admin remediation compiles; pre-existing lint warnings remain. |
+| 2026-07-22 | Local build | npm.cmd run build --workspace=@cloudit/touchorbit-api | Passed | Build output | Expense claim response enrichment compiles after regenerating the local Prisma client. |
 
 ## Open Items By Portal
 

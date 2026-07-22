@@ -24,6 +24,13 @@ import {
   Printer
 } from 'lucide-react'
 import { toast } from 'sonner'
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 import { TableSkeleton } from '@/components/ui/ToSkeleton'
 import { ToEmptyState } from '@/components/ui/ToEmptyState'
 import { SwapApprovalQueue } from '@/components/roster/SwapApprovalQueue'
@@ -189,7 +196,7 @@ export default function RosterPage() {
   // Realtime: roster assignments and swap requests
   useEffect(() => {
     if (!organizationId) return
-    const weekStartStr = currentWeekStart.toISOString().split('T')[0]
+    const weekStartStr = formatLocalDate(currentWeekStart)
     const channel = supabase
       .channel(`roster-updates-${organizationId}`)
       .on(
@@ -215,7 +222,7 @@ export default function RosterPage() {
   async function loadInitialData(scopeId?: string | null, scopeType?: 'dept' | 'branch') {
     setLoading(true)
     try {
-      const weekStartStr = currentWeekStart.toISOString().split('T')[0]
+      const weekStartStr = formatLocalDate(currentWeekStart)
 
       // 1. Load Employees through the local API so the roster grid uses local DB seed employees.
       const employeeParams = new URLSearchParams({ status: 'active', limit: '500' })
@@ -253,7 +260,7 @@ export default function RosterPage() {
           .eq('organization_id', organizationId)
           .in('status', ['pending', 'awaiting_level1', 'awaiting_level2', 'awaiting_level3'])
           .gte('date', weekStartStr)
-          .lt('date', new Date(currentWeekStart.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+          .lt('date', formatLocalDate(new Date(currentWeekStart.getTime() + 7 * 24 * 60 * 60 * 1000)))
 
         setOvertimeRecords(otData || [])
 
@@ -382,8 +389,8 @@ export default function RosterPage() {
 
     try {
       const res = await api.post<{ copied: number }>('/roster/copy-week', {
-        source_week_start: prevWeek.toISOString().split('T')[0],
-        target_week_start: currentWeekStart.toISOString().split('T')[0]
+        source_week_start: formatLocalDate(prevWeek),
+        target_week_start: formatLocalDate(currentWeekStart)
       })
 
       if (!res.ok) throw new Error(res.error)
@@ -479,7 +486,7 @@ export default function RosterPage() {
       return
     }
 
-    const weekStartStr = currentWeekStart.toISOString().split('T')[0]
+    const weekStartStr = formatLocalDate(currentWeekStart)
 
     try {
       if (status === 'published') {
