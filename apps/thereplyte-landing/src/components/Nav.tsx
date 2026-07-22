@@ -23,7 +23,7 @@ export default function Nav() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 px-4 pt-4 sm:px-6">
       <div
-        className={`mx-auto flex max-w-5xl items-center justify-between gap-4 rounded-full border py-2.5 pl-5 pr-2.5 transition-all duration-300 ${
+        className={`mx-auto flex max-w-6xl items-center justify-between gap-4 rounded-full border py-2.5 pl-5 pr-2.5 transition-all duration-300 ${
           scrolled
             ? 'border-[#e6e8f5] bg-white/85 shadow-[0_8px_32px_rgba(74,66,252,0.10)] backdrop-blur-xl'
             : 'border-white/60 bg-white/60 shadow-[0_4px_24px_rgba(74,66,252,0.06)] backdrop-blur-lg'
@@ -80,7 +80,7 @@ export default function Nav() {
       </div>
 
       {open && (
-        <div className="mx-auto mt-2 max-w-5xl rounded-3xl border border-[#e6e8f5] bg-white/95 p-3 shadow-[0_16px_48px_rgba(74,66,252,0.12)] backdrop-blur-xl md:hidden">
+        <div className="mx-auto mt-2 max-w-6xl rounded-3xl border border-[#e6e8f5] bg-white/95 p-3 shadow-[0_16px_48px_rgba(74,66,252,0.12)] backdrop-blur-xl md:hidden">
           {links.map((l) => (
             <a
               key={l.href}

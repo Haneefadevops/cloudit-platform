@@ -193,7 +193,7 @@ export default function ChatMockup() {
   const current = SCRIPTS[cycle];
 
   return (
-    <div className="relative mx-auto w-full max-w-[380px]">
+    <div className="relative mx-auto w-full max-w-[400px]">
       {/* Floating orbs */}
       <motion.div
         aria-hidden
