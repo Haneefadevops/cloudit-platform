@@ -1,0 +1,41 @@
+services:
+  thereplyte-landing:
+    build:
+      context: ../../apps/thereplyte-landing
+      dockerfile: Dockerfile
+    image: cloudit/thereplyte-landing:latest
+    container_name: thereplyte-landing
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - cloudit
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.thereplyte-landing.rule=Host(`thereplyte.com`) || Host(`www.thereplyte.com`)"
+      - "traefik.http.routers.thereplyte-landing.entrypoints=websecure"
+      - "traefik.http.routers.thereplyte-landing.tls.certresolver=cloudflare"
+      - "traefik.http.routers.thereplyte-landing.tls.domains[0].main=thereplyte.com"
+      - "traefik.http.routers.thereplyte-landing.tls.domains[0].sans=www.thereplyte.com"
+      - "traefik.http.services.thereplyte-landing.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+networks:
+  cloudit:
+    external: true
