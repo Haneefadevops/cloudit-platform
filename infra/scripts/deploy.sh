@@ -249,6 +249,12 @@ build_service "whatsapp-agent-web"
 docker compose -f infra/whatsapp-agent-web/docker-compose.yml up -d
 wait_for_service "whatsapp-agent-web"
 
+log "Building TheReplyte landing page..."
+tag_previous_image "thereplyte-landing"
+build_service "thereplyte-landing"
+docker compose -f infra/thereplyte-landing/docker-compose.yml up -d
+wait_for_service "thereplyte-landing"
+
 ensure_chatwoot_env
 
 log "Preparing Chatwoot database..."
