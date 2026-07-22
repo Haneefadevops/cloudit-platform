@@ -273,6 +273,7 @@ export default function EmployeeCalendarPage() {
   const [showRescheduleForm, setShowRescheduleForm] = useState(false)
   const [rsvpStatuses, setRsvpStatuses] = useState<Record<string, string>>({})
   const [showTaskDialog, setShowTaskDialog] = useState(false)
+  const [taskRefreshKey, setTaskRefreshKey] = useState(0)
 
   const handleRsvp = (eventId: string, status: any) => {
     setRsvpStatuses(prev => ({ ...prev, [eventId]: status }))
@@ -293,6 +294,7 @@ export default function EmployeeCalendarPage() {
       if (!result.ok) throw new Error(result.error || 'Failed to create task')
       toast.success('Task created')
       setShowTaskDialog(false)
+      setTaskRefreshKey(key => key + 1)
     } catch (error: any) { toast.error(error.message) }
   }
 
@@ -585,7 +587,7 @@ export default function EmployeeCalendarPage() {
 
           {/* My Tasks Section */}
           <div className="px-4 py-6">
-            <MyTasks onCreateTask={() => setShowTaskDialog(true)} />
+            <MyTasks onCreateTask={() => setShowTaskDialog(true)} refreshKey={taskRefreshKey} />
           </div>
 
           {/* Reschedule Request Form */}

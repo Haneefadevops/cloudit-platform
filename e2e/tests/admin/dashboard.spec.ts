@@ -43,15 +43,14 @@ test.describe('Dashboard', () => {
   })
 
   test('2.6 remove widget from dashboard persists after reload', async ({ page, request }) => {
-    const widget = page.getByText(/Recent Clock-Ins/i).first()
-    await expect(widget).toBeVisible()
+    const widgetCard = page.getByTestId('dashboard-widget-recent-clock-ins')
+    await expect(widgetCard).toBeVisible()
 
     // Enter customize mode.
     const customizeButton = page.getByRole('button', { name: /customize/i }).first()
     await customizeButton.click()
 
     // Click the Remove widget button for Recent Clock-Ins.
-    const widgetCard = widget.locator('xpath=ancestor::*[contains(@class, "rounded-2xl") or contains(@class, "rounded-xl")][1]')
     const removeButton = widgetCard.getByRole('button', { name: /Remove widget/i })
     await expect(removeButton).toBeVisible({ timeout: 5000 })
     await removeButton.click()

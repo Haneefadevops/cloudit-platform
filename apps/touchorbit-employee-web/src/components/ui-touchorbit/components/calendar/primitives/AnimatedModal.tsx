@@ -33,7 +33,7 @@ export function AnimatedModal({ open, onClose, children, title, maxWidth = "28re
   return (
     <div
       className={cn(
-        "fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6",
+        "fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto p-4 sm:p-6",
         "transition-opacity duration-200",
         visible ? "opacity-100" : "opacity-0"
       )}
@@ -47,7 +47,7 @@ export function AnimatedModal({ open, onClose, children, title, maxWidth = "28re
       {/* Modal */}
       <div
         className={cn(
-          "relative bg-white rounded-[32px] w-full shadow-2xl border border-[#F1F0F4] overflow-hidden",
+          "relative my-auto max-h-[calc(100dvh-2rem)] bg-white rounded-[32px] w-full shadow-2xl border border-[#F1F0F4] overflow-y-auto",
           "transition-all duration-200 ease-out",
           visible ? "scale-100 opacity-100 translate-y-0" : "scale-[0.96] opacity-0 translate-y-2",
           className

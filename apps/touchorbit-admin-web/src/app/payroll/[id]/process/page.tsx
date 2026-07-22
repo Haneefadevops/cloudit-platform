@@ -60,8 +60,10 @@ export default function ProcessPayrollPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [items, setItems] = useState<PayrollItem[]>([])
   const [processing, setProcessing] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
-  const runId = params.id as string
+  const idParam = params?.id
+  const runId = Array.isArray(idParam) ? idParam[0] : idParam
 
   useEffect(() => {
     if (organizationId && runId) {
@@ -76,7 +78,9 @@ export default function ProcessPayrollPage() {
     const result = await api.get<PayrollRun>(`/payroll/runs/${runId}`)
     if (!result.ok) {
       console.error('Error loading payroll run:', result.error)
-      toast.error(result.error || 'Failed to load payroll run')
+      const message = result.error || 'Failed to load payroll run'
+      setLoadError(message)
+      toast.error(message)
       return
     }
 
@@ -86,6 +90,11 @@ export default function ProcessPayrollPage() {
       return
     }
 
+    if (!result.data) {
+      setLoadError('Payroll run was not found')
+      return
+    }
+    setLoadError(null)
     setRun(result.data)
   }
 
@@ -134,6 +143,20 @@ export default function ProcessPayrollPage() {
     }
   }
 
+  if (loadError) {
+    return (
+      <DashboardLayout>
+        <div className="p-8 text-center">
+          <h1 className="text-xl font-bold text-gray-900">Unable to load payroll run</h1>
+          <p className="mt-2 text-sm text-gray-600">{loadError}</p>
+          <Link href="/payroll" className="mt-5 inline-flex text-sm font-semibold text-purple-600 hover:text-purple-700">
+            Back to Payroll
+          </Link>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
   if (!run) {
     return (
       <DashboardLayout>
@@ -156,7 +179,7 @@ export default function ProcessPayrollPage() {
               Back to Payroll
             </Link>
             <h1 className="text-3xl font-bold">
-              Process Payroll - {MONTHS[run.month - 1]} {run.year}
+              Process Payroll - {MONTHS[num(run.month) - 1] || 'Unknown period'} {run.year}
             </h1>
             <p className="text-gray-600 mt-1">
               Calculate salaries for {employees.length} active employees

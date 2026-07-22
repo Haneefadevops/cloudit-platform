@@ -22,9 +22,10 @@ interface Task {
 interface MyTasksProps {
   onCreateTask?: () => void
   className?: string
+  refreshKey?: number
 }
 
-export function MyTasks({ onCreateTask, className }: MyTasksProps) {
+export function MyTasks({ onCreateTask, className, refreshKey = 0 }: MyTasksProps) {
   const { organizationId, isLoaded } = useAuth()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,7 +64,7 @@ export function MyTasks({ onCreateTask, className }: MyTasksProps) {
 
   useEffect(() => {
     loadTasks()
-  }, [loadTasks])
+  }, [loadTasks, refreshKey])
 
   async function handleComplete(taskId: string) {
     try {

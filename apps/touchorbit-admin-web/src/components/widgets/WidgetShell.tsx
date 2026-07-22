@@ -68,9 +68,14 @@ export function WidgetShell({
     orange: 'bg-orange-100 text-orange-700',
     gray: 'bg-slate-100 text-slate-600',
   }
+  const testId = `dashboard-widget-${title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')}`
 
   return (
     <div
+      data-testid={testId}
       className={`group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_14px_38px_rgba(15,23,42,0.10)] transition-all duration-200 ${
         editMode
           ? 'ring-2 ring-[#534AB7]/30 ring-dashed ring-offset-1 cursor-grab active:cursor-grabbing'

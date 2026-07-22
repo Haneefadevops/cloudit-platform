@@ -13,13 +13,18 @@ export interface Notification {
 }
 
 export function useNotifications() {
-  const { userId, organizationId } = useAuth()
+  const { userId, organizationId, isLoaded } = useAuth()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const loadNotifications = async () => {
-    if (!userId) return
+    if (!userId) {
+      setNotifications([])
+      setUnreadCount(0)
+      setLoading(!isLoaded)
+      return
+    }
 
     setLoading(true)
     try {
@@ -78,10 +83,8 @@ export function useNotifications() {
   }
 
   useEffect(() => {
-    if (userId) {
-      loadNotifications()
-    }
-  }, [userId, organizationId])
+    loadNotifications()
+  }, [userId, organizationId, isLoaded])
 
   return {
     notifications,

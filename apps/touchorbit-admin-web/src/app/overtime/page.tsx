@@ -197,16 +197,10 @@ export default function OvertimePage() {
       }
       setRecords(recordsData)
 
-      // Load overtime policy
-      const { data: policyData, error: policyError } = await supabase
-        .from('overtime_policies')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .single()
-
-      if (policyError && policyError.code !== 'PGRST116') throw policyError
-
-      setPolicy(policyData)
+      // Policy is supplementary to the records table. Load it through the API
+      // and never leave the table in a loading state when policy retrieval fails.
+      const policyResult = await api.get<{ overtimePolicy?: OvertimePolicy | null }>('/organizations/settings')
+      setPolicy(policyResult.ok ? policyResult.data?.overtimePolicy || null : null)
     } catch (error) {
       console.error('Error loading overtime data:', error)
       toast.error('Failed to load overtime data')

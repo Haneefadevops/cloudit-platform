@@ -62,7 +62,8 @@ export default function AdminEncashmentPage() {
 
   async function handleAction(requestId: string, status: 'approved' | 'rejected') {
     try {
-      const result = await api.post<EncashmentRequest>(`/leave/encashment/${requestId}/${status}`, {})
+      const action = status === 'approved' ? 'approve' : 'reject'
+      const result = await api.post<EncashmentRequest>(`/leave/encashment/${requestId}/${action}`, {})
       if (!result.ok) throw new Error(result.error || 'Failed to update request')
       toast.success(`Request ${status} successfully`)
       loadRequests()

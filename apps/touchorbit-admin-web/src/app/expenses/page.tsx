@@ -137,12 +137,11 @@ export default function ExpensesAdminPage() {
   async function loadData(scopeId?: string | null, scopeType?: 'dept' | 'branch') {
     setLoading(true)
     try {
-      // 1. Load Categories (not needed for finance)
-      if (!isFinance) {
-        const result = await api.get<ExpenseCategory[]>('/expenses/categories?include_inactive=true')
-        if (!result.ok) throw new Error(result.error || 'Failed to load expense categories')
-        setCategories(result.data || [])
-      }
+      // Finance users manage categories from this page too, so every role needs
+      // the category collection populated.
+      const categoryResult = await api.get<ExpenseCategory[]>('/expenses/categories?include_inactive=true')
+      if (!categoryResult.ok) throw new Error(categoryResult.error || 'Failed to load expense categories')
+      setCategories(categoryResult.data || [])
 
       // 2. Load Claims — scoped by role
       let query = supabase

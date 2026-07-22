@@ -77,16 +77,11 @@ export default function ProfilePage() {
         const now = new Date()
         const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
 
-        const [clockRes, lbRes, otRes, coRes, contactsRes, assetsRes, trainingsRes, reviewRes] = await Promise.all([
+        const [clockRes, lbRes, otRes, coRes] = await Promise.all([
           supabase.from('clock_events').select('id', { count: 'exact', head: true }).eq('employee_id', empData.id).eq('event_type', 'clock_in').gte('timestamp', monthStart),
           supabase.from('leave_balances').select('remaining_days').eq('employee_id', empData.id).eq('leave_type', 'annual').eq('year', now.getFullYear()).single(),
           supabase.from('overtime_records').select('hours').eq('employee_id', empData.id).eq('status', 'approved').gte('date', monthStart),
           supabase.from('comp_off_records').select('id', { count: 'exact', head: true }).eq('employee_id', empData.id).eq('status', 'approved'),
-          api.get<any[]>(`/employees/${empData.id}/emergency-contacts`),
-          // TODO: migrate asset/training/performance domains to backend
-          supabase.from('asset_assignments').select('*, asset:assets(name, serial_number, category)').eq('employee_id', empData.id).eq('status', 'active'),
-          supabase.from('training_assignments').select('id, status, start_date, program:training_programs(title, category)').eq('employee_id', empData.id).in('status', ['assigned', 'in_progress']).order('start_date', { ascending: true }).limit(3),
-          supabase.from('performance_reviews').select('id, review_period, status').eq('employee_id', empData.id).eq('status', 'pending_self').maybeSingle(),
         ])
 
         const workingDaysElapsed = Math.max(1, Math.floor((now.getTime() - new Date(monthStart).getTime()) / 86400000) + 1)

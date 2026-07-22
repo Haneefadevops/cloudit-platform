@@ -19,7 +19,7 @@ export class RosterService {
          e.department_id,
          d.name AS department_name,
          e.branch_id,
-         ra.date,
+         ra.date::text AS date,
          ra.shift_id,
          s.name AS shift_name,
          s.start_time,

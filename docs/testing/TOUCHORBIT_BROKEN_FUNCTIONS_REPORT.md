@@ -1141,6 +1141,22 @@ Add every failed/skipped/unverified function below using this template.
 
 Additional final-gate blockers: BF-0004 dashboard widget persistence, BF-0019 expense category create/edit, BF-0047/BF-0048 employee calendar tasks, BF-0051 employee self-review, and BF-0053 encashment decisions. Employee availability and notifications passed only after retry and remain flaky release risks.
 
+### Post-Gate Stabilization (2026-07-22)
+
+The following release-blocker remediations are implemented locally and are **Ready For Deployment Retest**. They are not marked Fixed until the deployed functional suites pass:
+
+- BF-0004: added a stable widget container contract and corrected the persistence test to operate on the actual Recent Clock-Ins widget.
+- BF-0019: finance users now load the category collection required by the category-management tab.
+- BF-0022: overtime records no longer remain behind a loading skeleton when supplementary policy retrieval fails; policy now loads through the organization settings API.
+- BF-0026: roster assignment dates are serialized as ISO date strings so create/read state is consistent.
+- BF-0047/BF-0048: employee task dialogs now stay above mobile navigation, scroll within the viewport, and refresh My Tasks immediately after creation.
+- BF-0050: payroll processing now guards route parameters and malformed/missing run responses, and renders a meaningful error state instead of a client crash.
+- BF-0051: employee self-review discovery no longer waits on or races a direct Supabase performance query; the local performance API is authoritative.
+- BF-0053: encashment decisions now call the implemented approve and reject API routes.
+- Availability/notification release risk: employee notification loading now settles cleanly before or without a linked user; the previously implemented local availability API remains ready for deployment retest.
+
+The go-live decision remains **NO-GO pending deployment and production retest** of these changes plus the required correlated cross-portal workflows.
+
 ## Run History
 
 | Date       | Environment           | Command                                                                                                                                | Result  | Report/Artifact                                                                                                                                                                                                                                                                                                                                                                                        | Notes                                                                                                                                                                                                                          |
@@ -1255,6 +1271,10 @@ Additional final-gate blockers: BF-0004 dashboard widget persistence, BF-0019 ex
 | 2026-07-21 | Production TouchOrbit | `npm.cmd run e2e:test:admin` | Failed | `e2e/test-results/`, `playwright-report/` | Phase 12 full admin gate: 82 passed, 8 failed, 1 flaky. Reports, settings, leave decisions, corrections, documents, employees, and core pages passed; dashboard, encashment, expense category, manual overtime, payroll processing, roster assignment, and one shift selector failed. |
 | 2026-07-21 | Production TouchOrbit | `npm.cmd run e2e:test:employee` | Failed | `e2e/test-results/`, `playwright-report/` | Phase 12 full employee gate: 40 passed, 4 failed, 2 flaky. Requests, corrections, expenses, pages, org chart, search, training, profile, and document signing passed; calendar tasks, document-view selector, and self review failed. |
 | 2026-07-21 | Production TouchOrbit | `npx.cmd playwright test ... encashment-functional.spec.ts shifts-functional.spec.ts documents-functional.spec.ts` | Failed | `e2e/test-results/` | Corrected strict selectors: shift CRUD/status and employee document view/sign passed; encashment approve/reject consistently returned HTTP 404. |
+| 2026-07-22 | Local build | npm.cmd run build --workspace=@cloudit/touchorbit-api | Passed | Build output | Stabilization API changes compile, including normalized roster dates. |
+| 2026-07-22 | Local build | npm.cmd run build --workspace=@cloudit/touchorbit-admin-web | Passed | Build output | Dashboard, expense, overtime, payroll, encashment, and modal hardening compile; pre-existing lint warnings remain. |
+| 2026-07-22 | Local build | npm.cmd run build --workspace=@cloudit/touchorbit-employee-web | Passed | Build output | Calendar task refresh/modal, profile review, and notification loading changes compile; pre-existing lint warnings remain. |
+| 2026-07-22 | Local test | npm.cmd test --workspace=@cloudit/touchorbit-api -- --runInBand | Passed | Jest output | Existing API suite passed: 1 suite, 1 test. |
 
 ## Open Items By Portal
 
