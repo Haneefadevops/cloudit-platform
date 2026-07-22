@@ -84,11 +84,19 @@ jobs:
             bash infra/scripts/rollback.sh
           REMOTE
 
+      - name: Setup SSH for notify
+        if: always()
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
       - name: Notify deployment result
         if: always()
         env:
           SERVER_IP: ${{ secrets.SERVER_IP }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts 2>/dev/null
           ssh "${SERVER_USER}@${SERVER_IP}" \
             "echo '[deploy] $(date -Iseconds) status=${{ job.status }} commit=${{ github.sha }} branch=${{ github.ref_name }}' >> /var/log/cloudit-deploy.log"
