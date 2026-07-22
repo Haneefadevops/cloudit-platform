@@ -23,7 +23,7 @@ export default function Nav() {
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
         scrolled
-          ? 'border-b border-white/[0.08] bg-night/70 backdrop-blur-xl'
+          ? 'border-b border-[#e6e8f5] bg-white/80 backdrop-blur-xl'
           : 'border-b border-transparent bg-transparent'
       }`}
     >
@@ -36,7 +36,7 @@ export default function Nav() {
             <a
               key={l.href}
               href={l.href}
-              className="text-sm text-slate-300 transition-colors hover:text-white"
+              className="text-sm text-[#5a5e7a] transition-colors hover:text-[#12142b]"
             >
               {l.label}
             </a>
@@ -46,7 +46,7 @@ export default function Nav() {
           href={WA_LINK}
           target="_blank"
           rel="noopener noreferrer"
-          className="btn-gradient rounded-full px-5 py-2 text-sm font-semibold text-night"
+          className="btn-gradient rounded-full px-5 py-2 text-sm font-semibold text-white"
         >
           Chat with us
         </a>

@@ -102,10 +102,10 @@ export default function Features() {
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-brand">
             Features
           </p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl">
+          <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#12142b] sm:text-4xl lg:text-5xl">
             Everything a great hire does. <span className="text-gradient">Without the payroll.</span>
           </h2>
-          <p className="mt-4 text-lg text-slate-400">
+          <p className="mt-4 text-lg text-[#5a5e7a]">
             One AI that answers, sells, books and knows when to step aside for your team.
           </p>
         </Reveal>
@@ -116,19 +116,19 @@ export default function Features() {
               <div
                 className={`group relative h-full overflow-hidden rounded-2xl p-7 transition-all duration-300 ${
                   f.highlight
-                    ? 'border border-teal-brand/20 bg-gradient-to-br from-teal-brand/[0.08] to-indigo-brand/[0.10]'
+                    ? 'border border-teal-brand/30 bg-gradient-to-br from-teal-brand/[0.07] to-indigo-brand/[0.09] shadow-[0_4px_24px_rgba(74,66,252,0.06)]'
                     : 'glass'
-                } hover:border-white/20 hover:shadow-[0_0_40px_-8px_rgba(74,66,252,0.35)]`}
+                } hover:border-indigo-brand/30 hover:shadow-[0_12px_40px_-12px_rgba(74,66,252,0.25)]`}
               >
                 <div
                   aria-hidden
-                  className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-indigo-brand/0 blur-3xl transition-all duration-500 group-hover:bg-indigo-brand/15"
+                  className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-indigo-brand/0 blur-3xl transition-all duration-500 group-hover:bg-indigo-brand/10"
                 />
                 <div className="glass flex h-12 w-12 items-center justify-center rounded-xl">
                   {f.icon}
                 </div>
-                <h3 className="mt-5 text-lg font-semibold text-white">{f.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-400">{f.copy}</p>
+                <h3 className="mt-5 text-lg font-semibold text-[#12142b]">{f.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-[#5a5e7a]">{f.copy}</p>
               </div>
             </Reveal>
           ))}

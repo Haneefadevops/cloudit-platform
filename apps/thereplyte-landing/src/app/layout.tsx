@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 
@@ -14,10 +14,14 @@ export const metadata: Metadata = {
     'Hire an AI employee for your WhatsApp. Answers customers instantly in their language, takes orders and bookings, and hands off to your team when it matters — 24/7.',
 };
 
+export const viewport: Viewport = {
+  themeColor: '#ffffff',
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className="bg-night font-sans text-slate-100 antialiased">{children}</body>
+      <body className="bg-white font-sans text-[#12142b] antialiased">{children}</body>
     </html>
   );
 }

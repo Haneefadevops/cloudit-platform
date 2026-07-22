@@ -125,12 +125,12 @@ function TypingIndicator() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
-      className="flex w-fit items-center gap-1.5 rounded-2xl rounded-bl-md bg-[#005c4b] px-4 py-3"
+      className="flex w-fit items-center gap-1.5 rounded-2xl rounded-bl-md bg-white px-4 py-3 shadow-sm"
     >
       {[0, 1, 2].map((i) => (
         <motion.span
           key={i}
-          className="h-1.5 w-1.5 rounded-full bg-white/80"
+          className="h-1.5 w-1.5 rounded-full bg-[#8696a0]"
           animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
           transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.15 }}
         />
@@ -197,28 +197,28 @@ export default function ChatMockup() {
       {/* Floating orbs */}
       <motion.div
         aria-hidden
-        className="absolute -left-16 -top-12 h-56 w-56 rounded-full bg-teal-brand/25 blur-[90px]"
+        className="absolute -left-16 -top-12 h-56 w-56 rounded-full bg-teal-brand/20 blur-[90px]"
         animate={{ x: [0, 20, 0], y: [0, -16, 0] }}
         transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
         aria-hidden
-        className="absolute -bottom-14 -right-16 h-64 w-64 rounded-full bg-indigo-brand/30 blur-[100px]"
+        className="absolute -bottom-14 -right-16 h-64 w-64 rounded-full bg-indigo-brand/20 blur-[100px]"
         animate={{ x: [0, -24, 0], y: [0, 18, 0] }}
         transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }}
       />
 
       {/* Phone frame */}
-      <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#0b141a] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)]">
+      <div className="relative overflow-hidden rounded-[2rem] border border-[#e6e8f5] bg-white shadow-[0_30px_80px_-24px_rgba(74,66,252,0.28)]">
         {/* Header */}
-        <div className="flex items-center gap-3 border-b border-white/5 bg-[#1f2c34] px-4 py-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-gradient text-sm font-bold text-night">
+        <div className="flex items-center gap-3 bg-[#008069] px-4 py-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-gradient text-sm font-bold text-white">
             C
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-white">CloudIT</p>
-            <p className="flex items-center gap-1.5 text-xs text-slate-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
+            <p className="flex items-center gap-1.5 text-xs text-white/80">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#d9fdd3]" />
               online
             </p>
           </div>
@@ -229,7 +229,7 @@ export default function ChatMockup() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.3 }}
-              className="glass rounded-full px-2.5 py-1 text-[11px] font-medium text-teal-brand"
+              className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white"
             >
               {current.label}
             </motion.span>
@@ -238,10 +238,10 @@ export default function ChatMockup() {
 
         {/* Chat area */}
         <div
-          className="relative flex h-[380px] flex-col justify-end gap-2 overflow-hidden px-3 pb-4 pt-8 [mask-image:linear-gradient(to_bottom,transparent,black_14%)]"
+          className="relative flex h-[380px] flex-col justify-end gap-2 overflow-hidden bg-[#efeae2] px-3 pb-4 pt-8 [mask-image:linear-gradient(to_bottom,transparent,black_14%)]"
           style={{
             backgroundImage:
-              'radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px)',
+              'radial-gradient(rgba(18,20,43,0.055) 1px, transparent 1px)',
             backgroundSize: '22px 22px',
           }}
         >
@@ -263,9 +263,12 @@ export default function ChatMockup() {
                       initial={{ opacity: 0, y: 14, scale: 0.96 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       transition={{ duration: 0.4, ease: 'easeOut' }}
-                      className="glass mx-auto max-w-[85%] rounded-xl px-3.5 py-2.5 text-center text-[11px] leading-relaxed text-slate-300"
+                      className="mx-auto flex max-w-[85%] items-stretch overflow-hidden rounded-xl border border-[#e6e8f5] bg-white text-left shadow-sm"
                     >
-                      {m.text}
+                      <span aria-hidden className="w-1 shrink-0 bg-gradient-to-b from-teal-brand to-indigo-brand" />
+                      <span className="px-3.5 py-2.5 text-[11px] leading-relaxed text-[#5a5e7a]">
+                        {m.text}
+                      </span>
                     </motion.div>
                   );
                 }
@@ -276,16 +279,16 @@ export default function ChatMockup() {
                     initial={{ opacity: 0, y: 16, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ duration: 0.35, ease: 'easeOut' }}
-                    className={`w-fit max-w-[82%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm ${
+                    className={`w-fit max-w-[82%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed text-[#111b21] shadow-sm ${
                       isAi
-                        ? 'rounded-bl-md bg-[#005c4b] text-white'
-                        : 'self-end rounded-br-md bg-[#202c33] text-slate-100'
+                        ? 'rounded-bl-md bg-white'
+                        : 'self-end rounded-br-md bg-[#d9fdd3]'
                     }`}
                   >
                     {isAi ? <Typewriter text={m.text} /> : m.text}
-                    <span className="mt-1 flex items-center justify-end gap-1 text-[9px] text-white/40">
+                    <span className="mt-1 flex items-center justify-end gap-1 text-[9px] text-[#667781]">
                       {isAi && (
-                        <span className="rounded bg-white/10 px-1 py-px text-[8px] font-semibold uppercase tracking-wide text-teal-brand">
+                        <span className="rounded bg-teal-brand/15 px-1 py-px text-[8px] font-semibold uppercase tracking-wide text-[#009e90]">
                           AI
                         </span>
                       )}
@@ -300,13 +303,13 @@ export default function ChatMockup() {
         </div>
 
         {/* Input bar (decorative) */}
-        <div className="flex items-center gap-2 border-t border-white/5 bg-[#1f2c34] px-3 py-2.5">
-          <div className="h-9 flex-1 rounded-full bg-[#2a3942] px-4 text-xs leading-9 text-slate-500">
+        <div className="flex items-center gap-2 border-t border-[#e6e8f5] bg-[#f0f2f5] px-3 py-2.5">
+          <div className="h-9 flex-1 rounded-full bg-white px-4 text-xs leading-9 text-[#8696a0]">
             Message
           </div>
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-brand/90">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M3 11.5 21 3l-6.5 18-2.7-7.8L3 11.5Z" fill="#0a0a12" />
+              <path d="M3 11.5 21 3l-6.5 18-2.7-7.8L3 11.5Z" fill="#ffffff" />
             </svg>
           </div>
         </div>

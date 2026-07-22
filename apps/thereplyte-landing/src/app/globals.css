@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0a0a12;
+  --bg: #ffffff;
 }
 
 html {
@@ -12,34 +12,35 @@ html {
 
 body {
   background-color: var(--bg);
-  color: #e8e8f2;
+  color: #12142b;
   font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
-  background: rgba(0, 216, 199, 0.3);
-  color: #fff;
+  background: rgba(0, 216, 199, 0.25);
+  color: #12142b;
 }
 
 ::-webkit-scrollbar {
   width: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #0a0a12;
+  background: #f6f7fd;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: #d5d8ec;
   border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: #b9bde0;
 }
 
 @layer components {
   .glass {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #ffffff;
+    border: 1px solid #e6e8f5;
+    box-shadow: 0 4px 24px rgba(74, 66, 252, 0.06);
   }
 
   .text-gradient {
@@ -49,12 +50,12 @@ body {
 
   .btn-gradient {
     background-image: linear-gradient(92deg, #00d8c7 0%, #4a42fc 100%);
-    box-shadow: 0 0 24px rgba(74, 66, 252, 0.35), 0 0 48px rgba(0, 216, 199, 0.12);
+    box-shadow: 0 8px 24px rgba(74, 66, 252, 0.25), 0 2px 8px rgba(0, 216, 199, 0.18);
     transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
   }
   .btn-gradient:hover {
-    filter: brightness(1.1);
+    filter: brightness(1.06);
     transform: translateY(-1px);
-    box-shadow: 0 0 32px rgba(74, 66, 252, 0.5), 0 0 64px rgba(0, 216, 199, 0.2);
+    box-shadow: 0 12px 32px rgba(74, 66, 252, 0.32), 0 4px 12px rgba(0, 216, 199, 0.24);
   }
 }
