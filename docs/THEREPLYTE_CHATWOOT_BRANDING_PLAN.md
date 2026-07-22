@@ -37,11 +37,7 @@ Nothing else. No landing-page files, no other apps.
 
 ## Technical detail (the one tricky part)
 
-`installation_configs` stores values in a `serialized_value` column as Ruby YAML, e.g. `---\n:value: TheReplyte\n`. During implementation we will:
-
-1. First **read** an existing row (e.g. `INSTALLATION_NAME` if present, or `INSTALLATION_IDENTIFIER`) to confirm the exact YAML format used by our Chatwoot version.
-2. Write rows in that exact format via upsert (`INSERT ... ON CONFLICT (name) DO UPDATE`).
-3. Keep the `locked` flag `false` so the values can still be edited from the super-admin console later if ever needed.
+`installation_configs.serialized_value` holds a **YAML document tagged as `!ruby/hash:ActiveSupport::HashWithIndifferentAccess`** with a string key, because the model declares `serialize :serialized_value, type: HashWithIndifferentAccess`. Newer versions type the column as **jsonb but store the YAML as a JSON string scalar**; older versions use a plain text column. Production-verified pitfalls (2026-07-22), each 500ing every HTML page: a JSON object → `TypeError: no implicit conversion of Hash into String`; a symbol key (`:value:`) → `Psych::DisallowedClass`; untagged plain-hash YAML → `ActiveRecord::SerializationTypeMismatch`. The code detects the column type per run and writes a JSON-encoded tagged-YAML string for jsonb, plain tagged YAML for text. Manual alternative (guaranteed correct): set values via `rails runner` with `InstallationConfig#value=`, which serializes through Chatwoot's own setter.
 
 ## Deployment steps (after code is merged)
 

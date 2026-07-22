@@ -412,9 +412,12 @@ export class ChatwootService implements OnModuleInit {
       const jsonColumn = await this.installationConfigUsesJson(pool);
       const cast = jsonColumn ? '::jsonb' : '';
       for (const [name, value] of entries) {
-        const serialized = jsonColumn
-          ? JSON.stringify({ value })
-          : this.serializeInstallationConfigValue(value);
+        const yaml = this.serializeInstallationConfigValue(value);
+        // jsonb columns still hold the YAML document — as a JSON string scalar.
+        // Chatwoot's InstallationConfig#value always runs YAML.load on what it
+        // reads, so a JSON object like {"value": ...} crashes page rendering
+        // (TypeError: no implicit conversion of Hash into String).
+        const serialized = jsonColumn ? JSON.stringify(yaml) : yaml;
         // UPDATE first so this works whether or not a unique index on `name` exists.
         const result = await pool.query(
           `UPDATE installation_configs
@@ -444,8 +447,9 @@ export class ChatwootService implements OnModuleInit {
   }
 
   /**
-   * Newer Chatwoot versions store installation_configs.serialized_value as
-   * jsonb ({"value": ...}); older versions use YAML text. Detect once per run.
+   * Newer Chatwoot versions type installation_configs.serialized_value as
+   * jsonb, but the app still stores a YAML document in it (as a JSON string
+   * scalar); older versions use a plain YAML text column. Detect once per run.
    */
   private async installationConfigUsesJson(pool: Pool): Promise<boolean> {
     const result = await pool.query(
@@ -459,14 +463,16 @@ export class ChatwootService implements OnModuleInit {
   }
 
   /**
-   * YAML fallback for older Chatwoot versions where serialized_value is a text
-   * column holding a Ruby-serialized hash ({ value: ... }). A double-quoted
-   * scalar is always valid YAML, so this parses identically to what Chatwoot
-   * itself writes.
+   * Chatwoot declares `serialize :serialized_value, type: HashWithIndifferentAccess`,
+   * so the YAML must be tagged as HashWithIndifferentAccess — anything else
+   * 500s every HTML page (verified in production: plain Hash raises
+   * ActiveRecord::SerializationTypeMismatch, a symbol key raises
+   * Psych::DisallowedClass, and a jsonb object raises TypeError).
+   * A double-quoted scalar is always valid YAML.
    */
   private serializeInstallationConfigValue(value: string): string {
     const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    return `---\n:value: "${escaped}"\n`;
+    return `--- !ruby/hash:ActiveSupport::HashWithIndifferentAccess\nvalue: "${escaped}"\n`;
   }
 
   /**
