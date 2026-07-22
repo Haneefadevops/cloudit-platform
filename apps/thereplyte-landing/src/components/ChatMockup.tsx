@@ -3,98 +3,333 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
-type Msg = {
-  id: number;
-  from: 'customer' | 'ai' | 'system';
-  text: string;
-};
+type LangCode = 'en' | 'si' | 'ta' | 'ar' | 'es';
 
-type Script = {
+type Language = {
+  code: LangCode;
   label: string;
   dir: 'ltr' | 'rtl';
-  steps: { from: 'customer' | 'ai'; text: string }[];
+};
+
+const LANGUAGES: Language[] = [
+  { code: 'en', label: 'English', dir: 'ltr' },
+  { code: 'si', label: 'සිංහල', dir: 'ltr' },
+  { code: 'ta', label: 'தமிழ்', dir: 'ltr' },
+  { code: 'ar', label: 'العربية', dir: 'rtl' },
+  { code: 'es', label: 'Español', dir: 'ltr' },
+];
+
+// Currency follows the language, not the business.
+const PRICES: Record<'cake' | 'food' | 'slip', Record<LangCode, string>> = {
+  cake: { en: 'LKR 6,500', si: 'රු. 6,500', ta: 'ரூ. 6,500', ar: 'AED 80', es: '$22' },
+  food: { en: 'LKR 1,850', si: 'රු. 1,850', ta: 'ரூ. 1,850', ar: 'AED 23', es: '$6' },
+  slip: { en: 'LKR 8,900', si: 'රු. 8,900', ta: 'ரூ. 8,900', ar: 'AED 110', es: '$30' },
+};
+
+const localize = (text: string, lang: LangCode) =>
+  text
+    .replaceAll('{cake}', PRICES.cake[lang])
+    .replaceAll('{food}', PRICES.food[lang])
+    .replaceAll('{slip}', PRICES.slip[lang]);
+
+type StepType = 'c' | 'ai' | 'voice' | 'photo' | 'card' | 'handoff';
+
+type Step = {
+  t: StepType;
+  text?: string;
+};
+
+type Scenario = {
+  business: string;
+  avatarLetter: string;
+  avatarColor: string;
+  chip: string;
+  steps: Record<LangCode, Step[]>;
 };
 
 const HANDOFF_TEXT =
   '🤖→👤 Complex question? It hands off to your team with a full summary.';
 
-const SCRIPTS: Script[] = [
+const SCENARIOS: Scenario[] = [
   {
-    label: 'English',
-    dir: 'ltr',
-    steps: [
-      { from: 'customer', text: 'Hi! Do you have any slots available this Friday?' },
-      {
-        from: 'ai',
-        text: 'Yes! Dr. Perera has slots at 6:45pm and 7:30pm Friday. Which works for you?',
-      },
-      { from: 'customer', text: '7:30 please' },
-      { from: 'ai', text: "Booked ✅ Friday 7:30pm with Dr. Perera. I'll remind you a day before!" },
-    ],
+    business: 'City Clinic',
+    avatarLetter: 'C',
+    avatarColor: 'bg-indigo-500',
+    chip: 'Booking',
+    steps: {
+      en: [
+        { t: 'c', text: 'Hi! Do you have any slots available this Friday?' },
+        {
+          t: 'ai',
+          text: 'Yes! Dr. Perera has slots at 6:45pm and 7:30pm Friday. Which works for you?',
+        },
+        { t: 'c', text: '7:30 please' },
+        {
+          t: 'ai',
+          text: "Booked ✅ Friday 7:30pm with Dr. Perera. I'll remind you a day before!",
+        },
+        { t: 'handoff' },
+      ],
+      si: [
+        { t: 'c', text: 'Hi! Friday වලට appointment එකක් ගන්න පුළුවන්ද?' },
+        {
+          t: 'ai',
+          text: 'පුළුවන්! Dr. Perera Friday 6:45pm සහ 7:30pm වලට available. කොච්චර වෙලාවට ඕනද?',
+        },
+        { t: 'c', text: '7:30ට ඕන' },
+        {
+          t: 'ai',
+          text: 'Booked ✅ Friday 7:30pm Dr. Perera එක්ක. දවසකට කලින් reminder එකක් එවන්නම්!',
+        },
+        { t: 'handoff' },
+      ],
+      ta: [
+        { t: 'c', text: 'Hi! வெள்ளிக்கு appointment கிடைக்குமா?' },
+        {
+          t: 'ai',
+          text: 'கிடைக்கும்! Dr. Perera வெள்ளி 6:45pm மற்றும் 7:30pm-க்கு available. எது சரியாகும்?',
+        },
+        { t: 'c', text: '7:30 சரி' },
+        {
+          t: 'ai',
+          text: 'Booked ✅ வெள்ளி 7:30pm Dr. Perera. ஒரு நாள் முன் reminder அனுப்புவேன்!',
+        },
+        { t: 'handoff' },
+      ],
+      ar: [
+        { t: 'c', text: 'مرحباً! هل يوجد موعد متاح يوم الجمعة؟' },
+        {
+          t: 'ai',
+          text: 'نعم! الدكتور بيريرا متاح الجمعة 6:45 و 7:30 مساءً. أيهما يناسبك؟',
+        },
+        { t: 'c', text: '7:30 من فضلك' },
+        {
+          t: 'ai',
+          text: 'تم الحجز ✅ الجمعة 7:30 مساءً مع الدكتور بيريرا. سأذكّرك قبلها بيوم!',
+        },
+        { t: 'handoff' },
+      ],
+      es: [
+        { t: 'c', text: '¡Hola! ¿Hay citas disponibles el viernes?' },
+        {
+          t: 'ai',
+          text: '¡Sí! El Dr. Perera tiene horas a las 6:45pm y 7:30pm el viernes. ¿Cuál te viene bien?',
+        },
+        { t: 'c', text: '7:30 por favor' },
+        {
+          t: 'ai',
+          text: '¡Reservado ✅ Viernes 7:30pm con el Dr. Perera. Te recordaré un día antes!',
+        },
+        { t: 'handoff' },
+      ],
+    },
   },
   {
-    label: 'සිංහල',
-    dir: 'ltr',
-    steps: [
-      { from: 'customer', text: 'Hi! Friday වලට appointment එකක් ගන්න පුළුවන්ද?' },
-      {
-        from: 'ai',
-        text: 'පුළුවන්! Dr. Perera Friday 6:45pm සහ 7:30pm වලට available. කොයි එකද ඕන?',
-      },
-      { from: 'customer', text: '7:30ට ඕන' },
-      {
-        from: 'ai',
-        text: 'Booked ✅ Friday 7:30pm Dr. Perera එක්ක. දවසකට කලින් reminder එකක් එවන්නම්!',
-      },
-    ],
+    business: 'Sweet Layers Bakery',
+    avatarLetter: 'S',
+    avatarColor: 'bg-rose-500',
+    chip: 'Pricing',
+    steps: {
+      en: [
+        { t: 'c', text: 'Hi, how much is a 2kg ribbon cake?' },
+        {
+          t: 'ai',
+          text: 'Our 2kg ribbon cake is {cake} 🎂 Most customers add a free message card — want one?',
+        },
+        { t: 'c', text: 'Yes please, add the card' },
+        {
+          t: 'ai',
+          text: 'Done! 2kg ribbon cake + message card — {cake}. Shall I book it for Saturday?',
+        },
+      ],
+      si: [
+        { t: 'c', text: 'Hi, 2kg ribbon cake එකක් කීයද?' },
+        {
+          t: 'ai',
+          text: '2kg ribbon cake එක {cake} 🎂 බොහොමයක් අය free message card එකක් add කරගන්නවා — ඕනද?',
+        },
+        { t: 'c', text: 'ඔව්, card එකත් දාන්න' },
+        {
+          t: 'ai',
+          text: 'හරි! 2kg ribbon cake + message card — {cake}. Saturdayට book කරන්නද?',
+        },
+      ],
+      ta: [
+        { t: 'c', text: 'Hi, 2kg ribbon cake எவ்வளவு?' },
+        {
+          t: 'ai',
+          text: '2kg ribbon cake {cake} 🎂 பலர் இலவச message card சேர்ப்பார்கள் — வேண்டுமா?',
+        },
+        { t: 'c', text: 'ஆம், card-ஐயும் சேருங்கள்' },
+        {
+          t: 'ai',
+          text: 'சரி! 2kg ribbon cake + message card — {cake}. சனிக்கு book செய்யட்டுமா?',
+        },
+      ],
+      ar: [
+        { t: 'c', text: 'مرحباً، كم سعر كيكة الريبون ٢ كجم؟' },
+        {
+          t: 'ai',
+          text: 'كيكة الريبون ٢ كجم بـ{cake} 🎂 معظم العملاء يضيفون بطاقة رسالة مجانية — هل تريد واحدة؟',
+        },
+        { t: 'c', text: 'نعم، أضف البطاقة' },
+        {
+          t: 'ai',
+          text: 'تم! كيكة ريبون ٢ كجم + بطاقة رسالة — {cake}. هل أحجزها ليوم السبت؟',
+        },
+      ],
+      es: [
+        { t: 'c', text: 'Hola, ¿cuánto cuesta una torta de 2kg?' },
+        {
+          t: 'ai',
+          text: 'Nuestra torta de 2kg cuesta {cake} 🎂 La mayoría añade una tarjeta de mensaje gratis — ¿quieres una?',
+        },
+        { t: 'c', text: 'Sí, añade la tarjeta' },
+        {
+          t: 'ai',
+          text: '¡Listo! Torta 2kg + tarjeta — {cake}. ¿La reservo para el sábado?',
+        },
+      ],
+    },
   },
   {
-    label: 'தமிழ்',
-    dir: 'ltr',
-    steps: [
-      { from: 'customer', text: 'Hi! வெள்ளிக்கு appointment கிடைக்குமா?' },
-      {
-        from: 'ai',
-        text: 'கிடைக்கும்! Dr. Perera வெள்ளி 6:45pm மற்றும் 7:30pm-க்கு free. எது ok?',
-      },
-      { from: 'customer', text: '7:30 please' },
-      {
-        from: 'ai',
-        text: 'Booked ✅ வெள்ளி 7:30pm Dr. Perera உடன். ஒரு நாள் முன் reminder அனுப்புறேன்!',
-      },
-    ],
+    business: 'Spice Route Kitchen',
+    avatarLetter: 'S',
+    avatarColor: 'bg-amber-500',
+    chip: 'Food order',
+    steps: {
+      en: [
+        { t: 'voice' },
+        { t: 'ai', text: 'Got it! One chicken kottu and one lime juice — anything else?' },
+        { t: 'c', text: "That's all, deliver to Dehiwala" },
+        { t: 'card', text: '{food}' },
+        { t: 'ai', text: 'Order #78 confirmed! Arriving in ~35 mins 🛵' },
+      ],
+      si: [
+        { t: 'voice' },
+        { t: 'ai', text: 'හරි! chicken kottu එකක් සහ lime juice එකක් — තව මොනවාහරිද?' },
+        { t: 'c', text: 'ඒවා විතරයි, Dehiwalaට deliver කරන්න' },
+        { t: 'card', text: '{food}' },
+        { t: 'ai', text: 'Order #78 confirm! විනාඩි 35කින් විතර එනවා 🛵' },
+      ],
+      ta: [
+        { t: 'voice' },
+        { t: 'ai', text: 'சரி! ஒரு chicken kottu, ஒரு lime juice — வேறு ஏதும்?' },
+        { t: 'c', text: 'அவ்வளவுதான், Dehiwala-க்கு deliver செய்யுங்கள்' },
+        { t: 'card', text: '{food}' },
+        { t: 'ai', text: 'Order #78 உறுதி! ~35 நிமிடங்களில் வரும் 🛵' },
+      ],
+      ar: [
+        { t: 'voice' },
+        { t: 'ai', text: 'تم! كوتو دجاج واحد وعصير ليمون — شيء آخر؟' },
+        { t: 'c', text: 'هذا كل شيء، التوصيل إلى ديهيوالا' },
+        { t: 'card', text: '{food}' },
+        { t: 'ai', text: 'تم تأكيد الطلب #78! يصل خلال ~35 دقيقة 🛵' },
+      ],
+      es: [
+        { t: 'voice' },
+        { t: 'ai', text: '¡Anotado! Un kottu de pollo y un jugo de lima — ¿algo más?' },
+        { t: 'c', text: 'Eso es todo, entrega en Dehiwala' },
+        { t: 'card', text: '{food}' },
+        { t: 'ai', text: '¡Pedido #78 confirmado! Llega en ~35 min 🛵' },
+      ],
+    },
   },
   {
-    label: 'العربية',
-    dir: 'rtl',
-    steps: [
-      { from: 'customer', text: 'مرحباً! هل يوجد موعد متاح يوم الجمعة؟' },
-      {
-        from: 'ai',
-        text: 'نعم! الدكتور بيريرا متاح يوم الجمعة 6:45م و 7:30م. أي وقت يناسبك؟',
-      },
-      { from: 'customer', text: '7:30 من فضلك' },
-      {
-        from: 'ai',
-        text: 'تم الحجز ✅ الجمعة 7:30م مع الدكتور بيريرا. سأذكّرك قبلها بيوم!',
-      },
-    ],
+    business: 'QuickMart Stores',
+    avatarLetter: 'Q',
+    avatarColor: 'bg-teal-500',
+    chip: 'Tracking',
+    steps: {
+      en: [
+        { t: 'c', text: 'Where is my order?' },
+        { t: 'ai', text: 'Your order #1042 is out for delivery 🚚 Arriving today before 4pm.' },
+        { t: 'c', text: 'Great, thanks!' },
+        { t: 'ai', text: "You're welcome! Message me anytime for updates." },
+      ],
+      si: [
+        { t: 'c', text: 'මගේ order එක කොහෙද?' },
+        { t: 'ai', text: 'ඔබේ order #1042 deliveryට නික්මුණා 🚚 අද 4pmට කලින් එනවා.' },
+        { t: 'c', text: 'බොහොම ස්තූතියි!' },
+        { t: 'ai', text: 'සුභ පැතුම්! Updates ඕන විටෙක message කරන්න.' },
+      ],
+      ta: [
+        { t: 'c', text: 'என் order எங்கே?' },
+        { t: 'ai', text: 'உங்கள் order #1042 delivery-க்கு புறப்பட்டது 🚚 இன்று 4pm முன் வரும்.' },
+        { t: 'c', text: 'நன்றி!' },
+        { t: 'ai', text: 'வரவேற்கிறோம்! எப்போது வேண்டுமானாலும் message செய்யுங்கள்.' },
+      ],
+      ar: [
+        { t: 'c', text: 'أين طلبي؟' },
+        { t: 'ai', text: 'طلبك #1042 خرج للتوصيل 🚚 يصل اليوم قبل 4 مساءً.' },
+        { t: 'c', text: 'شكراً!' },
+        { t: 'ai', text: 'على الرحب! راسلني في أي وقت للتحديثات.' },
+      ],
+      es: [
+        { t: 'c', text: '¿Dónde está mi pedido?' },
+        { t: 'ai', text: 'Tu pedido #1042 está en reparto 🚚 Llega hoy antes de las 4pm.' },
+        { t: 'c', text: '¡Genial, gracias!' },
+        { t: 'ai', text: '¡De nada! Escríbeme cuando quieras.' },
+      ],
+    },
   },
   {
-    label: 'Español',
-    dir: 'ltr',
-    steps: [
-      { from: 'customer', text: '¡Hola! ¿Hay citas disponibles el viernes?' },
-      {
-        from: 'ai',
-        text: '¡Sí! El Dr. Perera tiene horas el viernes a las 6:45pm y 7:30pm. ¿Cuál te viene mejor?',
-      },
-      { from: 'customer', text: '7:30 por favor' },
-      {
-        from: 'ai',
-        text: 'Reservado ✅ viernes 7:30pm con el Dr. Perera. ¡Te recuerdo un día antes!',
-      },
-    ],
+    business: 'Style Hub Clothing',
+    avatarLetter: 'S',
+    avatarColor: 'bg-violet-500',
+    chip: 'Payment',
+    steps: {
+      en: [
+        { t: 'c', text: "I've just paid via bank transfer" },
+        { t: 'photo', text: 'bank-slip.jpg 🧾' },
+        {
+          t: 'ai',
+          text: 'Payment received ✅ {slip} via bank transfer. Your order is confirmed!',
+        },
+        { t: 'c', text: 'When will it arrive?' },
+        {
+          t: 'ai',
+          text: "Ships tomorrow — delivery in 2–3 days 📦 I'll send you the tracking link.",
+        },
+      ],
+      si: [
+        { t: 'c', text: 'Bank transfer එකක් ගෙව්වා' },
+        { t: 'photo', text: 'bank-slip.jpg 🧾' },
+        { t: 'ai', text: 'Payment ලැබුණා ✅ {slip} bank transfer එකෙන්. ඔබේ order එක confirm!' },
+        { t: 'c', text: 'කවදාද එන්නේ?' },
+        {
+          t: 'ai',
+          text: 'හෙට ship කරනවා — දවස් 2–3කින් deliver වෙනවා 📦 tracking link එක එවන්නම්.',
+        },
+      ],
+      ta: [
+        { t: 'c', text: 'Bank transfer செய்துவிட்டேன்' },
+        { t: 'photo', text: 'bank-slip.jpg 🧾' },
+        { t: 'ai', text: 'Payment வந்துவிட்டது ✅ {slip} bank transfer மூலம். உங்கள் order உறுதி!' },
+        { t: 'c', text: 'எப்போது வரும்?' },
+        {
+          t: 'ai',
+          text: 'நாளை ship ஆகும் — 2–3 நாட்களில் delivery 📦 tracking link அனுப்புவேன்.',
+        },
+      ],
+      ar: [
+        { t: 'c', text: 'لقد دفعت عبر تحويل بنكي' },
+        { t: 'photo', text: 'bank-slip.jpg 🧾' },
+        { t: 'ai', text: 'تم استلام الدفعة ✅ {slip} عبر تحويل بنكي. تم تأكيد طلبك!' },
+        { t: 'c', text: 'متى سيصل؟' },
+        { t: 'ai', text: 'يُشحن غداً — التوصيل خلال 2–3 أيام 📦 سأرسل رابط التتبع.' },
+      ],
+      es: [
+        { t: 'c', text: 'Ya pagué por transferencia' },
+        { t: 'photo', text: 'bank-slip.jpg 🧾' },
+        { t: 'ai', text: 'Pago recibido ✅ {slip} por transferencia. ¡Tu pedido está confirmado!' },
+        { t: 'c', text: '¿Cuándo llega?' },
+        {
+          t: 'ai',
+          text: 'Sale mañana — entrega en 2–3 días 📦 Te envío el link de seguimiento.',
+        },
+      ],
+    },
   },
 ];
 
@@ -139,6 +374,83 @@ function TypingIndicator() {
   );
 }
 
+const WAVEFORM_HEIGHTS = [7, 11, 15, 9, 13, 17, 8, 12, 16, 10, 14, 8];
+
+function VoiceBubble() {
+  return (
+    <div className="w-[180px]">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#00a884]">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="#ffffff" aria-hidden="true">
+            <path d="M8 5v14l11-7L8 5Z" />
+          </svg>
+        </span>
+        <span className="flex flex-1 items-center gap-[2.5px]" aria-hidden="true">
+          {WAVEFORM_HEIGHTS.map((h, i) => (
+            <span
+              key={i}
+              className="w-[2.5px] rounded-full bg-[#5a8a72]"
+              style={{ height: `${h}px` }}
+            />
+          ))}
+        </span>
+        <span className="text-[10px] text-[#667781]">0:12</span>
+      </div>
+      <span className="mt-1 flex items-center justify-end gap-1 text-[9px] text-[#667781]">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"
+            fill="currentColor"
+          />
+        </svg>
+        now
+      </span>
+    </div>
+  );
+}
+
+function PhotoBubble({ caption }: { caption: string }) {
+  return (
+    <div className="w-[200px]">
+      <div className="flex h-[120px] w-[200px] items-center justify-center rounded-lg bg-gradient-to-br from-teal-brand/25 to-indigo-brand/25">
+        <span className="text-2xl" aria-hidden="true">
+          🧾
+        </span>
+      </div>
+      <span className="mt-1.5 flex items-center justify-between gap-1 text-[10px] text-[#111b21]">
+        <span className="truncate">{caption}</span>
+        <span className="shrink-0 text-[9px] text-[#667781]">now</span>
+      </span>
+    </div>
+  );
+}
+
+function OrderCard({ total }: { total: string }) {
+  return (
+    <div className="flex items-stretch overflow-hidden rounded-xl border border-[#e6e8f5] bg-white text-left shadow-sm">
+      <span aria-hidden className="w-1 shrink-0 bg-gradient-to-b from-teal-brand to-indigo-brand" />
+      <div className="px-3.5 py-2.5">
+        <p className="text-[12px] font-semibold text-[#12142b]">🧾 Order summary</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-[#5a5e7a]">
+          Chicken kottu ×1
+          <br />
+          Lime juice ×1
+        </p>
+        <p className="mt-1 text-[11px] font-bold text-[#12142b]">Total: {total}</p>
+        <span className="mt-1.5 inline-flex rounded-full bg-brand-gradient px-3 py-1 text-[10px] font-semibold text-white">
+          Confirm ✅
+        </span>
+      </div>
+    </div>
+  );
+}
+
+type Msg = {
+  id: number;
+  kind: StepType;
+  text: string;
+};
+
 export default function ChatMockup() {
   const [cycle, setCycle] = useState(0);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -155,32 +467,38 @@ export default function ChatMockup() {
     };
 
     async function run() {
-      let lang = 0;
+      let i = 0;
       while (!cancelled) {
-        setCycle(lang);
+        const langIdx = i % LANGUAGES.length;
+        const scenIdx = (i * 3) % SCENARIOS.length;
+        const lang = LANGUAGES[langIdx];
+        const scenario = SCENARIOS[scenIdx];
+        setCycle(i);
         setMessages([]);
         setTyping(false);
         await sleep(600);
-        const script = SCRIPTS[lang];
-        for (const step of script.steps) {
+        for (const step of scenario.steps[lang.code]) {
           if (cancelled) return;
-          if (step.from === 'ai') {
+          const text = step.text ? localize(step.text, lang.code) : '';
+          if (step.t === 'ai' || step.t === 'card') {
             setTyping(true);
             await sleep(950);
             if (cancelled) return;
             setTyping(false);
-            push({ from: 'ai', text: step.text });
+            push({ kind: step.t, text });
             // keep pace with the Typewriter reveal (~12ms/char) plus a beat
-            await sleep(450 + step.text.length * 12);
+            await sleep(step.t === 'ai' ? 450 + text.length * 12 : 1400);
+          } else if (step.t === 'handoff') {
+            push({ kind: 'handoff', text: HANDOFF_TEXT });
+            await sleep(1400);
           } else {
-            push({ from: 'customer', text: step.text });
+            push({ kind: step.t, text });
             await sleep(1150);
           }
         }
         if (cancelled) return;
-        push({ from: 'system', text: HANDOFF_TEXT });
         await sleep(4000);
-        lang = (lang + 1) % SCRIPTS.length;
+        i += 1;
       }
     }
 
@@ -190,10 +508,11 @@ export default function ChatMockup() {
     };
   }, []);
 
-  const current = SCRIPTS[cycle];
+  const lang = LANGUAGES[cycle % LANGUAGES.length];
+  const scenario = SCENARIOS[(cycle * 3) % SCENARIOS.length];
 
   return (
-    <div className="relative mx-auto w-full max-w-[400px]">
+    <div className="relative w-full max-w-[400px]">
       {/* Floating orbs */}
       <motion.div
         aria-hidden
@@ -212,11 +531,31 @@ export default function ChatMockup() {
       <div className="relative overflow-hidden rounded-[2rem] border border-[#e6e8f5] bg-white shadow-[0_30px_80px_-24px_rgba(74,66,252,0.28)]">
         {/* Header */}
         <div className="flex items-center gap-3 bg-[#008069] px-4 py-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-gradient text-sm font-bold text-white">
-            C
-          </div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={scenario.business}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.3 }}
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${scenario.avatarColor} text-sm font-bold text-white`}
+            >
+              {scenario.avatarLetter}
+            </motion.div>
+          </AnimatePresence>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">CloudIT</p>
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={scenario.business}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.3 }}
+                className="truncate text-sm font-semibold text-white"
+              >
+                {scenario.business}
+              </motion.p>
+            </AnimatePresence>
             <p className="flex items-center gap-1.5 text-xs text-white/80">
               <span className="h-1.5 w-1.5 rounded-full bg-[#d9fdd3]" />
               online
@@ -224,14 +563,26 @@ export default function ChatMockup() {
           </div>
           <AnimatePresence mode="wait">
             <motion.span
-              key={current.label}
+              key={scenario.chip}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.3 }}
               className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white"
             >
-              {current.label}
+              {scenario.chip}
+            </motion.span>
+          </AnimatePresence>
+          <AnimatePresence mode="wait">
+            <motion.span
+              key={lang.label}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.3 }}
+              className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white"
+            >
+              {lang.label}
             </motion.span>
           </AnimatePresence>
         </div>
@@ -252,10 +603,10 @@ export default function ChatMockup() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0, transition: { duration: 0.4 } }}
               className="flex flex-col justify-end gap-2"
-              dir={current.dir}
+              dir={lang.dir}
             >
               {messages.map((m) => {
-                if (m.from === 'system') {
+                if (m.kind === 'handoff') {
                   return (
                     <motion.div
                       key={m.id}
@@ -272,7 +623,20 @@ export default function ChatMockup() {
                     </motion.div>
                   );
                 }
-                const isAi = m.from === 'ai';
+                if (m.kind === 'card') {
+                  return (
+                    <motion.div
+                      key={m.id}
+                      initial={{ opacity: 0, y: 16, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ duration: 0.35, ease: 'easeOut' }}
+                      className="w-fit max-w-[82%]"
+                    >
+                      <OrderCard total={m.text} />
+                    </motion.div>
+                  );
+                }
+                const isAi = m.kind === 'ai';
                 return (
                   <motion.div
                     key={m.id}
@@ -285,15 +649,28 @@ export default function ChatMockup() {
                         : 'self-end rounded-br-md bg-[#d9fdd3]'
                     }`}
                   >
-                    {isAi ? <Typewriter text={m.text} /> : m.text}
-                    <span className="mt-1 flex items-center justify-end gap-1 text-[9px] text-[#667781]">
-                      {isAi && (
-                        <span className="rounded bg-teal-brand/15 px-1 py-px text-[8px] font-semibold uppercase tracking-wide text-[#009e90]">
-                          AI
+                    {m.kind === 'voice' ? (
+                      <VoiceBubble />
+                    ) : m.kind === 'photo' ? (
+                      <PhotoBubble caption={m.text} />
+                    ) : isAi ? (
+                      <>
+                        <Typewriter text={m.text} />
+                        <span className="mt-1 flex items-center justify-end gap-1 text-[9px] text-[#667781]">
+                          <span className="rounded bg-teal-brand/15 px-1 py-px text-[8px] font-semibold uppercase tracking-wide text-[#009e90]">
+                            AI
+                          </span>
+                          now
                         </span>
-                      )}
-                      now
-                    </span>
+                      </>
+                    ) : (
+                      <>
+                        {m.text}
+                        <span className="mt-1 flex items-center justify-end gap-1 text-[9px] text-[#667781]">
+                          now
+                        </span>
+                      </>
+                    )}
                   </motion.div>
                 );
               })}
