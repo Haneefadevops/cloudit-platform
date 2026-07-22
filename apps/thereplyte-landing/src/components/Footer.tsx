@@ -5,7 +5,7 @@ export default function Footer() {
     <footer className="bg-[#f6f7fd]">
       <div aria-hidden className="h-[2px] bg-gradient-to-r from-teal-brand to-indigo-brand" />
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-8 px-5 py-12 md:flex-row">
-        <Logo size={28} />
+        <Logo size={40} />
         <nav className="flex flex-wrap items-center justify-center gap-6 text-sm text-[#5a5e7a]">
           <a href="#features" className="transition-colors hover:text-[#12142b]">Features</a>
           <a href="#how" className="transition-colors hover:text-[#12142b]">How it works</a>

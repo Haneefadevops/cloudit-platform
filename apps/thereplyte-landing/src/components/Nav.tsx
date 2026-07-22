@@ -30,7 +30,7 @@ export default function Nav() {
         }`}
       >
         <a href="#" aria-label="TheReplyte home" className="flex shrink-0 items-center">
-          <Logo size={40} />
+          <Logo size={56} />
         </a>
 
         <nav className="hidden items-center gap-1 md:flex">
