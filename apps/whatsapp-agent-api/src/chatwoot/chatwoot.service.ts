@@ -409,12 +409,16 @@ export class ChatwootService implements OnModuleInit {
     let pool: Pool | undefined;
     try {
       pool = new Pool({ connectionString: databaseUrl, max: 1 });
+      const jsonColumn = await this.installationConfigUsesJson(pool);
+      const cast = jsonColumn ? '::jsonb' : '';
       for (const [name, value] of entries) {
-        const serialized = this.serializeInstallationConfigValue(value);
+        const serialized = jsonColumn
+          ? JSON.stringify({ value })
+          : this.serializeInstallationConfigValue(value);
         // UPDATE first so this works whether or not a unique index on `name` exists.
         const result = await pool.query(
           `UPDATE installation_configs
-           SET serialized_value = $2, updated_at = NOW()
+           SET serialized_value = $2${cast}, updated_at = NOW()
            WHERE name = $1`,
           [name, serialized],
         );
@@ -422,7 +426,7 @@ export class ChatwootService implements OnModuleInit {
           await pool.query(
             `INSERT INTO installation_configs
                (name, serialized_value, locked, created_at, updated_at)
-             VALUES ($1, $2, false, NOW(), NOW())`,
+             VALUES ($1, $2${cast}, false, NOW(), NOW())`,
             [name, serialized],
           );
         }
@@ -440,9 +444,25 @@ export class ChatwootService implements OnModuleInit {
   }
 
   /**
-   * installation_configs stores values as Ruby-serialized YAML hashes
-   * ({ value: ... }). A double-quoted scalar is always valid YAML, so this
-   * canonical form parses identically to what Chatwoot itself writes.
+   * Newer Chatwoot versions store installation_configs.serialized_value as
+   * jsonb ({"value": ...}); older versions use YAML text. Detect once per run.
+   */
+  private async installationConfigUsesJson(pool: Pool): Promise<boolean> {
+    const result = await pool.query(
+      `SELECT data_type
+       FROM information_schema.columns
+       WHERE table_name = 'installation_configs'
+         AND column_name = 'serialized_value'`,
+    );
+    const dataType = (result.rows[0]?.data_type as string | undefined) ?? '';
+    return dataType === 'json' || dataType === 'jsonb';
+  }
+
+  /**
+   * YAML fallback for older Chatwoot versions where serialized_value is a text
+   * column holding a Ruby-serialized hash ({ value: ... }). A double-quoted
+   * scalar is always valid YAML, so this parses identically to what Chatwoot
+   * itself writes.
    */
   private serializeInstallationConfigValue(value: string): string {
     const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
