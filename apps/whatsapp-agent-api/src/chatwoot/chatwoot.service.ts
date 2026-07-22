@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 
@@ -50,10 +50,14 @@ export interface ChatwootWebhook {
 }
 
 @Injectable()
-export class ChatwootService {
+export class ChatwootService implements OnModuleInit {
   private readonly logger = new Logger(ChatwootService.name);
 
   constructor(private readonly configService: ConfigService) {}
+
+  async onModuleInit(): Promise<void> {
+    await this.ensureInstallationBranding();
+  }
 
   private get baseUrl(): string {
     return this.configService.get<string>(
@@ -361,6 +365,88 @@ export class ChatwootService {
       },
       this.adminApiKey,
     );
+  }
+
+  /**
+   * Brand the Chatwoot installation as TheReplyte (name, brand URL, optional logo).
+   * Writes directly to Chatwoot's installation_configs table; the setting is
+   * instance-wide, so it applies to every client account automatically.
+   * Idempotent — runs on every API start and simply re-applies the same values.
+   * Note: Chatwoot caches these configs (GlobalConfig); restart chatwoot-rails
+   * once after the first apply for the change to become visible.
+   */
+  async ensureInstallationBranding(): Promise<void> {
+    const databaseUrl = this.chatwootDatabaseUrl;
+    if (!databaseUrl) {
+      this.logger.warn(
+        'CHATWOOT_DATABASE_URL not set; skipping Chatwoot installation branding.',
+      );
+      return;
+    }
+
+    const brandName = this.configService.get<string>(
+      'CHATWOOT_BRAND_NAME',
+      'TheReplyte',
+    );
+    const brandUrl = this.configService.get<string>(
+      'CHATWOOT_BRAND_URL',
+      'https://thereplyte.com',
+    );
+    const logoUrl = this.configService.get<string>(
+      'CHATWOOT_BRAND_LOGO_URL',
+      '',
+    );
+
+    const entries: Array<[string, string]> = [
+      ['INSTALLATION_NAME', brandName],
+      ['BRAND_NAME', brandName],
+      ['BRAND_URL', brandUrl],
+    ];
+    if (logoUrl) {
+      entries.push(['LOGO', logoUrl], ['LOGO_DARK', logoUrl]);
+    }
+
+    let pool: Pool | undefined;
+    try {
+      pool = new Pool({ connectionString: databaseUrl, max: 1 });
+      for (const [name, value] of entries) {
+        const serialized = this.serializeInstallationConfigValue(value);
+        // UPDATE first so this works whether or not a unique index on `name` exists.
+        const result = await pool.query(
+          `UPDATE installation_configs
+           SET serialized_value = $2, updated_at = NOW()
+           WHERE name = $1`,
+          [name, serialized],
+        );
+        if (!result.rowCount) {
+          await pool.query(
+            `INSERT INTO installation_configs
+               (name, serialized_value, locked, created_at, updated_at)
+             VALUES ($1, $2, false, NOW(), NOW())`,
+            [name, serialized],
+          );
+        }
+      }
+      this.logger.log(
+        `Applied Chatwoot installation branding: ${brandName} (${entries.length} keys)`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to apply Chatwoot installation branding: ${(error as Error).message}`,
+      );
+    } finally {
+      await pool?.end();
+    }
+  }
+
+  /**
+   * installation_configs stores values as Ruby-serialized YAML hashes
+   * ({ value: ... }). A double-quoted scalar is always valid YAML, so this
+   * canonical form parses identically to what Chatwoot itself writes.
+   */
+  private serializeInstallationConfigValue(value: string): string {
+    const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return `---\n:value: "${escaped}"\n`;
   }
 
   /**
