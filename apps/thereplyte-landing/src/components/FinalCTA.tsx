@@ -22,11 +22,11 @@ export default function FinalCTA() {
 
             <div className="relative">
               <h2 className="mx-auto max-w-2xl text-3xl font-extrabold tracking-tight text-[#12142b] sm:text-4xl lg:text-5xl">
-                See it answer <span className="text-gradient">your customers</span>
+                Experience Your <span className="text-gradient">AI Employee</span> in Action
               </h2>
               <p className="mx-auto mt-5 max-w-xl text-lg text-[#5a5e7a]">
-                Message us on WhatsApp and talk to the same AI your customers will. Live in
-                minutes, no code required.
+                Message us on WhatsApp and chat with the same AI that will answer your
+                customers no demos, no forms, just a real conversation.
               </p>
               <a
                 href={WA_LINK}

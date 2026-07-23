@@ -32,11 +32,14 @@ const localize = (text: string, lang: LangCode) =>
     .replaceAll('{food}', PRICES.food[lang])
     .replaceAll('{slip}', PRICES.slip[lang]);
 
-type StepType = 'c' | 'ai' | 'voice' | 'photo' | 'card' | 'handoff';
+type StepType = 'c' | 'ai' | 'voice' | 'photo' | 'card' | 'handoff' | 'result';
+
+type ResultView = 'calendar' | 'orderbook';
 
 type Step = {
   t: StepType;
   text?: string;
+  view?: ResultView;
 };
 
 type Scenario = {
@@ -69,6 +72,7 @@ const SCENARIOS: Scenario[] = [
           text: "Booked ✅ Friday 7:30pm with Dr. Perera. I'll remind you a day before!",
         },
         { t: 'handoff' },
+        { t: 'result', view: 'calendar' },
       ],
       si: [
         { t: 'c', text: 'Hi! Friday වලට appointment එකක් ගන්න පුළුවන්ද?' },
@@ -82,6 +86,7 @@ const SCENARIOS: Scenario[] = [
           text: 'Booked ✅ Friday 7:30pm Dr. Perera එක්ක. දවසකට කලින් reminder එකක් එවන්නම්!',
         },
         { t: 'handoff' },
+        { t: 'result', view: 'calendar' },
       ],
       ta: [
         { t: 'c', text: 'Hi! வெள்ளிக்கு appointment கிடைக்குமா?' },
@@ -95,6 +100,7 @@ const SCENARIOS: Scenario[] = [
           text: 'Booked ✅ வெள்ளி 7:30pm Dr. Perera. ஒரு நாள் முன் reminder அனுப்புவேன்!',
         },
         { t: 'handoff' },
+        { t: 'result', view: 'calendar' },
       ],
       ar: [
         { t: 'c', text: 'مرحباً! هل يوجد موعد متاح يوم الجمعة؟' },
@@ -108,6 +114,7 @@ const SCENARIOS: Scenario[] = [
           text: 'تم الحجز ✅ الجمعة 7:30 مساءً مع الدكتور بيريرا. سأذكّرك قبلها بيوم!',
         },
         { t: 'handoff' },
+        { t: 'result', view: 'calendar' },
       ],
       es: [
         { t: 'c', text: '¡Hola! ¿Hay citas disponibles el viernes?' },
@@ -121,6 +128,7 @@ const SCENARIOS: Scenario[] = [
           text: '¡Reservado ✅ Viernes 7:30pm con el Dr. Perera. Te recordaré un día antes!',
         },
         { t: 'handoff' },
+        { t: 'result', view: 'calendar' },
       ],
     },
   },
@@ -204,6 +212,7 @@ const SCENARIOS: Scenario[] = [
         { t: 'c', text: "That's all, deliver to Dehiwala" },
         { t: 'card', text: '{food}' },
         { t: 'ai', text: 'Order #78 confirmed! Arriving in ~35 mins 🛵' },
+        { t: 'result', view: 'orderbook', text: '#78 · Kottu + juice · {food} · Confirmed ✅' },
       ],
       si: [
         { t: 'voice' },
@@ -211,6 +220,7 @@ const SCENARIOS: Scenario[] = [
         { t: 'c', text: 'ඒවා විතරයි, Dehiwalaට deliver කරන්න' },
         { t: 'card', text: '{food}' },
         { t: 'ai', text: 'Order #78 confirm! විනාඩි 35කින් විතර එනවා 🛵' },
+        { t: 'result', view: 'orderbook', text: '#78 · Kottu + juice · {food} · Confirmed ✅' },
       ],
       ta: [
         { t: 'voice' },
@@ -218,6 +228,7 @@ const SCENARIOS: Scenario[] = [
         { t: 'c', text: 'அவ்வளவுதான், Dehiwala-க்கு deliver செய்யுங்கள்' },
         { t: 'card', text: '{food}' },
         { t: 'ai', text: 'Order #78 உறுதி! ~35 நிமிடங்களில் வரும் 🛵' },
+        { t: 'result', view: 'orderbook', text: '#78 · Kottu + juice · {food} · Confirmed ✅' },
       ],
       ar: [
         { t: 'voice' },
@@ -225,6 +236,7 @@ const SCENARIOS: Scenario[] = [
         { t: 'c', text: 'هذا كل شيء، التوصيل إلى ديهيوالا' },
         { t: 'card', text: '{food}' },
         { t: 'ai', text: 'تم تأكيد الطلب #78! يصل خلال ~35 دقيقة 🛵' },
+        { t: 'result', view: 'orderbook', text: '#78 · Kottu + juice · {food} · Confirmed ✅' },
       ],
       es: [
         { t: 'voice' },
@@ -232,6 +244,7 @@ const SCENARIOS: Scenario[] = [
         { t: 'c', text: 'Eso es todo, entrega en Dehiwala' },
         { t: 'card', text: '{food}' },
         { t: 'ai', text: '¡Pedido #78 confirmado! Llega en ~35 min 🛵' },
+        { t: 'result', view: 'orderbook', text: '#78 · Kottu + juice · {food} · Confirmed ✅' },
       ],
     },
   },
@@ -291,6 +304,7 @@ const SCENARIOS: Scenario[] = [
           t: 'ai',
           text: "Ships tomorrow — delivery in 2–3 days 📦 I'll send you the tracking link.",
         },
+        { t: 'result', view: 'orderbook', text: '#79 · Dress ×1 · {slip} · Paid ✅' },
       ],
       si: [
         { t: 'c', text: 'Bank transfer එකක් ගෙව්වා' },
@@ -301,6 +315,7 @@ const SCENARIOS: Scenario[] = [
           t: 'ai',
           text: 'හෙට ship කරනවා — දවස් 2–3කින් deliver වෙනවා 📦 tracking link එක එවන්නම්.',
         },
+        { t: 'result', view: 'orderbook', text: '#79 · Dress ×1 · {slip} · Paid ✅' },
       ],
       ta: [
         { t: 'c', text: 'Bank transfer செய்துவிட்டேன்' },
@@ -311,6 +326,7 @@ const SCENARIOS: Scenario[] = [
           t: 'ai',
           text: 'நாளை ship ஆகும் — 2–3 நாட்களில் delivery 📦 tracking link அனுப்புவேன்.',
         },
+        { t: 'result', view: 'orderbook', text: '#79 · Dress ×1 · {slip} · Paid ✅' },
       ],
       ar: [
         { t: 'c', text: 'لقد دفعت عبر تحويل بنكي' },
@@ -318,6 +334,7 @@ const SCENARIOS: Scenario[] = [
         { t: 'ai', text: 'تم استلام الدفعة ✅ {slip} عبر تحويل بنكي. تم تأكيد طلبك!' },
         { t: 'c', text: 'متى سيصل؟' },
         { t: 'ai', text: 'يُشحن غداً — التوصيل خلال 2–3 أيام 📦 سأرسل رابط التتبع.' },
+        { t: 'result', view: 'orderbook', text: '#79 · Dress ×1 · {slip} · Paid ✅' },
       ],
       es: [
         { t: 'c', text: 'Ya pagué por transferencia' },
@@ -328,6 +345,7 @@ const SCENARIOS: Scenario[] = [
           t: 'ai',
           text: 'Sale mañana — entrega en 2–3 días 📦 Te envío el link de seguimiento.',
         },
+        { t: 'result', view: 'orderbook', text: '#79 · Dress ×1 · {slip} · Paid ✅' },
       ],
     },
   },
@@ -445,6 +463,97 @@ function OrderCard({ total }: { total: string }) {
   );
 }
 
+// July 2026 starts on a Wednesday (Mon-first grid → 2 leading blanks); the 24th is a Friday.
+const CALENDAR_CELLS: (number | null)[] = [
+  null,
+  null,
+  ...Array.from({ length: 31 }, (_, d) => d + 1),
+];
+
+function CalendarView() {
+  return (
+    <div className="mx-auto w-full max-w-[300px]">
+      <div className="rounded-xl border border-[#e6e8f5] bg-white p-3.5 shadow-sm">
+        <p className="text-[12px] font-semibold text-[#12142b]">📅 July 2026</p>
+        <div className="mt-2 grid grid-cols-7 gap-1 text-center">
+          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+            <span key={i} className="text-[9px] font-semibold text-[#8696a0]">
+              {d}
+            </span>
+          ))}
+          {CALENDAR_CELLS.map((d, i) =>
+            d === 24 ? (
+              <span
+                key={i}
+                className="flex h-7 items-center justify-center rounded-md bg-gradient-to-br from-teal-brand to-indigo-brand text-[10px] font-bold text-white"
+              >
+                24
+              </span>
+            ) : (
+              <span
+                key={i}
+                className="flex h-7 items-center justify-center rounded-md text-[10px] text-[#667781]"
+              >
+                {d ?? ''}
+              </span>
+            ),
+          )}
+        </div>
+        <div className="mt-2 flex justify-center">
+          <span className="rounded-full bg-gradient-to-r from-teal-brand/15 to-indigo-brand/15 px-2.5 py-1 text-[9px] font-semibold text-[#12142b]">
+            Fri 24 · 7:30 · Dr. Perera
+          </span>
+        </div>
+      </div>
+      <p className="mt-2 text-center text-[11px] font-semibold">
+        <span className="text-gradient">Booked on the calendar ✅</span>
+      </p>
+    </div>
+  );
+}
+
+const ORDERBOOK_COLS = 'grid grid-cols-[2.4rem_1fr_auto_auto] gap-x-2';
+
+function OrderBookView({ row }: { row: string }) {
+  const cells = row.split(' · ');
+  return (
+    <div className="mx-auto w-full max-w-[320px]">
+      <div className="rounded-xl border border-[#e6e8f5] bg-white p-3.5 shadow-sm">
+        <p className="text-[12px] font-semibold text-[#12142b]">🧾 Order book</p>
+        <div className="mt-2 text-[10px]">
+          <div
+            className={`${ORDERBOOK_COLS} border-b border-[#eef0f8] pb-1 font-semibold uppercase tracking-wide text-[#8696a0]`}
+          >
+            <span>Order</span>
+            <span>Items</span>
+            <span>Total</span>
+            <span>Status</span>
+          </div>
+          <div className={`${ORDERBOOK_COLS} py-1.5 text-[#a0a4bd]`}>
+            <span>#77</span>
+            <span>Sandwich ×2</span>
+            <span>LKR 1,200</span>
+            <span>Delivered</span>
+          </div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.45, delay: 0.35, ease: 'easeOut' }}
+            className={`${ORDERBOOK_COLS} rounded-lg bg-teal-brand/10 px-1.5 py-1.5 font-semibold text-[#12142b]`}
+          >
+            {cells.map((c, i) => (
+              <span key={i}>{c}</span>
+            ))}
+          </motion.div>
+        </div>
+      </div>
+      <p className="mt-2 text-center text-[11px] font-semibold">
+        <span className="text-gradient">Logged in the order book ✅</span>
+      </p>
+    </div>
+  );
+}
+
 type Msg = {
   id: number;
   kind: StepType;
@@ -455,6 +564,7 @@ export default function ChatMockup() {
   const [cycle, setCycle] = useState(0);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [typing, setTyping] = useState(false);
+  const [result, setResult] = useState<{ view: ResultView; text: string } | null>(null);
   const idRef = useRef(0);
 
   useEffect(() => {
@@ -476,7 +586,9 @@ export default function ChatMockup() {
         setCycle(i);
         setMessages([]);
         setTyping(false);
+        setResult(null);
         await sleep(600);
+        let showedResult = false;
         for (const step of scenario.steps[lang.code]) {
           if (cancelled) return;
           const text = step.text ? localize(step.text, lang.code) : '';
@@ -491,13 +603,20 @@ export default function ChatMockup() {
           } else if (step.t === 'handoff') {
             push({ kind: 'handoff', text: HANDOFF_TEXT });
             await sleep(1400);
+          } else if (step.t === 'result' && step.view) {
+            await sleep(500);
+            if (cancelled) return;
+            setResult({ view: step.view, text });
+            showedResult = true;
+            await sleep(3000);
           } else {
             push({ kind: step.t, text });
             await sleep(1150);
           }
         }
         if (cancelled) return;
-        await sleep(4000);
+        // the result view already held the screen for ~3s, so cut the end pause short
+        await sleep(showedResult ? 800 : 4000);
         i += 1;
       }
     }
@@ -597,6 +716,23 @@ export default function ChatMockup() {
           }}
         >
           <AnimatePresence mode="wait">
+            {result ? (
+              <motion.div
+                key={`result-${cycle}`}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, transition: { duration: 0.4 } }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="flex flex-col justify-center gap-2"
+                dir={lang.dir}
+              >
+                {result.view === 'calendar' ? (
+                  <CalendarView />
+                ) : (
+                  <OrderBookView row={result.text} />
+                )}
+              </motion.div>
+            ) : (
             <motion.div
               key={cycle}
               initial={{ opacity: 0 }}
@@ -676,6 +812,7 @@ export default function ChatMockup() {
               })}
               {typing && <TypingIndicator />}
             </motion.div>
+            )}
           </AnimatePresence>
         </div>
 

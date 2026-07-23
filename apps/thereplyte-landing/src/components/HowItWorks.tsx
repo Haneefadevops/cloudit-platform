@@ -13,8 +13,13 @@ const steps = [
   },
   {
     n: '03',
-    title: 'It answers, sells & hands off',
+    title: 'It answers, sells & books',
     copy: 'Replies 24/7 in your customer’s language, takes orders and bookings, and loops in your team when it matters.',
+  },
+  {
+    n: '04',
+    title: 'The work lands in your systems',
+    copy: 'Bookings hit your calendar, orders your order book, and summaries your team inbox automatically.',
   },
 ];
 
@@ -27,22 +32,22 @@ export default function HowItWorks() {
       />
       <div className="relative mx-auto max-w-6xl px-5">
         <Reveal className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-brand">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-brand">
             How it works
           </p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#12142b] sm:text-4xl lg:text-5xl">
-            Live in <span className="text-gradient">three steps</span>
+            Live in <span className="text-gradient">Four Steps</span>
           </h2>
         </Reveal>
 
-        <div className="mt-16 grid gap-10 md:grid-cols-3 md:gap-6">
+        <div className="mt-16 grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
           {steps.map((s, i) => (
             <Reveal key={s.n} delay={i * 0.12}>
               <div className="relative">
                 {i < steps.length - 1 && (
                   <div
                     aria-hidden
-                    className="absolute left-[calc(50%+3rem)] top-8 hidden h-px w-[calc(100%-6rem)] bg-gradient-to-r from-teal-brand/40 to-indigo-brand/40 md:block"
+                    className="absolute left-[calc(50%+3rem)] top-8 hidden h-px w-[calc(100%-6rem)] bg-gradient-to-r from-teal-brand/40 to-indigo-brand/40 lg:block"
                   />
                 )}
                 <div className="flex flex-col items-center text-center">

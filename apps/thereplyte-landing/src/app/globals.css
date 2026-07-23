@@ -58,4 +58,15 @@ body {
     transform: translateY(-1px);
     box-shadow: 0 12px 32px rgba(74, 66, 252, 0.32), 0 4px 12px rgba(0, 216, 199, 0.24);
   }
+
+  .btn-gradient-rev {
+    background-image: linear-gradient(92deg, #4a42fc 0%, #00d8c7 100%);
+    box-shadow: 0 8px 24px rgba(0, 216, 199, 0.25), 0 2px 8px rgba(74, 66, 252, 0.18);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  }
+  .btn-gradient-rev:hover {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+    box-shadow: 0 12px 32px rgba(0, 216, 199, 0.32), 0 4px 12px rgba(74, 66, 252, 0.24);
+  }
 }

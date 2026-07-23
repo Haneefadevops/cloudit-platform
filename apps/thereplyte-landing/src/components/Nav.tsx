@@ -6,6 +6,7 @@ import Logo, { WA_LINK } from './Logo';
 const links = [
   { label: 'Features', href: '#features' },
   { label: 'How it works', href: '#how' },
+  { label: 'Possibilities', href: '#possibilities' },
   { label: 'Pricing', href: '#pricing' },
 ];
 
