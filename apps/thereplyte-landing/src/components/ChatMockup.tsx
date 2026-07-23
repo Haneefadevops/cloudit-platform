@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 type LangCode = 'en' | 'si' | 'ta' | 'ar' | 'es';
 
@@ -354,15 +354,21 @@ const SCENARIOS: Scenario[] = [
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function Typewriter({ text }: { text: string }) {
+  const reduceMotion = useReducedMotion();
   const [n, setN] = useState(0);
 
   useEffect(() => {
+    if (reduceMotion) {
+      // prefers-reduced-motion: render the full message instantly
+      setN(text.length);
+      return;
+    }
     setN(0);
     const iv = setInterval(() => {
       setN((v) => (v >= text.length ? v : v + 2));
     }, 24);
     return () => clearInterval(iv);
-  }, [text]);
+  }, [text, reduceMotion]);
 
   return (
     <>
@@ -566,6 +572,36 @@ export default function ChatMockup() {
   const [typing, setTyping] = useState(false);
   const [result, setResult] = useState<{ view: ResultView; text: string } | null>(null);
   const idRef = useRef(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const pausedRef = useRef(false);
+  const reduceMotion = useReducedMotion();
+  const reducedRef = useRef(false);
+
+  useEffect(() => {
+    reducedRef.current = reduceMotion ?? false;
+  }, [reduceMotion]);
+
+  // Pause the demo while the phone is scrolled out of view or the tab is hidden.
+  useEffect(() => {
+    let inView = true;
+    const update = () => {
+      pausedRef.current = document.hidden || !inView;
+    };
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        inView = entry.isIntersecting;
+        update();
+      },
+      { threshold: 0.1 },
+    );
+    if (rootRef.current) io.observe(rootRef.current);
+    document.addEventListener('visibilitychange', update);
+    update();
+    return () => {
+      io.disconnect();
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -576,9 +612,24 @@ export default function ChatMockup() {
       setMessages((prev) => [...prev.slice(-5), { ...m, id: idRef.current }]);
     };
 
+    // Pause-aware sleep: freezes while paused and resumes exactly where it stopped.
+    const wait = async (ms: number) => {
+      let left = ms;
+      while (!cancelled && left > 0) {
+        if (pausedRef.current) {
+          await sleep(250);
+          continue;
+        }
+        const slice = Math.min(100, left);
+        await sleep(slice);
+        left -= slice;
+      }
+    };
+
     async function run() {
       let i = 0;
       while (!cancelled) {
+        const reduced = reducedRef.current;
         const langIdx = i % LANGUAGES.length;
         const scenIdx = (i * 3) % SCENARIOS.length;
         const lang = LANGUAGES[langIdx];
@@ -587,36 +638,41 @@ export default function ChatMockup() {
         setMessages([]);
         setTyping(false);
         setResult(null);
-        await sleep(600);
+        await wait(reduced ? 250 : 600);
         let showedResult = false;
         for (const step of scenario.steps[lang.code]) {
           if (cancelled) return;
           const text = step.text ? localize(step.text, lang.code) : '';
           if (step.t === 'ai' || step.t === 'card') {
-            setTyping(true);
-            await sleep(950);
-            if (cancelled) return;
-            setTyping(false);
-            push({ kind: step.t, text });
-            // keep pace with the Typewriter reveal (~12ms/char) plus a beat
-            await sleep(step.t === 'ai' ? 450 + text.length * 12 : 1400);
+            if (reduced) {
+              push({ kind: step.t, text });
+              await wait(400);
+            } else {
+              setTyping(true);
+              await wait(950);
+              if (cancelled) return;
+              setTyping(false);
+              push({ kind: step.t, text });
+              // keep pace with the Typewriter reveal (~12ms/char) plus a beat
+              await wait(step.t === 'ai' ? 450 + text.length * 12 : 1400);
+            }
           } else if (step.t === 'handoff') {
             push({ kind: 'handoff', text: HANDOFF_TEXT });
-            await sleep(1400);
+            await wait(reduced ? 500 : 1400);
           } else if (step.t === 'result' && step.view) {
-            await sleep(500);
+            await wait(reduced ? 200 : 500);
             if (cancelled) return;
             setResult({ view: step.view, text });
             showedResult = true;
-            await sleep(3000);
+            await wait(reduced ? 1500 : 3000);
           } else {
             push({ kind: step.t, text });
-            await sleep(1150);
+            await wait(reduced ? 400 : 1150);
           }
         }
         if (cancelled) return;
         // the result view already held the screen for ~3s, so cut the end pause short
-        await sleep(showedResult ? 800 : 4000);
+        await wait(reduced ? 1000 : showedResult ? 800 : 4000);
         i += 1;
       }
     }
@@ -631,18 +687,18 @@ export default function ChatMockup() {
   const scenario = SCENARIOS[(cycle * 3) % SCENARIOS.length];
 
   return (
-    <div className="relative w-full max-w-[400px]">
+    <div ref={rootRef} className="relative w-full max-w-[min(400px,90vw)]">
       {/* Floating orbs */}
       <motion.div
         aria-hidden
-        className="absolute -left-16 -top-12 h-56 w-56 rounded-full bg-teal-brand/20 blur-[90px]"
-        animate={{ x: [0, 20, 0], y: [0, -16, 0] }}
+        className="absolute -left-16 -top-12 h-36 w-36 rounded-full bg-teal-brand/20 blur-[60px] will-change-transform md:h-56 md:w-56 md:blur-[90px]"
+        animate={reduceMotion ? undefined : { x: [0, 20, 0], y: [0, -16, 0] }}
         transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
         aria-hidden
-        className="absolute -bottom-14 -right-16 h-64 w-64 rounded-full bg-indigo-brand/20 blur-[100px]"
-        animate={{ x: [0, -24, 0], y: [0, 18, 0] }}
+        className="absolute -bottom-14 -right-16 h-44 w-44 rounded-full bg-indigo-brand/20 blur-[70px] will-change-transform md:h-64 md:w-64 md:blur-[100px]"
+        animate={reduceMotion ? undefined : { x: [0, -24, 0], y: [0, 18, 0] }}
         transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }}
       />
 

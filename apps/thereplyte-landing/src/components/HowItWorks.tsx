@@ -28,7 +28,7 @@ export default function HowItWorks() {
     <section id="how" className="relative border-t border-[#e6e8f5] bg-[#f6f7fd] py-24 md:py-32">
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-0 h-72 w-[42rem] -translate-x-1/2 rounded-full bg-indigo-brand/15 blur-[140px]"
+        className="pointer-events-none absolute left-1/2 top-0 h-48 w-[22rem] -translate-x-1/2 rounded-full bg-indigo-brand/15 blur-[80px] md:h-72 md:w-[42rem] md:blur-[140px]"
       />
       <div className="relative mx-auto max-w-6xl px-5">
         <Reveal className="mx-auto max-w-2xl text-center">

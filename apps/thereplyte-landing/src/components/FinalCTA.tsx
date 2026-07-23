@@ -9,8 +9,8 @@ export default function FinalCTA() {
           <div className="glass relative overflow-hidden rounded-3xl px-8 py-16 text-center md:py-24">
             {/* Glow backdrop */}
             <div aria-hidden className="absolute inset-0">
-              <div className="absolute -left-24 top-0 h-72 w-72 rounded-full bg-teal-brand/20 blur-[110px]" />
-              <div className="absolute -right-24 bottom-0 h-72 w-72 rounded-full bg-indigo-brand/20 blur-[110px]" />
+              <div className="absolute -left-24 top-0 h-44 w-44 rounded-full bg-teal-brand/20 blur-[70px] md:h-72 md:w-72 md:blur-[110px]" />
+              <div className="absolute -right-24 bottom-0 h-44 w-44 rounded-full bg-indigo-brand/20 blur-[70px] md:h-72 md:w-72 md:blur-[110px]" />
               <div
                 className="absolute inset-0 opacity-60"
                 style={{

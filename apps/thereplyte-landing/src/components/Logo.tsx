@@ -4,7 +4,7 @@ export default function Logo({ size = 32 }: { size?: number }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src="/logo.svg"
+      src="/logo.webp"
       alt="TheReplyte"
       style={{ height: size, width: 'auto' }}
       className="inline-block"

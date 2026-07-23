@@ -8,8 +8,8 @@ export default function Hero() {
     <section className="relative overflow-hidden pb-16 pt-32 md:pb-24 md:pt-40">
       {/* Background mesh */}
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-40 left-1/4 h-96 w-96 rounded-full bg-indigo-brand/20 blur-[140px]" />
-        <div className="absolute right-1/4 top-20 h-80 w-80 rounded-full bg-teal-brand/15 blur-[130px]" />
+        <div className="absolute -top-40 left-1/4 h-56 w-56 rounded-full bg-indigo-brand/20 blur-[80px] md:h-96 md:w-96 md:blur-[140px]" />
+        <div className="absolute right-1/4 top-20 h-48 w-48 rounded-full bg-teal-brand/15 blur-[70px] md:h-80 md:w-80 md:blur-[130px]" />
       </div>
 
       <div className="relative mx-auto grid max-w-6xl items-center gap-14 px-5 lg:grid-cols-2 lg:gap-8">
