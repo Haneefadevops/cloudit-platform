@@ -15,12 +15,20 @@ services:
       - cloudit
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.thereplyte-landing.rule=Host(`thereplyte.com`) || Host(`www.thereplyte.com`)"
+      - "traefik.http.routers.thereplyte-landing.rule=Host(`thereplyte.com`)"
       - "traefik.http.routers.thereplyte-landing.entrypoints=websecure"
       - "traefik.http.routers.thereplyte-landing.tls.certresolver=cloudflare"
       - "traefik.http.routers.thereplyte-landing.tls.domains[0].main=thereplyte.com"
       - "traefik.http.routers.thereplyte-landing.tls.domains[0].sans=www.thereplyte.com"
       - "traefik.http.services.thereplyte-landing.loadbalancer.server.port=80"
+      # 301 redirect www -> apex to consolidate SEO authority
+      - "traefik.http.middlewares.thereplyte-www-redirect.redirectregex.regex=^https://www\\.thereplyte\\.com/(.*)"
+      - "traefik.http.middlewares.thereplyte-www-redirect.redirectregex.replacement=https://thereplyte.com/$${1}"
+      - "traefik.http.middlewares.thereplyte-www-redirect.redirectregex.permanent=true"
+      - "traefik.http.routers.thereplyte-landing-www.rule=Host(`www.thereplyte.com`)"
+      - "traefik.http.routers.thereplyte-landing-www.entrypoints=websecure"
+      - "traefik.http.routers.thereplyte-landing-www.tls.certresolver=cloudflare"
+      - "traefik.http.routers.thereplyte-landing-www.middlewares=thereplyte-www-redirect"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
       interval: 15s

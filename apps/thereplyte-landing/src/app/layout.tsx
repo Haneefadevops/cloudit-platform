@@ -104,6 +104,24 @@ const jsonLd = {
         },
       ],
     },
+    {
+      '@type': 'LocalBusiness',
+      name: 'TheReplyte by CloudIT',
+      url: SITE_URL,
+      email: 'hello@thereplyte.com',
+      telephone: '+94771696631',
+      priceRange: '$12 - $25',
+      address: {
+        '@type': 'PostalAddress',
+        addressCountry: 'LK',
+      },
+      parentOrganization: {
+        '@type': 'Organization',
+        name: 'CloudIT',
+        url: 'https://www.cloudit.lk',
+      },
+      sameAs: ['https://www.cloudit.lk'],
+    },
   ],
 };
 
