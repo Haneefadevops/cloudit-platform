@@ -28,6 +28,8 @@ interface PlaygroundResponse {
   reply: string;
   handoffRecommended: boolean;
   handoffReason: string;
+  action: { type: string; [key: string]: unknown } | null;
+  actionResult: string | null;
   sources: Source[];
   usage: Usage;
 }
@@ -352,6 +354,30 @@ export default function PlaygroundPage() {
               </div>
             </div>
           </div>
+
+          {result.action && (
+            <div style={{ ...sectionStyle, marginTop: 16 }}>
+              <div style={{ fontSize: 12, color: '#6b7280' }}>
+                Booking action (executed by the backend)
+              </div>
+              <pre
+                style={{
+                  fontSize: 12,
+                  background: '#f3f4f6',
+                  padding: 8,
+                  borderRadius: 4,
+                  overflow: 'auto',
+                }}
+              >
+                {JSON.stringify(result.action, null, 2)}
+              </pre>
+              {result.actionResult && (
+                <div style={{ fontSize: 13, color: '#374151' }}>
+                  {result.actionResult}
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <h3 style={{ marginTop: 0, fontSize: 16 }}>Knowledge Sources</h3>

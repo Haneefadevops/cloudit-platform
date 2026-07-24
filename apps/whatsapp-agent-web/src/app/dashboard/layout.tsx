@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function DashboardLayout({
   children,
@@ -9,12 +10,44 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [showServices, setShowServices] = useState(true);
+  const [showOrders, setShowOrders] = useState(true);
+
+  useEffect(() => {
+    const token =
+      (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
+    if (!token) return;
+    fetch('/api/clients', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((list) => {
+        if (!Array.isArray(list)) return;
+        setShowServices(list.some((c) => c.bookingsEnabled));
+        setShowOrders(list.some((c) => c.ordersEnabled));
+      })
+      .catch(() => {
+        // Fail silently to showing the link
+      });
+  }, []);
 
   const nav = [
     { href: '/dashboard/clients', label: 'Clients' },
     { href: '/dashboard/ai-settings', label: 'AI Settings' },
     { href: '/dashboard/knowledge-base', label: 'Knowledge Base' },
     { href: '/dashboard/canned-responses', label: 'Canned Responses' },
+    ...(showServices
+      ? [
+          { href: '/dashboard/services', label: 'Services' },
+          { href: '/dashboard/bookings', label: 'Bookings' },
+        ]
+      : []),
+    ...(showOrders
+      ? [
+          { href: '/dashboard/catalog', label: 'Catalog' },
+          { href: '/dashboard/orders', label: 'Orders' },
+        ]
+      : []),
     { href: '/dashboard/analytics', label: 'Analytics' },
     { href: '/dashboard/playground', label: 'Playground' },
   ];

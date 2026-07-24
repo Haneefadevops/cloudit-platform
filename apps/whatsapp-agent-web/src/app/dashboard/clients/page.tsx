@@ -31,6 +31,15 @@ interface Client {
   chatwootAccountId?: number | null;
   chatwootInboxId?: number | null;
   chatwootAdminUserId?: number | null;
+  bookingsEnabled?: boolean;
+  bookingApprovalMode?: string | null;
+  bookingReminderHours?: number | null;
+  bookingConfirmationTemplate?: string | null;
+  ordersEnabled?: boolean;
+  deliveryEnabled?: boolean;
+  pickupEnabled?: boolean;
+  paymentInstructions?: string | null;
+  orderConfirmationTemplate?: string | null;
 }
 
 interface ChatwootStatus {
@@ -100,6 +109,15 @@ export default function ClientsPage() {
     operatingHoursEnd: '17:00',
     closedDays: 'Saturday,Sunday',
     autoSetup: true,
+    bookingsEnabled: false,
+    bookingApprovalMode: 'approval',
+    bookingReminderHours: 24,
+    bookingConfirmationTemplate: '',
+    ordersEnabled: false,
+    deliveryEnabled: false,
+    pickupEnabled: false,
+    paymentInstructions: '',
+    orderConfirmationTemplate: '',
   });
 
   const token =
@@ -160,6 +178,15 @@ export default function ClientsPage() {
       operatingHoursEnd: '17:00',
       closedDays: 'Saturday,Sunday',
       autoSetup: true,
+      bookingsEnabled: false,
+      bookingApprovalMode: 'approval',
+      bookingReminderHours: 24,
+      bookingConfirmationTemplate: '',
+      ordersEnabled: false,
+      deliveryEnabled: false,
+      pickupEnabled: false,
+      paymentInstructions: '',
+      orderConfirmationTemplate: '',
     });
     setEditing(null);
     setShowForm(false);
@@ -187,6 +214,21 @@ export default function ClientsPage() {
       operatingHoursStart: form.operatingHoursStart || null,
       operatingHoursEnd: form.operatingHoursEnd || null,
       closedDays: form.closedDays || null,
+      bookingsEnabled: form.bookingsEnabled,
+      bookingApprovalMode: form.bookingApprovalMode || 'approval',
+      bookingReminderHours: Number(form.bookingReminderHours),
+      bookingConfirmationTemplate: form.bookingConfirmationTemplate || null,
+      ordersEnabled: form.ordersEnabled,
+      deliveryEnabled: form.ordersEnabled ? form.deliveryEnabled : false,
+      pickupEnabled: form.ordersEnabled ? form.pickupEnabled : false,
+      paymentInstructions:
+        form.ordersEnabled && form.paymentInstructions
+          ? form.paymentInstructions
+          : null,
+      orderConfirmationTemplate:
+        form.ordersEnabled && form.orderConfirmationTemplate
+          ? form.orderConfirmationTemplate
+          : null,
     };
 
     const url = editing ? `/api/clients/${editing.id}` : '/api/clients';
@@ -256,6 +298,19 @@ export default function ClientsPage() {
       operatingHoursEnd: client.operatingHoursEnd || '',
       closedDays: client.closedDays || '',
       autoSetup: false,
+      bookingsEnabled: client.bookingsEnabled || false,
+      bookingApprovalMode: client.bookingApprovalMode || 'approval',
+      bookingReminderHours:
+        client.bookingReminderHours === null ||
+        client.bookingReminderHours === undefined
+          ? 24
+          : client.bookingReminderHours,
+      bookingConfirmationTemplate: client.bookingConfirmationTemplate || '',
+      ordersEnabled: client.ordersEnabled || false,
+      deliveryEnabled: client.deliveryEnabled || false,
+      pickupEnabled: client.pickupEnabled || false,
+      paymentInstructions: client.paymentInstructions || '',
+      orderConfirmationTemplate: client.orderConfirmationTemplate || '',
     });
     setShowForm(true);
   };
@@ -543,6 +598,171 @@ export default function ClientsPage() {
                 }
                 style={inputStyle}
               />
+            </div>
+          </div>
+
+          <div style={sectionStyle}>
+            <div style={sectionTitleStyle}>5. Modules</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 14,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.bookingsEnabled}
+                  onChange={(e) =>
+                    setForm({ ...form, bookingsEnabled: e.target.checked })
+                  }
+                />
+                Enable bookings module
+              </label>
+              {form.bookingsEnabled && (
+                <>
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 600 }}>
+                      Booking approval mode
+                    </label>
+                    <select
+                      value={form.bookingApprovalMode}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          bookingApprovalMode: e.target.value,
+                        })
+                      }
+                      style={{ ...inputStyle, marginTop: 4 }}
+                    >
+                      <option value="approval">
+                        Require approval before confirming
+                      </option>
+                      <option value="auto">Auto-confirm bookings</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 600 }}>
+                      Reminder hours before appointment (0 disables)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={form.bookingReminderHours}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          bookingReminderHours: Number(e.target.value),
+                        })
+                      }
+                      style={{ ...inputStyle, marginTop: 4 }}
+                    />
+                  </div>
+                  <textarea
+                    placeholder="Booking confirmation message template (optional)"
+                    value={form.bookingConfirmationTemplate}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        bookingConfirmationTemplate: e.target.value,
+                      })
+                    }
+                    rows={3}
+                    style={{ ...inputStyle, resize: 'vertical' }}
+                  />
+                </>
+              )}
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 14,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.ordersEnabled}
+                  onChange={(e) =>
+                    setForm({ ...form, ordersEnabled: e.target.checked })
+                  }
+                />
+                Enable orders module
+              </label>
+              {form.ordersEnabled && (
+                <>
+                  <div style={{ display: 'flex', gap: 16, fontSize: 14 }}>
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.deliveryEnabled}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            deliveryEnabled: e.target.checked,
+                          })
+                        }
+                      />
+                      Delivery
+                    </label>
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.pickupEnabled}
+                        onChange={(e) =>
+                          setForm({ ...form, pickupEnabled: e.target.checked })
+                        }
+                      />
+                      Pickup
+                    </label>
+                  </div>
+                  <input
+                    placeholder="Payment instructions (e.g. bank transfer details)"
+                    value={form.paymentInstructions}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        paymentInstructions: e.target.value,
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                  <div>
+                    <textarea
+                      placeholder="Order confirmation message template (optional)"
+                      value={form.orderConfirmationTemplate}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          orderConfirmationTemplate: e.target.value,
+                        })
+                      }
+                      rows={3}
+                      style={{ ...inputStyle, resize: 'vertical' }}
+                    />
+                    <div
+                      style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}
+                    >
+                      Variables: {'{{customer_name}}'}, {'{{business_name}}'},{' '}
+                      {'{{total}}'}, {'{{items}}'}, {'{{address}}'}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

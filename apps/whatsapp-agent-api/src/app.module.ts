@@ -15,6 +15,8 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { KnowledgeBaseModule } from './knowledge-base/knowledge-base.module';
 import { CannedResponsesModule } from './canned-responses/canned-responses.module';
 import { PlaygroundModule } from './playground/playground.module';
+import { BookingsModule } from './bookings/bookings.module';
+import { OrdersModule } from './orders/orders.module';
 
 @Module({
   imports: [
@@ -37,6 +39,8 @@ import { PlaygroundModule } from './playground/playground.module';
     KnowledgeBaseModule,
     CannedResponsesModule,
     PlaygroundModule,
+    BookingsModule,
+    OrdersModule,
   ],
 })
 export class AppModule {}

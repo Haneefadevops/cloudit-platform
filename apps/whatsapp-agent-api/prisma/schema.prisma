@@ -48,6 +48,19 @@ model Client {
   closedDays            String?  @default("Saturday,Sunday")
   outsideHoursMessage   String?  @default("Thank you for contacting us! We are currently outside our business hours. Please leave your message and our team will get back to you as soon as we open.")
 
+  // Bookings module
+  bookingsEnabled           Boolean @default(false)
+  bookingApprovalMode       String  @default("approval") // auto, approval
+  bookingReminderHours      Int?    @default(24) // null/0 disables reminders
+  bookingConfirmationTemplate String?
+
+  // Orders module
+  ordersEnabled             Boolean @default(false)
+  deliveryEnabled           Boolean @default(true)
+  pickupEnabled             Boolean @default(true)
+  orderConfirmationTemplate String?
+  paymentInstructions       String? // e.g. bank transfer details, "pay at counter"
+
   // Customer satisfaction (CSAT)
   csatEnabled           Boolean  @default(true)
   csatMessage           String?  @default("Thank you for chatting with us! How would you rate your experience? Please reply with a number from 1 (poor) to 5 (excellent).")
@@ -71,6 +84,11 @@ model Client {
   users           User[]
   documents       Document[]
   cannedResponses CannedResponse[]
+  services        Service[]
+  staff           Staff[]
+  bookings        Booking[]
+  productCatalog  Product[]
+  orders          Order[]
 
   @@map("clients")
 }
@@ -89,6 +107,8 @@ model Customer {
   clientId      String
   client        Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
   conversations Conversation[]
+  bookings      Booking[]
+  orders        Order[]
 
   @@unique([clientId, phoneNumber])
   @@map("customers")
@@ -136,6 +156,7 @@ model Conversation {
   assignedToId String?
   assignedTo   User?      @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
   messages     Message[]
+  orders       Order[]
 
   @@index([clientId, status])
   @@index([assignedToId, status])
@@ -203,4 +224,127 @@ model Document {
 
   @@index([clientId])
   @@map("documents")
+}
+
+model Service {
+  id                   String   @id @default(uuid())
+  name                 String
+  description          String?
+  durationMinutes      Int      @default(60)
+  price                Float?
+  requiresConfirmation Boolean  @default(false)
+  intakeQuestions      Json?    @default("[]") // array of strings, asked by the AI before booking
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  clientId String
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([clientId])
+  @@map("services")
+}
+
+model Staff {
+  id           String   @id @default(uuid())
+  name         String
+  weeklyHours  Json?    @default("{}") // { monday: { start: "09:00", end: "17:00" }, ... }
+  daysOff      Json?    @default("[]") // exceptions: specific dates (YYYY-MM-DD) the staff member is off
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  clientId String
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([clientId])
+  @@map("staff")
+}
+
+model Booking {
+  id            String   @id @default(uuid())
+  startAt       DateTime
+  endAt         DateTime
+  status        String   @default("pending") // pending, confirmed, completed, cancelled, no_show
+  intakeAnswers Json?    @default("{}") // answers to the service's intakeQuestions
+  notes         String?
+  reminderSentAt DateTime? // set when the WhatsApp reminder has been sent (dedupe)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  clientId   String
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  serviceId  String
+  service    Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  staffId    String?
+  staff      Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, startAt])
+  @@index([staffId, startAt])
+  @@map("bookings")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  price       Float
+  category    String?
+  available   Boolean  @default(true) // false = sold out; the AI offers alternatives
+  options     Json?    @default("[]") // [{ name, priceDelta }] variants, e.g. chicken/beef/veg
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clientId   String
+  client     Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([clientId])
+  @@map("products")
+}
+
+model Order {
+  id           String   @id @default(uuid())
+  type         String   @default("pickup") // delivery, pickup
+  status       String   @default("draft") // draft, pending, confirmed, preparing, out_for_delivery, completed, cancelled
+  customerName String?
+  address      String?
+  phone        String?
+  total        Float    @default(0) // computed by the backend from items, never by the AI
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  clientId       String
+  client         Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  customerId     String
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  items          OrderItem[]
+
+  @@index([clientId, status])
+  @@index([conversationId, status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id              String   @id @default(uuid())
+  quantity        Int      @default(1)
+  unitPrice       Float // copied from the product at order time; later price changes never rewrite history
+  selectedOptions Json?    @default("[]") // [{ name, priceDelta }] chosen variants
+  createdAt       DateTime @default(now())
+
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_items")
 }

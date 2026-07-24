@@ -8,6 +8,10 @@ import { ClientsService } from '../clients/clients.service';
 import { WhatsAppSenderService } from '../whatsapp-sender/whatsapp-sender.service';
 import { ChatwootService } from '../chatwoot/chatwoot.service';
 import { KnowledgeBaseService } from '../knowledge-base/knowledge-base.service';
+import { BookingActionsService } from '../bookings/booking-actions.service';
+import type { BookingActionResult } from '../bookings/booking-actions.service';
+import { OrderActionsService } from '../orders/order-actions.service';
+import type { OrderActionResult } from '../orders/order-actions.service';
 import { MediaService, IncomingMediaType } from './media.service';
 
 interface MetaMedia {
@@ -61,6 +65,8 @@ export class WhatsAppService {
     private readonly senderService: WhatsAppSenderService,
     private readonly chatwootService: ChatwootService,
     private readonly knowledgeBaseService: KnowledgeBaseService,
+    private readonly bookingActionsService: BookingActionsService,
+    private readonly orderActionsService: OrderActionsService,
     private readonly mediaService: MediaService,
   ) {}
 
@@ -326,8 +332,20 @@ export class WhatsAppService {
       );
     }
 
+    // 8.5 Load module context (bookings / orders) for enabled modules
+    const bookingContext = client.bookingsEnabled
+      ? await this.bookingActionsService.buildPromptContext(client, customer.id)
+      : null;
+    const orderContext = client.ordersEnabled
+      ? await this.orderActionsService.buildPromptContext(
+          client,
+          customer.id,
+          conversation.id,
+        )
+      : null;
+
     // 9. Call Kimi AI
-    const aiResult = await this.aiService.generateReply({
+    const aiInput = {
       client: {
         name: client.name,
         businessProfile: client.businessProfile as any,
@@ -337,6 +355,24 @@ export class WhatsAppService {
         maxTokens: client.maxTokens,
         fallbackMessage: client.fallbackMessage || undefined,
         language: client.language,
+        ...(bookingContext
+          ? {
+              bookingsEnabled: true,
+              bookingApprovalMode: client.bookingApprovalMode,
+              services: bookingContext.services,
+              staff: bookingContext.staff,
+              upcomingBookings: bookingContext.upcomingBookings,
+            }
+          : {}),
+        ...(orderContext
+          ? {
+              ordersEnabled: true,
+              paymentInstructions: client.paymentInstructions,
+              catalog: orderContext.catalog,
+              fulfilment: orderContext.fulfilment,
+              currentDraft: orderContext.currentDraft,
+            }
+          : {}),
       },
       customer: {
         name: customer.name,
@@ -345,33 +381,107 @@ export class WhatsAppService {
       message: messageBody,
       history,
       knowledgeContext,
-    });
+    };
+    const aiResult = await this.aiService.generateReply(aiInput);
 
-    // 9. Store AI message
+    // 9.5 Execute an action if the AI requested one, then let the AI phrase
+    // its reply from the authoritative backend result. At most one action
+    // per customer message; a follow-up action is never executed.
+    let reply = aiResult.reply;
+    let handoff = aiResult.handoff;
+    let handoffReason = aiResult.handoffReason;
+    let actionResult: (BookingActionResult | OrderActionResult) | null = null;
+
+    if (aiResult.action) {
+      if (client.bookingsEnabled && this.isBookingAction(aiResult.action)) {
+        actionResult = await this.bookingActionsService.execute({
+          client,
+          customer,
+          action: aiResult.action,
+        });
+      } else if (client.ordersEnabled) {
+        actionResult = await this.orderActionsService.execute({
+          client,
+          customer,
+          conversationId: conversation.id,
+          action: aiResult.action,
+        });
+      }
+
+      if (actionResult) {
+        const followUp = await this.aiService.generateReply({
+          ...aiInput,
+          actionResult: actionResult.summary,
+        });
+        reply = followUp.reply;
+        handoff = followUp.handoff;
+        handoffReason = followUp.handoffReason;
+        if (followUp.action) {
+          this.logger.warn(
+            `Ignoring follow-up action "${followUp.action.type}" — only one action per message is executed`,
+          );
+        }
+      }
+    }
+
+    // 10. Store AI message
     await this.prisma.message.create({
       data: {
         conversationId: conversation.id,
         senderType: 'bot',
-        content: aiResult.reply,
-        kimiMetadata: aiResult.metadata || {},
+        content: reply,
+        kimiMetadata: {
+          ...(aiResult.metadata || {}),
+          ...(aiResult.action ? { action: aiResult.action } : {}),
+          ...(actionResult ? { actionSummary: actionResult.summary } : {}),
+        },
       },
     });
 
-    // 10. Handle AI-triggered handoff
-    if (aiResult.handoff) {
+    // 10.5 Action side effects: notify staff in Chatwoot, and hand the
+    // conversation to a human when a booking needs staff confirmation.
+    if (actionResult?.staffNotification) {
+      await this.forwardToChatwoot(
+        client,
+        customer,
+        conversation,
+        actionResult.staffNotification,
+      );
+    }
+    if ((actionResult as BookingActionResult | null)?.requiresApproval) {
       await this.conversationsService.handoffToHuman({
         conversationId: conversation.id,
         triggeredBy: 'bot',
-        reason: aiResult.handoffReason || 'AI requested human handoff',
+        reason:
+          actionResult?.staffNotification ||
+          'Booking pending staff confirmation',
       });
     }
 
-    // 11. Send AI reply to customer
+    // 11. Handle AI-triggered handoff
+    if (handoff) {
+      await this.conversationsService.handoffToHuman({
+        conversationId: conversation.id,
+        triggeredBy: 'bot',
+        reason: handoffReason || 'AI requested human handoff',
+      });
+    }
+
+    // 12. Send AI reply to customer
     await this.senderService.sendMessage({
       client,
       to: from,
-      message: aiResult.reply,
+      message: reply,
     });
+  }
+
+  private isBookingAction(action: { type: string }): boolean {
+    return [
+      'check_availability',
+      'create_booking',
+      'cancel_booking',
+      'reschedule_booking',
+    ].includes(action.type);
   }
 
   private async forwardToChatwoot(

@@ -9,6 +9,8 @@ import { ClientsModule } from '../clients/clients.module';
 import { WhatsAppSenderModule } from '../whatsapp-sender/whatsapp-sender.module';
 import { ChatwootModule } from '../chatwoot/chatwoot.module';
 import { KnowledgeBaseModule } from '../knowledge-base/knowledge-base.module';
+import { BookingsModule } from '../bookings/bookings.module';
+import { OrdersModule } from '../orders/orders.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { KnowledgeBaseModule } from '../knowledge-base/knowledge-base.module';
     WhatsAppSenderModule,
     ChatwootModule,
     KnowledgeBaseModule,
+    BookingsModule,
+    OrdersModule,
   ],
   controllers: [WhatsAppController],
   providers: [WhatsAppService, MediaService],
