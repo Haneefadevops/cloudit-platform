@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { isPortalUser } from '../dashboard/portal';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -27,7 +28,10 @@ export default function LoginPage() {
     }
 
     localStorage.setItem('token', data.access_token);
-    router.push('/dashboard/clients');
+    if (data.user) {
+      localStorage.setItem('user', JSON.stringify(data.user));
+    }
+    router.push(isPortalUser(data.user) ? '/dashboard/bookings' : '/dashboard/clients');
   };
 
   return (

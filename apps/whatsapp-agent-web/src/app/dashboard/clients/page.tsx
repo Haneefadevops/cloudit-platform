@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { isPortalUser } from '../portal';
 
 interface Client {
   id: string;
@@ -48,6 +49,13 @@ interface ChatwootStatus {
   accountName?: string | null;
 }
 
+interface PortalUser {
+  id: string;
+  email: string;
+  name?: string | null;
+  createdAt?: string;
+}
+
 const inputStyle: React.CSSProperties = {
   padding: 8,
   borderRadius: 4,
@@ -89,6 +97,12 @@ export default function ClientsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState<Client | null>(null);
   const [metaGuideClient, setMetaGuideClient] = useState<Client | null>(null);
+  const [portalUsers, setPortalUsers] = useState<PortalUser[]>([]);
+  const [portalForm, setPortalForm] = useState({
+    email: '',
+    password: '',
+    name: '',
+  });
   const [form, setForm] = useState({
     name: '',
     industry: '',
@@ -152,6 +166,10 @@ export default function ClientsPage() {
       window.location.href = '/login';
       return;
     }
+    if (isPortalUser()) {
+      window.location.href = '/dashboard/bookings';
+      return;
+    }
     fetchClients().then((list) => {
       list.forEach((c) => fetchStatus(c.id));
     });
@@ -189,6 +207,8 @@ export default function ClientsPage() {
       orderConfirmationTemplate: '',
     });
     setEditing(null);
+    setPortalUsers([]);
+    setPortalForm({ email: '', password: '', name: '' });
     setShowForm(false);
   };
 
@@ -312,7 +332,71 @@ export default function ClientsPage() {
       paymentInstructions: client.paymentInstructions || '',
       orderConfirmationTemplate: client.orderConfirmationTemplate || '',
     });
+    setPortalUsers([]);
+    setPortalForm({ email: '', password: '', name: '' });
+    fetchPortalUsers(client.id);
     setShowForm(true);
+  };
+
+  const fetchPortalUsers = async (clientId: string) => {
+    const res = await fetch(`/api/clients/${clientId}/portal-users`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    setPortalUsers(Array.isArray(data) ? data : []);
+  };
+
+  const createPortalUser = async () => {
+    if (!editing) return;
+    if (!portalForm.email || !portalForm.password) {
+      showInfo('Email and temporary password are required');
+      return;
+    }
+    const res = await fetch(`/api/clients/${editing.id}/portal-users`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        email: portalForm.email,
+        password: portalForm.password,
+        name: portalForm.name || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showInfo(data.message || 'Failed to create portal user');
+      return;
+    }
+    showInfo(`Portal login created for ${data.email || portalForm.email}`);
+    setPortalForm({ email: '', password: '', name: '' });
+    fetchPortalUsers(editing.id);
+  };
+
+  const resetPortalPassword = async (user: PortalUser) => {
+    if (!editing) return;
+    const password = prompt(`New password for ${user.email}:`);
+    if (!password) return;
+    const res = await fetch(
+      `/api/clients/${editing.id}/portal-users/${user.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ password }),
+      },
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      showInfo(data.message || 'Failed to reset password');
+      return;
+    }
+    alert(
+      `Password for ${user.email} reset to:\n\n${password}\n\nCopy it now and share it with the client — there is no email reset.`,
+    );
   };
 
   const handleDelete = async (id: string) => {
@@ -765,6 +849,116 @@ export default function ClientsPage() {
               )}
             </div>
           </div>
+
+          {editing && (
+            <div style={sectionStyle}>
+              <div style={sectionTitleStyle}>6. Portal access</div>
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+              >
+                {portalUsers.length === 0 ? (
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>
+                    No portal logins yet
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 4,
+                    }}
+                  >
+                    {portalUsers.map((u) => (
+                      <div
+                        key={u.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 8,
+                          fontSize: 14,
+                          background: 'white',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: 6,
+                          padding: '6px 10px',
+                        }}
+                      >
+                        <span>
+                          <strong>{u.email}</strong>
+                          {u.name ? ` — ${u.name}` : ''}
+                          {u.createdAt && (
+                            <span
+                              style={{ color: '#6b7280', fontSize: 12 }}
+                            >
+                              {' '}
+                              • created{' '}
+                              {new Date(u.createdAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => resetPortalPassword(u)}
+                          style={buttonStyle('#f59e0b')}
+                        >
+                          Reset password
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 8,
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    marginTop: 4,
+                  }}
+                >
+                  <input
+                    placeholder="Portal login email *"
+                    type="email"
+                    value={portalForm.email}
+                    onChange={(e) =>
+                      setPortalForm({ ...portalForm, email: e.target.value })
+                    }
+                    style={{ ...inputStyle, flex: 2, minWidth: 200 }}
+                  />
+                  <input
+                    placeholder="Temporary password *"
+                    type="text"
+                    value={portalForm.password}
+                    onChange={(e) =>
+                      setPortalForm({ ...portalForm, password: e.target.value })
+                    }
+                    style={{ ...inputStyle, flex: 1, minWidth: 140 }}
+                  />
+                  <input
+                    placeholder="Name (optional)"
+                    value={portalForm.name}
+                    onChange={(e) =>
+                      setPortalForm({ ...portalForm, name: e.target.value })
+                    }
+                    style={{ ...inputStyle, flex: 1, minWidth: 120 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={createPortalUser}
+                    style={buttonStyle('#16a34a')}
+                  >
+                    Create portal login
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: '#6b7280' }}>
+                  Portal users sign in with this email/password and only see
+                  their own bookings, orders and analytics. There is no email
+                  reset — share the password with the client directly.
+                </div>
+              </div>
+            </div>
+          )}
 
           {!editing && (
             <label

@@ -1,12 +1,19 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { AdminGuard } from '../common/guards/admin.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { STAFF_ROLES } from '../common/decorators/scoped-client-id.decorator';
 
 @Controller('analytics')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard)
 export class AnalyticsController {
   constructor(
     private readonly prisma: PrismaService,
@@ -14,7 +21,18 @@ export class AnalyticsController {
   ) {}
 
   @Get('overview')
-  async overview(@Query('clientId') clientId?: string) {
+  async overview(
+    @CurrentUser() user: { role?: string; clientId?: string },
+    @Query('clientId') clientId?: string,
+  ) {
+    // Staff may query any client (or all); portal users are always scoped
+    // to their own client regardless of the query param.
+    const isStaff = !!user && STAFF_ROLES.includes(user.role || '');
+    const scopedClientId = isStaff ? clientId : user?.clientId;
+    if (!isStaff && !scopedClientId) {
+      throw new ForbiddenException('No client associated with this account');
+    }
+    clientId = scopedClientId;
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const sevenDaysAgo = new Date();

@@ -315,6 +315,108 @@ AdminGuard on dashboard endpoints, Prisma migrations named
 - `site:`-level docs update: README/user guide sections for staff onboarding
   with the new modules.
 
+### Phase 5.5 — Conversation quality & bug fixes (do before or with Phase 6)
+
+Motivation: real WhatsApp testing (2026-07-24) showed the machinery works but
+the AI reads like a form, not a person. Root causes and required fixes:
+
+1. **Inject the current date/time into the prompt context.**
+   The AI could not resolve "tomorrow" and demanded machine-format dates
+   ("share the full date e.g. 2025-07-24" — wrong year, it is 2026).
+   In the prompt builder (ai.service.ts buildPromptContext/buildSystemPrompt),
+   add a CURRENT DATE & TIME section: ISO date + weekday + time in the
+   client's timezone. Add a rule: "Convert relative dates (tomorrow, next
+   Friday) into actual dates yourself using the current date above, then call
+   the action. Never ask the customer for a date in a specific format."
+
+2. **Offer alternatives when a slot is unavailable.**
+   The AI said "no slots on 24 July" four times without offering what IS
+   available. The check_availability result already contains real slots —
+   the follow-up turn (bookingActionResult path) must instruct: "If the
+   requested time is unavailable, offer the 2-3 nearest available slots from
+   the result and ask which one suits. Never just apologize."
+
+3. **Move conversation-style rules into the base prompt builder** (so every
+   client gets them, not just CloudIT's system prompt):
+   - One question per message — never bundle two asks.
+   - Answer a direct question directly before asking anything.
+   - Never expose internal workflow: no "requires staff confirmation",
+     "I'll check availability before confirming", action names, or
+     JSON/tooling talk. Backstage stays backstage.
+   - Keep messages WhatsApp-short; acknowledge first, then ask
+     ("11am is taken — I have 2pm or 4pm instead. Which works?").
+
+4. **Fix: conversation summary failed at handoff** ("Summary could not be
+   generated"). Debug ai.service.ts summarizeConversation (likely API error
+   swallowed by the catch — log the actual error and fix the cause).
+
+5. **Fix: duplicate CSAT request.** The rating request was sent twice on
+   resolve (seen 2026-07-24, 8:33 PM). Guard: only send/set csatPending when
+   the conversation is not already resolved / csatPending not already true.
+
+Verification: re-run the same real-WhatsApp scenario — "tomorrow 11am"
+should resolve without asking for a date; an unavailable slot should return
+2-3 real alternatives; no internal jargon; summary generated; CSAT sent once.
+
+### Phase 6 — Client Portal (clients see their own bookings & orders)
+
+Context: today the dashboard is staff-only (AdminGuard on everything). The
+product promise is that each client (clinic owner, restaurant manager) can
+see and manage their own bookings/orders. Chatwoot remains the agent
+workspace for conversations; the portal is the owner's visibility + approval
+surface. This is a core deliverable, not optional polish.
+
+**Auth & roles**
+
+- The `users` table already has `clientId` and `role` (admin/supervisor/agent).
+  Staff admins are the current global admins (no clientId).
+- Client portal users: create users linked to a clientId with a client-level
+  role (e.g. `client_admin` / `client_staff`).
+- Login stays on the same page. After login, the frontend stores the user
+  payload (id, role, clientId) alongside the token.
+- Backend: introduce scoping — a guard/decorator that, for non-staff users,
+  forces `clientId = user.clientId` on every bookings/orders query and
+  mutation (never trust a clientId from the request for portal users).
+  AdminGuard endpoints (clients, ai-settings, knowledge-base, canned
+  responses, playground) remain staff-only; portal users get 403 there.
+- Portal endpoints: bookings list/status update, orders list/status update,
+  catalog read (manage later if asked), services read, basic analytics for
+  their client only.
+
+**Frontend**
+
+- On login, branch the UI by role:
+  - Staff admin: current dashboard unchanged.
+  - Client user: nav shows only Bookings, Orders (+ optionally Analytics);
+    client selector is hidden and locked to their clientId.
+- Bookings page gains a real **calendar view** (week/month grid with booking
+  blocks) in addition to the list — this is the "client sees the calendar"
+  promise. Build it in the shared page so staff benefit too.
+- Add a logout button to the dashboard layout while touching it (currently
+  missing; users must clear localStorage manually).
+
+**Client portal user provisioning**
+
+- On the Clients page (staff), add "Create portal login" per client:
+  email + temporary password → creates the client-linked user.
+- Password reset: v1 can be staff-regenerates-password (no SMTP dependency);
+  email reset later if SMTP is configured.
+
+**Out of scope for Phase 6**
+
+- Client self-service AI settings / knowledge base editing (staff keeps
+  control; revisit if clients ask).
+- Client billing/subscription management.
+
+**Acceptance test**
+
+1. Staff creates a portal login for the test client.
+2. Log in as that user in an incognito window: sees only Bookings + Orders,
+   only that client's data; cannot open /dashboard/clients (403/redirect).
+3. Client approves a pending booking from the portal; customer notification
+   fires exactly as when staff does it.
+4. Staff admin still sees everything, including the calendar view.
+
 ## Deferred: Travel module (do NOT build now)
 
 Discussed 2026-07-23 for a prospective travel-agent client (flight ticketing +

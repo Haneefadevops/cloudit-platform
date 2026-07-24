@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getStoredUser, isPortalUser } from '../portal';
 
 interface Analytics {
   totalConversations: number;
@@ -36,10 +37,17 @@ export default function AnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [portal, setPortal] = useState(false);
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
 
   useEffect(() => {
+    const user = getStoredUser();
+    if (isPortalUser(user)) {
+      setPortal(true);
+      if (user?.clientId) setSelectedClientId(user.clientId);
+      return;
+    }
     fetch('/api/clients', {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -83,26 +91,28 @@ export default function AnalyticsPage() {
     <div>
       <h1>Analytics</h1>
 
-      <div style={{ marginTop: 12, maxWidth: 320 }}>
-        <select
-          value={selectedClientId}
-          onChange={(e) => setSelectedClientId(e.target.value)}
-          style={{
-            padding: 8,
-            borderRadius: 4,
-            border: '1px solid #d1d5db',
-            fontSize: 14,
-            width: '100%',
-          }}
-        >
-          <option value="">All clients</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {!portal && (
+        <div style={{ marginTop: 12, maxWidth: 320 }}>
+          <select
+            value={selectedClientId}
+            onChange={(e) => setSelectedClientId(e.target.value)}
+            style={{
+              padding: 8,
+              borderRadius: 4,
+              border: '1px solid #d1d5db',
+              fontSize: 14,
+              width: '100%',
+            }}
+          >
+            <option value="">All clients</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div
         style={{

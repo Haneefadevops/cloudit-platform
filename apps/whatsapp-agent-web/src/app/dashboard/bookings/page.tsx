@@ -8,6 +8,14 @@ interface Client {
   bookingsEnabled?: boolean;
 }
 
+interface StoredUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  clientId?: string | null;
+}
+
 type BookingStatus =
   | 'pending'
   | 'confirmed'
@@ -97,16 +105,49 @@ const formatStartAt = (iso: string) =>
     minute: '2-digit',
   });
 
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+// Monday-first week helpers (viewer's local timezone)
+const startOfWeek = (d: Date) => {
+  const date = new Date(d);
+  date.setHours(0, 0, 0, 0);
+  const day = date.getDay(); // 0 = Sunday
+  date.setDate(date.getDate() - ((day + 6) % 7));
+  return date;
+};
+
+const addDays = (d: Date, n: number) => {
+  const date = new Date(d);
+  date.setDate(date.getDate() + n);
+  return date;
+};
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 export default function BookingsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
+  const [isPortalUser, setIsPortalUser] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  const [view, setView] = useState<'list' | 'calendar'>('list');
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
   const [loading, setLoading] = useState(false);
+
+  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
+  const [calendarBookings, setCalendarBookings] = useState<Booking[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(
+    null,
+  );
 
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
@@ -149,17 +190,63 @@ export default function BookingsPage() {
     }
   };
 
+  // Calendar fetches the whole visible week with no status filter.
+  const fetchCalendar = async (clientId: string, start: Date) => {
+    if (!clientId) return;
+    setCalendarLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('from', start.toISOString());
+      // End of Sunday (inclusive) — backend applies `to` as lte.
+      params.set('to', addDays(start, 7).toISOString());
+      const res = await fetch(
+        `/api/bookings/${clientId}/bookings?${params.toString()}`,
+        { headers },
+      );
+      const list = await res.json();
+      setCalendarBookings(Array.isArray(list) ? list : []);
+    } finally {
+      setCalendarLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) {
       window.location.href = '/login';
+      return;
+    }
+    // Portal users (client_admin/client_staff) are locked to their own client.
+    let user: StoredUser | null = null;
+    try {
+      const raw = localStorage.getItem('user');
+      if (raw) user = JSON.parse(raw);
+    } catch {
+      user = null;
+    }
+    if (
+      user &&
+      (user.role === 'client_admin' || user.role === 'client_staff') &&
+      user.clientId
+    ) {
+      setIsPortalUser(true);
+      setSelectedId(user.clientId);
       return;
     }
     fetchClients();
   }, []);
 
   useEffect(() => {
-    fetchBookings(selectedId);
-  }, [selectedId, statusFilter, fromDate, toDate]);
+    if (view === 'list') fetchBookings(selectedId);
+  }, [selectedId, statusFilter, fromDate, toDate, view]);
+
+  useEffect(() => {
+    if (view === 'calendar') fetchCalendar(selectedId, weekStart);
+  }, [selectedId, weekStart, view]);
+
+  const refreshCurrentView = () => {
+    if (view === 'calendar') fetchCalendar(selectedId, weekStart);
+    else fetchBookings(selectedId);
+  };
 
   const updateStatus = async (booking: Booking, status: BookingStatus) => {
     if (!selectedId) return;
@@ -177,7 +264,7 @@ export default function BookingsPage() {
       return;
     }
     showInfo(`Booking ${STATUS_LABELS[status].toLowerCase()}`);
-    fetchBookings(selectedId);
+    refreshCurrentView();
   };
 
   const handleAction = (booking: Booking, status: BookingStatus) => {
@@ -239,12 +326,33 @@ export default function BookingsPage() {
     return null;
   };
 
+  const weekEnd = addDays(weekStart, 6);
+  const weekRangeLabel = `${weekStart.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })} – ${weekEnd.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })}`;
+
+  const bookingsForDay = (day: Date) => {
+    const key = day.toDateString();
+    return calendarBookings
+      .filter((b) => new Date(b.startAt).toDateString() === key)
+      .sort(
+        (a, b) =>
+          new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+      );
+  };
+
   return (
     <div>
       <h1>Bookings</h1>
       <p style={{ color: '#6b7280', fontSize: 14 }}>
         View and manage bookings per client. Confirming or cancelling a booking
-        automatically messages the customer on WhatsApp.
+        automatically messages the customer on WhatsApp. Times are shown in
+        your browser&apos;s timezone.
       </p>
 
       {message && (
@@ -262,24 +370,53 @@ export default function BookingsPage() {
         </div>
       )}
 
-      <div style={{ marginTop: 16, maxWidth: 320 }}>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Client</label>
-        <select
-          value={selectedId}
-          onChange={(e) => setSelectedId(e.target.value)}
-          style={{ ...inputStyle, marginTop: 4 }}
-        >
-          <option value="">Select a client</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-              {c.bookingsEnabled ? '' : ' (bookings disabled)'}
-            </option>
-          ))}
-        </select>
+      <div
+        style={{
+          marginTop: 16,
+          display: 'flex',
+          gap: 16,
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+        }}
+      >
+        {!isPortalUser && (
+          <div style={{ maxWidth: 320, flex: 1 }}>
+            <label style={{ fontSize: 13, fontWeight: 600 }}>Client</label>
+            <select
+              value={selectedId}
+              onChange={(e) => setSelectedId(e.target.value)}
+              style={{ ...inputStyle, marginTop: 4 }}
+            >
+              <option value="">Select a client</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.bookingsEnabled ? '' : ' (bookings disabled)'}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600 }}>View</label>
+          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+            <button
+              onClick={() => setView('list')}
+              style={buttonStyle(view === 'list' ? '#111827' : '#9ca3af')}
+            >
+              List
+            </button>
+            <button
+              onClick={() => setView('calendar')}
+              style={buttonStyle(view === 'calendar' ? '#111827' : '#9ca3af')}
+            >
+              Calendar
+            </button>
+          </div>
+        </div>
       </div>
 
-      {selectedId && (
+      {selectedId && view === 'list' && (
         <>
           <div
             style={{
@@ -420,6 +557,149 @@ export default function BookingsPage() {
             )}
           </div>
         </>
+      )}
+
+      {selectedId && view === 'calendar' && (
+        <div style={cardStyle}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <button
+              onClick={() => setWeekStart(addDays(weekStart, -7))}
+              style={buttonStyle('#6b7280')}
+            >
+              ‹ Prev week
+            </button>
+            <button
+              onClick={() => setWeekStart(startOfWeek(new Date()))}
+              style={buttonStyle('#2563eb')}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setWeekStart(addDays(weekStart, 7))}
+              style={buttonStyle('#6b7280')}
+            >
+              Next week ›
+            </button>
+            <h2 style={{ fontSize: 16, margin: 0, marginLeft: 8 }}>
+              {weekRangeLabel}
+            </h2>
+          </div>
+
+          {calendarLoading ? (
+            <div style={{ marginTop: 16, color: '#6b7280' }}>Loading…</div>
+          ) : (
+            <div
+              style={{
+                marginTop: 16,
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+                gap: 8,
+              }}
+            >
+              {DAY_LABELS.map((label, i) => {
+                const day = addDays(weekStart, i);
+                const dayBookings = bookingsForDay(day);
+                const isToday =
+                  day.toDateString() === new Date().toDateString();
+                return (
+                  <div
+                    key={label}
+                    style={{
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 6,
+                      minHeight: 120,
+                      background: isToday ? '#f0f9ff' : 'white',
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: '6px 8px',
+                        borderBottom: '1px solid #e5e7eb',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: isToday ? '#0369a1' : '#6b7280',
+                      }}
+                    >
+                      {label}{' '}
+                      {day.toLocaleDateString(undefined, {
+                        month: 'numeric',
+                        day: 'numeric',
+                      })}
+                    </div>
+                    <div
+                      style={{
+                        padding: 6,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                      }}
+                    >
+                      {dayBookings.map((b) => {
+                        const colors = STATUS_COLORS[b.status];
+                        const expanded = expandedBookingId === b.id;
+                        return (
+                          <div
+                            key={b.id}
+                            onClick={() =>
+                              setExpandedBookingId(expanded ? null : b.id)
+                            }
+                            style={{
+                              borderLeft: `4px solid ${colors.color}`,
+                              background: colors.bg,
+                              borderRadius: 4,
+                              padding: '4px 6px',
+                              fontSize: 12,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <div style={{ fontWeight: 600 }}>
+                              {formatTime(b.startAt)} · {b.service?.name}
+                            </div>
+                            <div style={{ color: '#374151' }}>
+                              {b.customer?.name}
+                              {b.staff?.name ? ` · ${b.staff.name}` : ''}
+                            </div>
+                            {expanded && (
+                              <div style={{ marginTop: 6 }}>
+                                <div style={{ marginBottom: 6 }}>
+                                  <span
+                                    style={badgeStyle(colors.color, 'white')}
+                                  >
+                                    {STATUS_LABELS[b.status]}
+                                  </span>
+                                </div>
+                                <div
+                                  style={{
+                                    color: '#6b7280',
+                                    marginBottom: 6,
+                                  }}
+                                >
+                                  {b.customer?.phoneNumber}
+                                  {b.notes ? ` · ${b.notes}` : ''}
+                                </div>
+                                {renderActions(b)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {dayBookings.length === 0 && (
+                        <div style={{ fontSize: 12, color: '#d1d5db' }}>—</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

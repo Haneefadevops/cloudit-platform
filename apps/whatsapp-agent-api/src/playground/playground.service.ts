@@ -96,6 +96,7 @@ export class PlaygroundService {
         maxTokens: client.maxTokens,
         fallbackMessage: client.fallbackMessage || undefined,
         language: client.language || undefined,
+        timezone: client.timezone,
         ...(bookingContext
           ? {
               bookingsEnabled: true,

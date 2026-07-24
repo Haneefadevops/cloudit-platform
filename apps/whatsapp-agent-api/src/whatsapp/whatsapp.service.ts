@@ -355,6 +355,7 @@ export class WhatsAppService {
         maxTokens: client.maxTokens,
         fallbackMessage: client.fallbackMessage || undefined,
         language: client.language,
+        timezone: client.timezone,
         ...(bookingContext
           ? {
               bookingsEnabled: true,

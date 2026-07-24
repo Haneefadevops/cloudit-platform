@@ -164,10 +164,21 @@ export class ChatwootController {
 
     const resolvedAt = new Date();
 
-    await this.prisma.conversation.update({
-      where: { id: conversation.id },
+    // Atomically claim the resolve: Chatwoot can emit conversation_resolved,
+    // conversation_status_changed AND conversation_updated for one resolve,
+    // and near-simultaneous webhooks would otherwise all pass the status
+    // check above and send duplicate CSAT requests. Only the first caller
+    // to flip the status proceeds.
+    const claimed = await this.prisma.conversation.updateMany({
+      where: { id: conversation.id, status: { not: 'resolved' } },
       data: { status: 'resolved', resolvedAt },
     });
+    if (claimed.count === 0) {
+      this.logger.log(
+        `Conversation ${conversation.id} already resolved by a concurrent event; skipping`,
+      );
+      return;
+    }
 
     await this.prisma.handoffLog.updateMany({
       where: { conversationId: conversation.id, resolvedAt: null },
@@ -176,8 +187,9 @@ export class ChatwootController {
 
     this.logger.log(`Conversation ${conversation.id} resolved from Chatwoot`);
 
-    // Send CSAT rating request to the customer
-    if (conversation.client.csatEnabled) {
+    // Send CSAT rating request to the customer (skip if one is already
+    // pending — e.g. the conversation was resolved, reopened, resolved again)
+    if (conversation.client.csatEnabled && !conversation.csatPending) {
       const csatMessage =
         conversation.client.csatMessage ||
         'Thank you for chatting with us! How would you rate your experience? Please reply with a number from 1 (poor) to 5 (excellent).';

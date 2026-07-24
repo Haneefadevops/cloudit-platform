@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getStoredUser, isPortalUser } from '../portal';
 
 interface Client {
   id: string;
@@ -122,6 +123,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [loading, setLoading] = useState(false);
+  const [portal, setPortal] = useState(false);
 
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
@@ -162,6 +164,12 @@ export default function OrdersPage() {
   useEffect(() => {
     if (!token) {
       window.location.href = '/login';
+      return;
+    }
+    const user = getStoredUser();
+    if (isPortalUser(user)) {
+      setPortal(true);
+      if (user?.clientId) setSelectedId(user.clientId);
       return;
     }
     fetchClients();
@@ -274,22 +282,24 @@ export default function OrdersPage() {
         </div>
       )}
 
-      <div style={{ marginTop: 16, maxWidth: 320 }}>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Client</label>
-        <select
-          value={selectedId}
-          onChange={(e) => setSelectedId(e.target.value)}
-          style={{ ...inputStyle, marginTop: 4 }}
-        >
-          <option value="">Select a client</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-              {c.ordersEnabled ? '' : ' (orders disabled)'}
-            </option>
-          ))}
-        </select>
-      </div>
+      {!portal && (
+        <div style={{ marginTop: 16, maxWidth: 320 }}>
+          <label style={{ fontSize: 13, fontWeight: 600 }}>Client</label>
+          <select
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+            style={{ ...inputStyle, marginTop: 4 }}
+          >
+            <option value="">Select a client</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.ordersEnabled ? '' : ' (orders disabled)'}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {selectedId && (
         <>

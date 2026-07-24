@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { isPortalUser } from '../portal';
 
 interface Client {
   id: string;
@@ -149,6 +150,10 @@ export default function ServicesPage() {
   useEffect(() => {
     if (!token) {
       window.location.href = '/login';
+      return;
+    }
+    if (isPortalUser()) {
+      window.location.href = '/dashboard/bookings';
       return;
     }
     fetchClients();

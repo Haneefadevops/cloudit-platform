@@ -1,5 +1,6 @@
 import {
   Controller,
+  ForbiddenException,
   Get,
   Post,
   Put,
@@ -15,9 +16,12 @@ import { ChatwootService } from '../chatwoot/chatwoot.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
+// Controller-level: any authenticated user (portal users may read their own
+// client via GET /clients/me). Everything else is staff-only (AdminGuard).
 @Controller('clients')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard)
 export class ClientsController {
   private readonly logger = new Logger(ClientsController.name);
 
@@ -28,32 +32,90 @@ export class ClientsController {
     private readonly configService: ConfigService,
   ) {}
 
+  /**
+   * The portal user's own client (safe fields only — drives the portal UI).
+   * Declared before ':id' so 'me' is not captured by the param route.
+   */
+  @Get('me')
+  async me(@CurrentUser() user: { clientId?: string }) {
+    if (!user?.clientId) {
+      throw new ForbiddenException('No client associated with this account');
+    }
+    const client = await this.clientsService.findOne(user.clientId);
+    if (!client) throw new ForbiddenException('Client not found');
+    return {
+      id: client.id,
+      name: client.name,
+      timezone: client.timezone,
+      language: client.language,
+      bookingsEnabled: client.bookingsEnabled,
+      ordersEnabled: client.ordersEnabled,
+    };
+  }
+
   @Get()
+  @UseGuards(AdminGuard)
   findAll() {
     return this.clientsService.findAll();
   }
 
   @Get(':id')
+  @UseGuards(AdminGuard)
   findOne(@Param('id') id: string) {
     return this.clientsService.findOne(id);
   }
 
   @Post()
+  @UseGuards(AdminGuard)
   create(@Body() body: any) {
     return this.clientsService.create(body);
   }
 
   @Put(':id')
+  @UseGuards(AdminGuard)
   update(@Param('id') id: string, @Body() body: any) {
     return this.clientsService.update(id, body);
   }
 
   @Delete(':id')
+  @UseGuards(AdminGuard)
   remove(@Param('id') id: string) {
     return this.clientsService.remove(id);
   }
 
+  // ---- Client portal logins (staff-managed) ----
+
+  @Get(':id/portal-users')
+  @UseGuards(AdminGuard)
+  listPortalUsers(@Param('id') id: string) {
+    return this.clientsService.listPortalUsers(id);
+  }
+
+  @Post(':id/portal-users')
+  @UseGuards(AdminGuard)
+  createPortalUser(
+    @Param('id') id: string,
+    @Body() body: { email: string; password: string; name?: string },
+  ) {
+    return this.clientsService.createPortalUser(id, body);
+  }
+
+  @Put(':id/portal-users/:userId')
+  @UseGuards(AdminGuard)
+  resetPortalUserPassword(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Body() body: { password: string },
+  ) {
+    return this.clientsService.resetPortalUserPassword(
+      id,
+      userId,
+      body.password,
+    );
+  }
+
   @Post(':id/chatwoot-setup')
+  @UseGuards(AdminGuard)
   async setupChatwoot(
     @Param('id') id: string,
     @Body('inboxName') inboxName?: string,
@@ -129,6 +191,7 @@ export class ClientsController {
   }
 
   @Post(':id/chatwoot-agents')
+  @UseGuards(AdminGuard)
   async syncAgents(@Param('id') id: string) {
     const client = await this.clientsService.findOne(id);
     if (!client) {
@@ -167,6 +230,7 @@ export class ClientsController {
   }
 
   @Get(':id/chatwoot-status')
+  @UseGuards(AdminGuard)
   async chatwootStatus(@Param('id') id: string) {
     const client = await this.clientsService.findOne(id);
     if (!client) {

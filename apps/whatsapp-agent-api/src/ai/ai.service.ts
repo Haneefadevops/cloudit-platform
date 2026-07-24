@@ -11,6 +11,7 @@ interface GenerateReplyInput {
     maxTokens?: number | null;
     fallbackMessage?: string;
     language?: string | null;
+    timezone?: string | null;
     // Bookings module (only present when the client has bookings enabled)
     bookingsEnabled?: boolean;
     bookingApprovalMode?: string;
@@ -185,18 +186,30 @@ export class AiService {
       .map((m) => `${m.role}: ${m.content}`)
       .join('\n\n');
 
-    const systemPrompt = `Summarize the following customer-support conversation in at most 5 concise bullet points. Use the same language as the conversation.
-
-${conversationText}`;
-
     try {
+      // Conversation goes in a user message — some providers reject
+      // system-only message arrays (the cause of "Summary could not be
+      // generated" in production).
       const result = await this.callKimiChat(
-        [{ role: 'system', content: systemPrompt }],
+        [
+          {
+            role: 'system',
+            content:
+              'You summarize customer-support conversations concisely and accurately.',
+          },
+          {
+            role: 'user',
+            content: `Summarize the following customer-support conversation in at most 5 concise bullet points. Use the same language as the conversation.\n\n${conversationText}`,
+          },
+        ],
         { maxTokens: 512, responseFormat: 'text' },
       );
       return result.content.trim() || 'No summary available.';
     } catch (error) {
-      this.logger.error('Conversation summarization failed', error);
+      this.logger.error(
+        `Conversation summarization failed: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
       return 'Summary could not be generated.';
     }
   }
@@ -315,7 +328,7 @@ ${conversationText}`;
       : `FALLBACK MESSAGE (use exactly when you cannot answer):\n${fallback}`;
 
     const actionResultBlock = actionResult
-      ? `ACTION RESULT (authoritative — executed by the backend, not by you):\n${actionResult}\n\nPhrase your reply to the customer based ONLY on this result. Do NOT include an "action" field in this reply.\n\n`
+      ? `ACTION RESULT (authoritative — executed by the backend, not by you):\n${actionResult}\n\nPhrase your reply to the customer based ONLY on this result. Do NOT include an "action" field in this reply. If the customer's requested time or option is unavailable, offer the 2-3 nearest available alternatives from the result and ask which one suits — never just apologize.\n\n`
       : '';
 
     const bookingSection =
@@ -333,7 +346,7 @@ ${conversationText}`;
 
     return `${client.systemPrompt || 'You are a helpful AI assistant.'}
 
-BUSINESS INFO:
+${this.currentDateTimeSection(client.timezone)}BUSINESS INFO:
 - Name: ${client.name}
 - Address: ${profile.address || 'Not provided'}
 - Hours: ${profile.hours || 'Not provided'}
@@ -351,6 +364,10 @@ RULES:
 5. Never make up prices, stock levels, or policies
 6. For orders, ask: product, quantity, address, phone
 7. For complaints or refund requests, immediately set handoff to true
+8. Keep messages WhatsApp-short. Acknowledge what the customer said first, then ask (e.g. "11am is taken — I have 2pm or 4pm instead. Which works?")
+9. Ask at most ONE question per message — never bundle two asks
+10. Answer a direct question directly before asking anything else
+11. Never expose internal workflow: no "requires staff confirmation", "I'll check availability before confirming", action names, or JSON/tooling talk — backstage stays backstage
 
 CUSTOMER CONTEXT:
 - Name: ${customer.name || 'New customer'}
@@ -362,6 +379,31 @@ IMPORTANT: Reply ONLY with a JSON object in this exact format:
   "handoffReason": "reason if handing off"${client.bookingsEnabled || client.ordersEnabled ? ',\n  "action": { "type": "...", "...": "optional — see ACTIONS above" }' : ''}
 }
 `;
+  }
+
+  /**
+   * The current date/time in the client's timezone so the AI can resolve
+   * relative dates ("tomorrow", "next Friday") into real dates itself
+   * instead of asking the customer for a machine format.
+   */
+  private currentDateTimeSection(timezone?: string | null): string {
+    const tz = timezone || 'UTC';
+    try {
+      const now = new Date();
+      const date = now.toLocaleDateString('en-CA', { timeZone: tz });
+      const weekday = now.toLocaleDateString('en-US', {
+        timeZone: tz,
+        weekday: 'long',
+      });
+      const time = now.toLocaleTimeString('en-GB', {
+        timeZone: tz,
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      return `CURRENT DATE & TIME (business timezone ${tz}):\n${weekday}, ${date}, ${time}\nConvert relative dates ("tomorrow", "next Friday") into actual dates yourself using the current date above, then call the action. Never ask the customer for a date in a specific format.\n\n`;
+    } catch {
+      return '';
+    }
   }
 
   /**
