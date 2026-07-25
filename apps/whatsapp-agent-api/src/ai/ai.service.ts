@@ -263,9 +263,15 @@ ${conversationText}`;
     const body: any = {
       model,
       messages,
-      temperature: options.temperature ?? 0.7,
       max_tokens: options.maxTokens ?? 1024,
     };
+    // Only send temperature when explicitly requested: thinking models
+    // (e.g. the production KIMI_MODEL) reject any value but 1 — omitting
+    // the field always falls back to a valid server default. This was the
+    // real cause of "Summary could not be generated" in production.
+    if (options.temperature !== undefined) {
+      body.temperature = options.temperature;
+    }
     if (options.responseFormat === 'json_object') {
       body.response_format = { type: 'json_object' };
     }

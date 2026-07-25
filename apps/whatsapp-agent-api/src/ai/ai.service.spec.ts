@@ -132,6 +132,16 @@ describe('AiService.summarizeConversation', () => {
     expect(userMsg.content).toContain('bot: hi there');
   });
 
+  it('omits temperature when not specified (thinking models reject != 1)', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(chatResponse('ok'));
+    const ai = makeAiService(fetchMock);
+
+    await ai.summarizeConversation([{ role: 'customer', content: 'hello' }]);
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect('temperature' in body).toBe(false);
+  });
+
   it('returns the fallback text when the API fails', async () => {
     const fetchMock = jest.fn().mockResolvedValue({
       ok: false,
