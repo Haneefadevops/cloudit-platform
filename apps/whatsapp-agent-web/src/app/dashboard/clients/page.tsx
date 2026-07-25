@@ -41,6 +41,8 @@ interface Client {
   pickupEnabled?: boolean;
   paymentInstructions?: string | null;
   orderConfirmationTemplate?: string | null;
+  planAllowance?: number;
+  usageResetAt?: string | null;
 }
 
 interface ChatwootStatus {
@@ -153,6 +155,8 @@ export default function ClientsPage() {
     pickupEnabled: false,
     paymentInstructions: '',
     orderConfirmationTemplate: '',
+    planAllowance: 500,
+    usageResetAt: '',
   });
 
   const token =
@@ -267,6 +271,8 @@ export default function ClientsPage() {
       pickupEnabled: false,
       paymentInstructions: '',
       orderConfirmationTemplate: '',
+      planAllowance: 500,
+      usageResetAt: '',
     });
     setEditing(null);
     setPortalUsers([]);
@@ -311,6 +317,12 @@ export default function ClientsPage() {
         form.ordersEnabled && form.orderConfirmationTemplate
           ? form.orderConfirmationTemplate
           : null,
+      planAllowance: Number(form.planAllowance) || 500,
+      // Only sent when set: on create the server default (now) applies,
+      // on update an empty input leaves the current anchor untouched.
+      ...(form.usageResetAt
+        ? { usageResetAt: new Date(`${form.usageResetAt}T00:00:00`).toISOString() }
+        : {}),
     };
 
     const url = editing ? `/api/clients/${editing.id}` : '/api/clients';
@@ -393,6 +405,10 @@ export default function ClientsPage() {
       pickupEnabled: client.pickupEnabled || false,
       paymentInstructions: client.paymentInstructions || '',
       orderConfirmationTemplate: client.orderConfirmationTemplate || '',
+      planAllowance: client.planAllowance ?? 500,
+      usageResetAt: client.usageResetAt
+        ? client.usageResetAt.slice(0, 10)
+        : '',
     });
     setPortalUsers([]);
     setPortalForm({ email: '', password: '', name: '' });
@@ -909,6 +925,51 @@ export default function ClientsPage() {
                   </div>
                 </>
               )}
+              <div
+                style={{
+                  borderTop: '1px solid #f3f4f6',
+                  paddingTop: 8,
+                  display: 'flex',
+                  gap: 16,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600 }}>
+                    Plan allowance (conversations/month)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.planAllowance}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        planAllowance: Number(e.target.value),
+                      })
+                    }
+                    style={{ ...inputStyle, marginTop: 4, width: 180 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600 }}>
+                    Usage period start (monthly reset anchor)
+                  </label>
+                  <input
+                    type="date"
+                    value={form.usageResetAt}
+                    onChange={(e) =>
+                      setForm({ ...form, usageResetAt: e.target.value })
+                    }
+                    style={{ ...inputStyle, marginTop: 4, width: 180 }}
+                  />
+                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                    {form.usageResetAt
+                      ? `Current period started ${form.usageResetAt}. Set it back a month to test the reset (top-up credits are kept).`
+                      : 'Leave empty to keep the current anchor.'}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
