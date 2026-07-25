@@ -1,0 +1,36 @@
+name: Debug container logs
+
+on:
+  workflow_dispatch:
+    inputs:
+      container:
+        description: 'Container name'
+        required: true
+        default: 'whatsapp-agent-api'
+      grep:
+        description: 'grep pattern (extended regex)'
+        required: false
+        default: 'summary|Summary|Kimi'
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Dump matching container log lines
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          ssh "${SERVER_USER}@${SERVER_IP}" \
+            "docker logs --tail 2000 '${{ inputs.container }}' 2>&1 | grep -iE '${{ inputs.grep }}' | tail -60 || true"
