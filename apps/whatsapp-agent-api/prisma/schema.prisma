@@ -61,6 +61,12 @@ model Client {
   orderConfirmationTemplate String?
   paymentInstructions       String? // e.g. bank transfer details, "pay at counter"
 
+  // Usage wallet (AI conversation allowance)
+  planAllowance             Int      @default(500) // plan conversations per monthly period
+  topUpCredits              Int      @default(0) // prepaid top-ups; roll over, never reset
+  usageResetAt              DateTime @default(now()) // start of the current monthly period
+  aiPausedMessage           String?  @default("Thanks for your message! Our team will reply to you shortly.")
+
   // Customer satisfaction (CSAT)
   csatEnabled           Boolean  @default(true)
   csatMessage           String?  @default("Thank you for chatting with us! How would you rate your experience? Please reply with a number from 1 (poor) to 5 (excellent).")
@@ -89,6 +95,7 @@ model Client {
   bookings        Booking[]
   productCatalog  Product[]
   orders          Order[]
+  topUpPurchases  TopUpPurchase[]
 
   @@map("clients")
 }
@@ -347,4 +354,18 @@ model OrderItem {
 
   @@index([orderId])
   @@map("order_items")
+}
+
+model TopUpPurchase {
+  id        String   @id @default(uuid())
+  credits   Int // conversations added to the client's topUpCredits
+  priceLkr  Float // amount paid (manual payment flow, recorded by staff)
+  note      String?
+  createdAt DateTime @default(now())
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@map("top_up_purchases")
 }

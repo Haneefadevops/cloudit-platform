@@ -17,6 +17,7 @@ import { CannedResponsesModule } from './canned-responses/canned-responses.modul
 import { PlaygroundModule } from './playground/playground.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { OrdersModule } from './orders/orders.module';
+import { UsageModule } from './usage/usage.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { OrdersModule } from './orders/orders.module';
     PlaygroundModule,
     BookingsModule,
     OrdersModule,
+    UsageModule,
   ],
 })
 export class AppModule {}

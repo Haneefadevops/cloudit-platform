@@ -12,6 +12,7 @@ import { BookingActionsService } from '../bookings/booking-actions.service';
 import type { BookingActionResult } from '../bookings/booking-actions.service';
 import { OrderActionsService } from '../orders/order-actions.service';
 import type { OrderActionResult } from '../orders/order-actions.service';
+import { UsageService } from '../usage/usage.service';
 import { MediaService, IncomingMediaType } from './media.service';
 
 interface MetaMedia {
@@ -67,6 +68,7 @@ export class WhatsAppService {
     private readonly knowledgeBaseService: KnowledgeBaseService,
     private readonly bookingActionsService: BookingActionsService,
     private readonly orderActionsService: OrderActionsService,
+    private readonly usageService: UsageService,
     private readonly mediaService: MediaService,
   ) {}
 
@@ -230,6 +232,38 @@ export class WhatsAppService {
         `Conversation ${conversation.id} is with human agent. Forwarding to Chatwoot.`,
       );
       await this.forwardToChatwoot(client, customer, conversation, messageBody);
+      return;
+    }
+
+    // 5.5 Usage wallet: when the AI allowance is exhausted, hand the
+    // conversation to the team without calling the AI. Resuming is
+    // automatic — a top-up raises the balance above 0 and the next
+    // message flows through the AI again.
+    const usage = await this.usageService.getUsage(client.id);
+    if (usage && usage.balance <= 0) {
+      const pausedMessage =
+        client.aiPausedMessage ||
+        'Thanks for your message! Our team will reply to you shortly.';
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderType: 'bot',
+          content: pausedMessage,
+        },
+      });
+      await this.senderService.sendMessage({
+        client,
+        to: from,
+        message: pausedMessage,
+      });
+      await this.conversationsService.handoffToHuman({
+        conversationId: conversation.id,
+        triggeredBy: 'system',
+        reason: 'AI allowance exhausted',
+      });
+      this.logger.log(
+        `Client ${client.id} AI allowance exhausted; conversation ${conversation.id} handed off`,
+      );
       return;
     }
 

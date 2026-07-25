@@ -56,6 +56,18 @@ interface PortalUser {
   createdAt?: string;
 }
 
+interface UsageInfo {
+  balance: number;
+  used: number;
+  planAllowance: number;
+  topUpCredits: number;
+  allowanceRemaining: number;
+  topUpRemaining: number;
+  remainingPct: number;
+  periodStart: string;
+  periodEnd: string;
+}
+
 const inputStyle: React.CSSProperties = {
   padding: 8,
   borderRadius: 4,
@@ -102,6 +114,15 @@ export default function ClientsPage() {
     email: '',
     password: '',
     name: '',
+  });
+  const [usageMap, setUsageMap] = useState<Record<string, UsageInfo | null>>(
+    {},
+  );
+  const [topUpClientId, setTopUpClientId] = useState<string | null>(null);
+  const [topUpForm, setTopUpForm] = useState({
+    credits: 500,
+    priceLkr: 3000,
+    note: '',
   });
   const [form, setForm] = useState({
     name: '',
@@ -150,7 +171,48 @@ export default function ClientsPage() {
     const data = await res.json();
     const list = Array.isArray(data) ? data : [];
     setClients(list);
+    list.forEach((c) => fetchUsage(c.id));
     return list;
+  };
+
+  const fetchUsage = async (clientId: string) => {
+    try {
+      const res = await fetch(`/api/usage/${clientId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = res.ok ? await res.json() : null;
+      setUsageMap((prev) => ({ ...prev, [clientId]: data }));
+    } catch {
+      setUsageMap((prev) => ({ ...prev, [clientId]: null }));
+    }
+  };
+
+  const handleTopUp = async (clientId: string) => {
+    const res = await fetch(`/api/usage/${clientId}/topups`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        credits: Number(topUpForm.credits),
+        priceLkr: Number(topUpForm.priceLkr),
+        note: topUpForm.note || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showInfo(data.message || 'Failed to record top-up');
+      return;
+    }
+    showInfo(
+      `Topped up ${Number(topUpForm.credits)} credits (LKR ${Number(
+        topUpForm.priceLkr,
+      ).toLocaleString()})`,
+    );
+    setTopUpClientId(null);
+    setTopUpForm({ credits: 500, priceLkr: 3000, note: '' });
+    fetchUsage(clientId);
   };
 
   const fetchStatus = async (clientId: string) => {
@@ -1136,6 +1198,133 @@ export default function ClientsPage() {
                   </button>
                 </div>
               </div>
+
+              {(() => {
+                const usage = usageMap[c.id];
+                if (usage === undefined) {
+                  return (
+                    <div style={{ marginTop: 12, fontSize: 13, color: '#9ca3af' }}>
+                      Loading usage...
+                    </div>
+                  );
+                }
+                if (usage === null) return null;
+                const left =
+                  (usage.allowanceRemaining ?? 0) + (usage.topUpRemaining ?? 0);
+                const low = usage.remainingPct <= 0.2;
+                const empty = usage.remainingPct <= 0;
+                const color = empty ? '#b91c1c' : low ? '#b45309' : '#15803d';
+                return (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      fontSize: 13,
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      color,
+                      background: empty ? '#fef2f2' : low ? '#fffbeb' : '#f0fdf4',
+                      border: low
+                        ? `1px solid ${empty ? '#fecaca' : '#fde68a'}`
+                        : '1px solid #bbf7d0',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 8,
+                    }}
+                  >
+                    <span>
+                      <strong>{left}</strong> conversations left
+                      {empty
+                        ? ' — AI paused'
+                        : low
+                        ? ' — running low'
+                        : ''}
+                      <span style={{ color: '#6b7280' }}>
+                        {' '}
+                        ({usage.allowanceRemaining}/{usage.planAllowance} plan
+                        {usage.topUpRemaining > 0 &&
+                          ` + ${usage.topUpRemaining} top-up`}
+                        )
+                      </span>
+                    </span>
+                    <button
+                      onClick={() => {
+                        setTopUpClientId(
+                          topUpClientId === c.id ? null : c.id,
+                        );
+                        setTopUpForm({ credits: 500, priceLkr: 3000, note: '' });
+                      }}
+                      style={buttonStyle('#7c3aed')}
+                    >
+                      Top up
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {topUpClientId === c.id && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    display: 'flex',
+                    gap: 8,
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    padding: '8px 12px',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 6,
+                    background: '#f9fafb',
+                  }}
+                >
+                  <input
+                    type="number"
+                    min={1}
+                    value={topUpForm.credits}
+                    onChange={(e) =>
+                      setTopUpForm({
+                        ...topUpForm,
+                        credits: Number(e.target.value),
+                      })
+                    }
+                    placeholder="Credits"
+                    style={{ ...inputStyle, width: 110 }}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    value={topUpForm.priceLkr}
+                    onChange={(e) =>
+                      setTopUpForm({
+                        ...topUpForm,
+                        priceLkr: Number(e.target.value),
+                      })
+                    }
+                    placeholder="Price (LKR)"
+                    style={{ ...inputStyle, width: 130 }}
+                  />
+                  <input
+                    value={topUpForm.note}
+                    onChange={(e) =>
+                      setTopUpForm({ ...topUpForm, note: e.target.value })
+                    }
+                    placeholder="Note (optional)"
+                    style={{ ...inputStyle, flex: 1, minWidth: 160 }}
+                  />
+                  <button
+                    onClick={() => handleTopUp(c.id)}
+                    style={buttonStyle('#16a34a')}
+                  >
+                    Confirm top-up
+                  </button>
+                  <button
+                    onClick={() => setTopUpClientId(null)}
+                    style={buttonStyle('#6b7280')}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
 
               {isConnected && (
                 <div

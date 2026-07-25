@@ -4,6 +4,7 @@ import { AiService } from '../ai/ai.service';
 import { KnowledgeBaseService } from '../knowledge-base/knowledge-base.service';
 import { BookingActionsService } from '../bookings/booking-actions.service';
 import { OrderActionsService } from '../orders/order-actions.service';
+import { UsageService } from '../usage/usage.service';
 import { PlaygroundMessageDto } from './dto/playground-message.dto';
 
 const BOOKING_ACTION_TYPES = [
@@ -21,6 +22,7 @@ export class PlaygroundService {
     private readonly knowledgeBaseService: KnowledgeBaseService,
     private readonly bookingActionsService: BookingActionsService,
     private readonly orderActionsService: OrderActionsService,
+    private readonly usageService: UsageService,
   ) {}
 
   async run(clientId: string, dto: PlaygroundMessageDto) {
@@ -45,6 +47,25 @@ export class PlaygroundService {
           .map((h) => `${h.role}: ${h.content}`)
           .join('\n')
       : undefined;
+
+    // Usage wallet: mirror the WhatsApp behavior — at 0 balance the AI is
+    // paused and the playground shows the paused state so staff can demo it.
+    const wallet = await this.usageService.getUsage(clientId);
+    if (wallet && wallet.balance <= 0) {
+      return {
+        reply:
+          client.aiPausedMessage ||
+          'Thanks for your message! Our team will reply to you shortly.',
+        paused: true,
+        wallet,
+        handoffRecommended: true,
+        handoffReason: 'AI allowance exhausted',
+        action: null,
+        actionResult: null,
+        sources: [],
+        usage: null,
+      };
+    }
 
     // Modules: act on real data via a dedicated playground customer so staff
     // can test booking/order flows end-to-end without WhatsApp.
@@ -152,6 +173,8 @@ export class PlaygroundService {
 
     return {
       reply,
+      paused: false,
+      wallet,
       handoffRecommended: aiResult.handoff,
       handoffReason: aiResult.handoffReason,
       action: aiResult.action ?? null,

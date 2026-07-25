@@ -417,6 +417,92 @@ surface. This is a core deliverable, not optional polish.
    fires exactly as when staff does it.
 4. Staff admin still sees everything, including the calendar view.
 
+### Phase 7 — Usage Wallet + Analytics
+
+Context: pricing is fixed monthly subscription (Starter LKR 3,500, Business
+LKR 7,500), each plan including a monthly AI conversation allowance. Clients
+top up prepaid when they run out — no pay-as-you-go invoicing, no chasing.
+At zero balance the AI must keep the customer experience intact by handing
+conversations to the human team (existing handoff machinery). This phase
+also upgrades analytics for both audiences.
+
+Defaults confirmed by the user (adjustable before build):
+- Counting unit: CONVERSATIONS (a conversation with at least one AI/bot
+  reply = 1 credit, regardless of message count).
+- Allowances: Starter 500 conversations/month, Business 1,500/month.
+- Top-up pack: +500 conversations for LKR 3,000. Top-up credits ROLL OVER
+  month to month (they are paid for); only the plan allowance resets monthly.
+
+**1. Usage wallet (data model)**
+
+Client fields (new migration):
+- `planAllowance` (int, default 500)
+- `topUpCredits` (int, default 0 — rolls over, never resets)
+- `usageResetAt` (DateTime — start of the current monthly period)
+- `aiPausedMessage` (string, nullable — customer-facing text when balance
+  is 0; default: "Thanks for your message! Our team will reply to you
+  shortly.")
+
+New model `TopUpPurchase` (clientId, credits, priceLkr, note, createdAt) —
+recorded by staff from the dashboard when payment is confirmed (manual
+payment flow: bank transfer / PayHere link; NO payment gateway integration
+in this phase).
+
+Balance = planAllowance + topUpCredits − conversations-with-AI-replies
+since usageResetAt. Monthly reset: on the first inbound message after the
+period ends, advance usageResetAt by one month (topUpCredits untouched).
+
+**2. Balance enforcement in the WhatsApp flow**
+
+In whatsapp.service.ts, before calling the AI:
+- Compute balance. If > 0 → normal AI flow (conversation counts as used
+  once the bot replies).
+- If 0 → do NOT call the AI. Trigger handoffToHuman (triggeredBy: 'system',
+  reason: 'AI allowance exhausted'), send the client's aiPausedMessage,
+  done. Reuses the existing Chatwoot handoff + notifications as-is.
+- Resume is automatic: as soon as a top-up raises the balance above 0,
+  the next message flows through the AI again. No flags to flip.
+
+Playground must show the same behavior (at 0, it reports the paused state
+so staff can demo it).
+
+**3. Portal + staff usage visibility**
+
+- Portal (client view): usage card — "X conversations left this month"
+  with a bar. Green > 20% remaining, yellow ≤ 20%, red at 0 with banner:
+  "AI paused — contact us to top up and resume instantly." Top-up history
+  list below (from TopUpPurchase).
+- Staff (Clients page): "Top up" action per client — enter credits +
+  price + note → adds to topUpCredits and records TopUpPurchase.
+- Staff analytics: clients at ≤ 20% remaining and at 0 highlighted.
+
+**4. Analytics upgrades**
+
+- Date-range filter on the analytics endpoint and page: today / 7 days /
+  30 days / custom range. ALL metrics respect it (currently mostly
+  all-time totals).
+- New metrics (period-aware): AI resolution rate (% of conversations
+  closed without any handoff — the sales number), handoff rate, bookings
+  (total, confirmed, no-show rate, upcoming this week), orders (total, by
+  status, revenue sum of completed orders in period).
+- Audience split (important): portal sees conversations, AI resolution
+  rate, bookings, orders, CSAT, usage card. TOKEN COUNTS and USD COST
+  (estimatedCostUsd — our provider margin) stay STAFF-ONLY. Clients see
+  their allowance balance, never raw token cost.
+
+**Acceptance test**
+
+1. Set a test client's planAllowance to 2. Send 2 AI conversations (real
+   WhatsApp or playground) → 3rd message goes straight to Chatwoot with
+   the paused message, no AI reply, handoff logged as system/allowance.
+2. Staff adds a top-up (+500) → next message gets an AI reply again.
+3. Portal shows the balance decreasing, yellow at ≤ 20%, red + banner at 0.
+4. topUpCredits unchanged across a monthly reset; allowance resets.
+5. Analytics: switch today/7d/30d and verify numbers change consistently;
+   AI resolution rate matches manual count; orders revenue sums completed
+   orders only.
+6. Portal (client login) sees NO token/cost figures anywhere.
+
 ## Deferred: Travel module (do NOT build now)
 
 Discussed 2026-07-23 for a prospective travel-agent client (flight ticketing +

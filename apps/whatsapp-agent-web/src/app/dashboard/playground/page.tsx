@@ -25,6 +25,25 @@ interface Usage {
   total_tokens: number;
 }
 
+interface UsageWallet {
+  balance: number;
+  used: number;
+  planAllowance: number;
+  topUpCredits: number;
+  allowanceRemaining: number;
+  topUpRemaining: number;
+  remainingPct: number;
+  periodStart: string;
+  periodEnd: string;
+  topUps: {
+    id: string;
+    credits: number;
+    priceLkr: number;
+    note?: string | null;
+    createdAt: string;
+  }[];
+}
+
 interface PlaygroundResponse {
   reply: string;
   handoffRecommended: boolean;
@@ -33,6 +52,8 @@ interface PlaygroundResponse {
   actionResult: string | null;
   sources: Source[];
   usage: Usage;
+  paused: boolean;
+  wallet: UsageWallet | null;
 }
 
 const inputStyle: React.CSSProperties = {
@@ -308,6 +329,23 @@ export default function PlaygroundPage() {
         >
           <div>
             <h3 style={{ marginTop: 0, fontSize: 16 }}>AI Reply</h3>
+            {result.paused && (
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: 12,
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: 6,
+                  color: '#b91c1c',
+                  fontWeight: 600,
+                  fontSize: 14,
+                }}
+              >
+                AI paused — allowance exhausted (this is what customers
+                experience at 0 balance)
+              </div>
+            )}
             <div
               style={{
                 padding: 12,
