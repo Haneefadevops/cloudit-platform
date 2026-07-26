@@ -3,6 +3,15 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { isPortalUser } from '../portal';
+import {
+  Button,
+  Card,
+  Input,
+  PageLoading,
+  Select,
+  Textarea,
+  useToast,
+} from '@/components/ui';
 
 interface Client {
   id: string;
@@ -24,47 +33,14 @@ interface Client {
   csatMessage?: string | null;
 }
 
-const inputStyle: React.CSSProperties = {
-  padding: 8,
-  borderRadius: 4,
-  border: '1px solid #d1d5db',
-  fontSize: 14,
-  width: '100%',
-};
-
-const buttonStyle = (color: string): React.CSSProperties => ({
-  padding: '6px 12px',
-  background: color,
-  color: 'white',
-  border: 'none',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 13,
-});
-
-const sectionStyle: React.CSSProperties = {
-  marginTop: 16,
-  padding: 12,
-  border: '1px solid #e5e7eb',
-  borderRadius: 6,
-  background: '#f9fafb',
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontWeight: 600,
-  fontSize: 14,
-  marginBottom: 8,
-  color: '#374151',
-};
-
 function AiSettingsForm() {
+  const toast = useToast();
   const searchParams = useSearchParams();
   const initialClientId = searchParams.get('clientId') || '';
 
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedId, setSelectedId] = useState<string>(initialClientId);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState({
     systemPrompt: '',
     aiTemperature: 1.0,
@@ -85,11 +61,6 @@ function AiSettingsForm() {
 
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
-
-  const showInfo = (text: string) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
-  };
 
   const fetchClients = async () => {
     if (!token) return;
@@ -172,47 +143,30 @@ function AiSettingsForm() {
       });
       const data = await res.json();
       if (!res.ok) {
-        showInfo(data.error || data.message || 'Failed to save AI settings');
+        toast(data.error || data.message || 'Failed to save AI settings', 'error');
       } else {
-        showInfo('AI settings saved');
+        toast('AI settings saved', 'success');
         await fetchClients();
       }
     } catch {
-      showInfo('Network error');
+      toast('Network error', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div>
-      <h1>AI Settings</h1>
-      <p style={{ color: '#6b7280', fontSize: 14 }}>
+    <div className="flex flex-col gap-4">
+      <p className="m-0 text-sm text-muted">
         Configure AI behaviour per client. These settings are used by the
         WhatsApp message handler.
       </p>
 
-      {message && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 12,
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: 6,
-            color: '#1e40af',
-          }}
-        >
-          {message}
-        </div>
-      )}
-
-      <div style={{ marginTop: 16 }}>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Client</label>
-        <select
+      <Card title="Client">
+        <Select
+          label="Client"
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
-          style={{ ...inputStyle, marginTop: 4 }}
         >
           <option value="">Select a client</option>
           {clients.map((c) => (
@@ -220,35 +174,16 @@ function AiSettingsForm() {
               {c.name}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Card>
 
       {selectedId && (
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            marginTop: 16,
-            background: 'white',
-            padding: 16,
-            borderRadius: 8,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
-        >
-          <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>General</div>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 14,
-              }}
-            >
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Card title="General">
+            <label className="flex items-center gap-2 text-sm text-brand-navy">
               <input
                 type="checkbox"
+                className="h-4 w-4 accent-brand-indigo"
                 checked={form.aiEnabled}
                 onChange={(e) =>
                   setForm({ ...form, aiEnabled: e.target.checked })
@@ -256,35 +191,32 @@ function AiSettingsForm() {
               />
               AI enabled
             </label>
-          </div>
+          </Card>
 
-          <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>System Prompt</div>
-            <textarea
+          <Card title="System Prompt">
+            <Textarea
               placeholder="Defines AI personality, tone, and business rules"
               value={form.systemPrompt}
               onChange={(e) =>
                 setForm({ ...form, systemPrompt: e.target.value })
               }
               rows={8}
-              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+              className="resize-y"
             />
-          </div>
+          </Card>
 
-          <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>Model & Generation</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input
+          <Card title="Model & Generation">
+            <div className="flex flex-col gap-3">
+              <Input
                 placeholder="AI model (e.g. kimi-latest)"
                 value={form.aiModel}
                 onChange={(e) => setForm({ ...form, aiModel: e.target.value })}
-                style={inputStyle}
               />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 12, color: '#6b7280' }}>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <span className="mb-1 block text-xs text-muted">
                     Temperature ({form.aiTemperature})
-                  </label>
+                  </span>
                   <input
                     type="range"
                     min={0}
@@ -297,27 +229,22 @@ function AiSettingsForm() {
                         aiTemperature: Number(e.target.value),
                       })
                     }
-                    style={{ width: '100%' }}
+                    className="w-full accent-brand-indigo"
                   />
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 12, color: '#6b7280' }}>
-                    Max tokens
-                  </label>
-                  <input
-                    type="number"
-                    value={form.maxTokens}
-                    onChange={(e) =>
-                      setForm({ ...form, maxTokens: Number(e.target.value) })
-                    }
-                    style={inputStyle}
-                  />
-                </div>
+                <Input
+                  label="Max tokens"
+                  type="number"
+                  value={form.maxTokens}
+                  onChange={(e) =>
+                    setForm({ ...form, maxTokens: Number(e.target.value) })
+                  }
+                />
               </div>
               <div>
-                <label style={{ fontSize: 12, color: '#6b7280' }}>
+                <span className="mb-1 block text-xs text-muted">
                   Confidence threshold ({form.confidenceThreshold})
-                </label>
+                </span>
                 <input
                   type="range"
                   min={0}
@@ -330,99 +257,83 @@ function AiSettingsForm() {
                       confidenceThreshold: Number(e.target.value),
                     })
                   }
-                  style={{ width: '100%' }}
+                  className="w-full accent-brand-indigo"
                 />
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>Messages</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input
+          <Card title="Messages">
+            <div className="flex flex-col gap-3">
+              <Input
                 placeholder="Welcome message (first message to new customers)"
                 value={form.welcomeMessage}
                 onChange={(e) =>
                   setForm({ ...form, welcomeMessage: e.target.value })
                 }
-                style={inputStyle}
               />
-              <input
+              <Input
                 placeholder="Fallback message (when AI cannot answer)"
                 value={form.fallbackMessage}
                 onChange={(e) =>
                   setForm({ ...form, fallbackMessage: e.target.value })
                 }
-                style={inputStyle}
               />
-              <input
+              <Input
                 placeholder="Handoff keywords (comma separated)"
                 value={form.handoffKeywords}
                 onChange={(e) =>
                   setForm({ ...form, handoffKeywords: e.target.value })
                 }
-                style={inputStyle}
               />
-              <input
+              <Input
                 placeholder="Outside-hours message (sent when closed)"
                 value={form.outsideHoursMessage}
                 onChange={(e) =>
                   setForm({ ...form, outsideHoursMessage: e.target.value })
                 }
-                style={inputStyle}
               />
             </div>
-          </div>
+          </Card>
 
-          <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>Operating Hours</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
+          <Card title="Operating Hours">
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Input
                   placeholder="Opens at (HH:MM)"
                   value={form.operatingHoursStart}
                   onChange={(e) =>
                     setForm({ ...form, operatingHoursStart: e.target.value })
                   }
-                  style={inputStyle}
                 />
-                <input
+                <Input
                   placeholder="Closes at (HH:MM)"
                   value={form.operatingHoursEnd}
                   onChange={(e) =>
                     setForm({ ...form, operatingHoursEnd: e.target.value })
                   }
-                  style={inputStyle}
                 />
               </div>
-              <input
+              <Input
                 placeholder="Closed days (comma separated)"
                 value={form.closedDays}
                 onChange={(e) =>
                   setForm({ ...form, closedDays: e.target.value })
                 }
-                style={inputStyle}
               />
-              <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+              <p className="m-0 text-xs text-muted">
                 Outside operating hours, customers receive the outside-hours
                 message and the conversation is queued for a human agent.
               </p>
             </div>
-          </div>
+          </Card>
 
-          <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>Customer Satisfaction (CSAT)</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 14,
-                }}
-              >
+          <Card title="Customer Satisfaction (CSAT)">
+            <div className="flex flex-col gap-3">
+              <label className="flex items-center gap-2 text-sm text-brand-navy">
                 <input
                   type="checkbox"
+                  className="h-4 w-4 accent-brand-indigo"
                   checked={form.csatEnabled}
                   onChange={(e) =>
                     setForm({ ...form, csatEnabled: e.target.checked })
@@ -431,26 +342,21 @@ function AiSettingsForm() {
                 Send a rating request after a conversation is resolved
               </label>
               {form.csatEnabled && (
-                <input
+                <Input
                   placeholder="CSAT message (ask for a 1-5 rating)"
                   value={form.csatMessage}
                   onChange={(e) =>
                     setForm({ ...form, csatMessage: e.target.value })
                   }
-                  style={inputStyle}
                 />
               )}
             </div>
-          </div>
+          </Card>
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button
-              type="submit"
-              disabled={loading}
-              style={buttonStyle('#16a34a')}
-            >
+          <div className="flex gap-2">
+            <Button type="submit" disabled={loading}>
               {loading ? 'Saving...' : 'Save AI Settings'}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -460,11 +366,7 @@ function AiSettingsForm() {
 
 export default function AiSettingsPage() {
   return (
-    <Suspense
-      fallback={
-        <div style={{ padding: 24, color: '#6b7280' }}>Loading AI Settings...</div>
-      }
-    >
+    <Suspense fallback={<PageLoading label="Loading AI Settings…" />}>
       <AiSettingsForm />
     </Suspense>
   );

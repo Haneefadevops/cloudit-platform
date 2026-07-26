@@ -1,6 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  Select,
+  StatusBadge,
+  Table,
+  TD,
+  TH,
+  THead,
+  TR,
+  Textarea,
+  useToast,
+} from '@/components/ui';
 import { isPortalUser } from '../portal';
 
 interface Client {
@@ -50,46 +66,13 @@ const emptyHours = (): Record<Weekday, { enabled: boolean; start: string; end: s
     WEEKDAYS.map((d) => [d, { enabled: false, start: '09:00', end: '17:00' }]),
   ) as Record<Weekday, { enabled: boolean; start: string; end: string }>;
 
-const inputStyle: React.CSSProperties = {
-  padding: 8,
-  borderRadius: 4,
-  border: '1px solid #d1d5db',
-  fontSize: 14,
-  width: '100%',
-};
-
-const buttonStyle = (color: string): React.CSSProperties => ({
-  padding: '6px 12px',
-  background: color,
-  color: 'white',
-  border: 'none',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 13,
-});
-
-const cardStyle: React.CSSProperties = {
-  marginTop: 16,
-  background: 'white',
-  padding: 16,
-  borderRadius: 8,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-};
-
-const badgeStyle = (color: string, bg: string): React.CSSProperties => ({
-  display: 'inline-block',
-  padding: '2px 8px',
-  borderRadius: 10,
-  fontSize: 12,
-  fontWeight: 600,
-  color,
-  background: bg,
-});
+const timeInputClass =
+  'w-28 rounded-lg border border-line bg-white px-3 py-2 text-sm text-brand-navy outline-none transition-colors focus:border-brand-indigo focus:ring-2 focus:ring-brand-indigo/20 disabled:bg-page disabled:text-muted';
 
 export default function ServicesPage() {
+  const toast = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
-  const [message, setMessage] = useState<string | null>(null);
 
   const [services, setServices] = useState<Service[]>([]);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
@@ -118,11 +101,6 @@ export default function ServicesPage() {
   const headers = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
-  };
-
-  const showInfo = (text: string) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
   };
 
   const fetchClients = async () => {
@@ -205,10 +183,10 @@ export default function ServicesPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      showInfo(data.message || 'Failed to save service');
+      toast(data.message || 'Failed to save service', 'error');
       return;
     }
-    showInfo(editingServiceId ? 'Service updated' : 'Service created');
+    toast(editingServiceId ? 'Service updated' : 'Service created', 'success');
     setEditingServiceId(null);
     setServiceForm({
       name: '',
@@ -292,10 +270,13 @@ export default function ServicesPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      showInfo(data.message || 'Failed to save staff member');
+      toast(data.message || 'Failed to save staff member', 'error');
       return;
     }
-    showInfo(editingStaffId ? 'Staff member updated' : 'Staff member created');
+    toast(
+      editingStaffId ? 'Staff member updated' : 'Staff member created',
+      'success',
+    );
     setEditingStaffId(null);
     setStaffForm({ name: '', hours: emptyHours(), daysOff: '', active: true });
     fetchStaff(selectedId);
@@ -335,468 +316,401 @@ export default function ServicesPage() {
   };
 
   return (
-    <div>
-      <h1>Services & Availability</h1>
-      <p style={{ color: '#6b7280', fontSize: 14 }}>
+    <div className="flex flex-col gap-4">
+      <p className="m-0 text-sm text-muted">
         Bookable services and staff schedules per client. These power the
         bookings module and the availability API.
       </p>
 
-      {message && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 12,
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: 6,
-            color: '#1e40af',
-          }}
-        >
-          {message}
+      <Card className="p-4">
+        <div className="max-w-xs">
+          <Select
+            label="Client"
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+          >
+            <option value="">Select a client</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.bookingsEnabled ? '' : ' (bookings disabled)'}
+              </option>
+            ))}
+          </Select>
         </div>
-      )}
-
-      <div style={{ marginTop: 16, maxWidth: 320 }}>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Client</label>
-        <select
-          value={selectedId}
-          onChange={(e) => setSelectedId(e.target.value)}
-          style={{ ...inputStyle, marginTop: 4 }}
-        >
-          <option value="">Select a client</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-              {c.bookingsEnabled ? '' : ' (bookings disabled)'}
-            </option>
-          ))}
-        </select>
-      </div>
+      </Card>
 
       {selectedId && (
         <>
-          <h2 style={{ marginTop: 24, fontSize: 18 }}>Services</h2>
-
-          <form
-            onSubmit={handleServiceSubmit}
-            style={{
-              ...cardStyle,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
-          >
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                placeholder="Service name (e.g. Consultation)"
-                value={serviceForm.name}
-                onChange={(e) =>
-                  setServiceForm({ ...serviceForm, name: e.target.value })
-                }
-                required
-                style={{ ...inputStyle, flex: 2 }}
-              />
-              <input
-                placeholder="Duration (minutes)"
-                type="number"
-                min={5}
-                value={serviceForm.durationMinutes}
-                onChange={(e) =>
-                  setServiceForm({
-                    ...serviceForm,
-                    durationMinutes: Number(e.target.value),
-                  })
-                }
-                style={{ ...inputStyle, flex: 1 }}
-              />
-              <input
-                placeholder="Price (optional)"
-                type="number"
-                min={0}
-                step="0.01"
-                value={serviceForm.price}
-                onChange={(e) =>
-                  setServiceForm({ ...serviceForm, price: e.target.value })
-                }
-                style={{ ...inputStyle, flex: 1 }}
-              />
-            </div>
-            <input
-              placeholder="Description (optional)"
-              value={serviceForm.description}
-              onChange={(e) =>
-                setServiceForm({ ...serviceForm, description: e.target.value })
-              }
-              style={inputStyle}
-            />
-            <textarea
-              placeholder="Intake questions, one per line (optional)"
-              value={serviceForm.intakeQuestions}
-              onChange={(e) =>
-                setServiceForm({
-                  ...serviceForm,
-                  intakeQuestions: e.target.value,
-                })
-              }
-              rows={3}
-              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-            />
-            <div style={{ display: 'flex', gap: 16, fontSize: 14 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input
-                  type="checkbox"
-                  checked={serviceForm.requiresConfirmation}
+          <Card title={editingServiceId ? 'Edit Service' : 'Add Service'}>
+            <form
+              onSubmit={handleServiceSubmit}
+              className="flex flex-col gap-3"
+            >
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr_1fr]">
+                <Input
+                  placeholder="Service name (e.g. Consultation)"
+                  value={serviceForm.name}
+                  onChange={(e) =>
+                    setServiceForm({ ...serviceForm, name: e.target.value })
+                  }
+                  required
+                />
+                <Input
+                  placeholder="Duration (minutes)"
+                  type="number"
+                  min={5}
+                  value={serviceForm.durationMinutes}
                   onChange={(e) =>
                     setServiceForm({
                       ...serviceForm,
-                      requiresConfirmation: e.target.checked,
+                      durationMinutes: Number(e.target.value),
                     })
                   }
                 />
-                Requires confirmation
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input
-                  type="checkbox"
-                  checked={serviceForm.active}
+                <Input
+                  placeholder="Price (optional)"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={serviceForm.price}
                   onChange={(e) =>
-                    setServiceForm({ ...serviceForm, active: e.target.checked })
+                    setServiceForm({ ...serviceForm, price: e.target.value })
                   }
                 />
-                Active
-              </label>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="submit" style={buttonStyle('#16a34a')}>
-                {editingServiceId ? 'Update Service' : 'Add Service'}
-              </button>
-              {editingServiceId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingServiceId(null);
-                    setServiceForm({
-                      name: '',
-                      description: '',
-                      durationMinutes: 60,
-                      price: '',
-                      requiresConfirmation: false,
-                      intakeQuestions: '',
-                      active: true,
-                    });
-                  }}
-                  style={buttonStyle('#6b7280')}
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
-
-          <div style={cardStyle}>
-            {services.length === 0 ? (
-              <div style={{ color: '#6b7280' }}>No services yet</div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr
-                    style={{ textAlign: 'left', color: '#6b7280', fontSize: 13 }}
+              </div>
+              <Input
+                placeholder="Description (optional)"
+                value={serviceForm.description}
+                onChange={(e) =>
+                  setServiceForm({ ...serviceForm, description: e.target.value })
+                }
+              />
+              <Textarea
+                placeholder="Intake questions, one per line (optional)"
+                value={serviceForm.intakeQuestions}
+                onChange={(e) =>
+                  setServiceForm({
+                    ...serviceForm,
+                    intakeQuestions: e.target.value,
+                  })
+                }
+                rows={3}
+              />
+              <div className="flex flex-wrap gap-4 text-sm">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    className="accent-brand-indigo"
+                    checked={serviceForm.requiresConfirmation}
+                    onChange={(e) =>
+                      setServiceForm({
+                        ...serviceForm,
+                        requiresConfirmation: e.target.checked,
+                      })
+                    }
+                  />
+                  Requires confirmation
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    className="accent-brand-indigo"
+                    checked={serviceForm.active}
+                    onChange={(e) =>
+                      setServiceForm({ ...serviceForm, active: e.target.checked })
+                    }
+                  />
+                  Active
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit">
+                  {editingServiceId ? 'Update Service' : 'Add Service'}
+                </Button>
+                {editingServiceId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingServiceId(null);
+                      setServiceForm({
+                        name: '',
+                        description: '',
+                        durationMinutes: 60,
+                        price: '',
+                        requiresConfirmation: false,
+                        intakeQuestions: '',
+                        active: true,
+                      });
+                    }}
                   >
-                    <th style={{ paddingBottom: 8 }}>Name</th>
-                    <th style={{ paddingBottom: 8 }}>Duration</th>
-                    <th style={{ paddingBottom: 8 }}>Price</th>
-                    <th style={{ paddingBottom: 8 }}>Flags</th>
-                    <th style={{ paddingBottom: 8 }}>Actions</th>
-                  </tr>
-                </thead>
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </form>
+          </Card>
+
+          <Card title="Services">
+            {services.length === 0 ? (
+              <EmptyState
+                title="No services yet"
+                hint="Add your first bookable service using the form above."
+              />
+            ) : (
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Name</TH>
+                    <TH>Duration</TH>
+                    <TH>Price</TH>
+                    <TH>Flags</TH>
+                    <TH>Actions</TH>
+                  </TR>
+                </THead>
                 <tbody>
                   {services.map((s) => (
-                    <tr key={s.id} style={{ borderTop: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '10px 0' }}>
+                    <TR key={s.id}>
+                      <TD>
                         {s.name}
                         {s.intakeQuestions?.length > 0 && (
-                          <div style={{ fontSize: 12, color: '#6b7280' }}>
+                          <div className="text-xs text-muted">
                             {s.intakeQuestions.length} intake question
                             {s.intakeQuestions.length === 1 ? '' : 's'}
                           </div>
                         )}
-                      </td>
-                      <td style={{ padding: '10px 0' }}>{s.durationMinutes} min</td>
-                      <td style={{ padding: '10px 0' }}>
+                      </TD>
+                      <TD>{s.durationMinutes} min</TD>
+                      <TD>
                         {s.price === null || s.price === undefined
                           ? '—'
                           : `$${Number(s.price).toFixed(2)}`}
-                      </td>
-                      <td style={{ padding: '10px 0' }}>
-                        <div style={{ display: 'flex', gap: 6 }}>
+                      </TD>
+                      <TD>
+                        <div className="flex flex-wrap gap-1.5">
                           {s.requiresConfirmation && (
-                            <span style={badgeStyle('#92400e', '#fef3c7')}>
-                              confirmation
-                            </span>
+                            <Badge tone="amber">confirmation</Badge>
                           )}
-                          <span
-                            style={badgeStyle(
-                              s.active ? '#15803d' : '#6b7280',
-                              s.active ? '#f0fdf4' : '#f3f4f6',
-                            )}
-                          >
-                            {s.active ? 'active' : 'inactive'}
-                          </span>
+                          <StatusBadge
+                            status={s.active ? 'active' : 'inactive'}
+                          />
                         </div>
-                      </td>
-                      <td style={{ padding: '10px 0' }}>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button
+                      </TD>
+                      <TD>
+                        <div className="flex flex-wrap gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => handleServiceEdit(s)}
-                            style={buttonStyle('#2563eb')}
                           >
                             Edit
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
                             onClick={() => toggleServiceActive(s)}
-                            style={buttonStyle(s.active ? '#f59e0b' : '#16a34a')}
                           >
                             {s.active ? 'Deactivate' : 'Activate'}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
                             onClick={() => handleServiceDelete(s.id)}
-                            style={buttonStyle('#dc2626')}
                           >
                             Delete
-                          </button>
+                          </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TD>
+                    </TR>
                   ))}
                 </tbody>
-              </table>
+              </Table>
             )}
-          </div>
+          </Card>
 
-          <h2 style={{ marginTop: 24, fontSize: 18 }}>Staff</h2>
+          <Card title={editingStaffId ? 'Edit Staff Member' : 'Add Staff Member'}>
+            <form onSubmit={handleStaffSubmit} className="flex flex-col gap-3">
+              <Input
+                placeholder="Staff member name (e.g. Dr. Silva)"
+                value={staffForm.name}
+                onChange={(e) =>
+                  setStaffForm({ ...staffForm, name: e.target.value })
+                }
+                required
+              />
 
-          <form
-            onSubmit={handleStaffSubmit}
-            style={{
-              ...cardStyle,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
-          >
-            <input
-              placeholder="Staff member name (e.g. Dr. Silva)"
-              value={staffForm.name}
-              onChange={(e) =>
-                setStaffForm({ ...staffForm, name: e.target.value })
-              }
-              required
-              style={inputStyle}
-            />
-
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-                Weekly hours
-              </div>
-              <div
-                style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
-              >
-                {WEEKDAYS.map((day) => {
-                  const h = staffForm.hours[day];
-                  return (
-                    <div
-                      key={day}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        fontSize: 14,
-                      }}
-                    >
-                      <label
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          width: 140,
-                          textTransform: 'capitalize',
-                        }}
+              <div>
+                <div className="mb-1 text-sm font-medium">Weekly hours</div>
+                <div className="flex flex-col gap-1.5">
+                  {WEEKDAYS.map((day) => {
+                    const h = staffForm.hours[day];
+                    return (
+                      <div
+                        key={day}
+                        className="flex flex-wrap items-center gap-2 text-sm"
                       >
+                        <label className="flex w-36 items-center gap-1.5 capitalize">
+                          <input
+                            type="checkbox"
+                            className="accent-brand-indigo"
+                            checked={h.enabled}
+                            onChange={(e) =>
+                              setStaffForm({
+                                ...staffForm,
+                                hours: {
+                                  ...staffForm.hours,
+                                  [day]: { ...h, enabled: e.target.checked },
+                                },
+                              })
+                            }
+                          />
+                          {day}
+                        </label>
                         <input
-                          type="checkbox"
-                          checked={h.enabled}
+                          type="time"
+                          value={h.start}
+                          disabled={!h.enabled}
                           onChange={(e) =>
                             setStaffForm({
                               ...staffForm,
                               hours: {
                                 ...staffForm.hours,
-                                [day]: { ...h, enabled: e.target.checked },
+                                [day]: { ...h, start: e.target.value },
                               },
                             })
                           }
+                          className={timeInputClass}
                         />
-                        {day}
-                      </label>
-                      <input
-                        type="time"
-                        value={h.start}
-                        disabled={!h.enabled}
-                        onChange={(e) =>
-                          setStaffForm({
-                            ...staffForm,
-                            hours: {
-                              ...staffForm.hours,
-                              [day]: { ...h, start: e.target.value },
-                            },
-                          })
-                        }
-                        style={{ ...inputStyle, width: 110 }}
-                      />
-                      <span style={{ color: '#6b7280' }}>to</span>
-                      <input
-                        type="time"
-                        value={h.end}
-                        disabled={!h.enabled}
-                        onChange={(e) =>
-                          setStaffForm({
-                            ...staffForm,
-                            hours: {
-                              ...staffForm.hours,
-                              [day]: { ...h, end: e.target.value },
-                            },
-                          })
-                        }
-                        style={{ ...inputStyle, width: 110 }}
-                      />
-                    </div>
-                  );
-                })}
+                        <span className="text-muted">to</span>
+                        <input
+                          type="time"
+                          value={h.end}
+                          disabled={!h.enabled}
+                          onChange={(e) =>
+                            setStaffForm({
+                              ...staffForm,
+                              hours: {
+                                ...staffForm.hours,
+                                [day]: { ...h, end: e.target.value },
+                              },
+                            })
+                          }
+                          className={timeInputClass}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
 
-            <textarea
-              placeholder="Days off, one YYYY-MM-DD per line (optional)"
-              value={staffForm.daysOff}
-              onChange={(e) =>
-                setStaffForm({ ...staffForm, daysOff: e.target.value })
-              }
-              rows={3}
-              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-            />
-
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 14,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={staffForm.active}
+              <Textarea
+                placeholder="Days off, one YYYY-MM-DD per line (optional)"
+                value={staffForm.daysOff}
                 onChange={(e) =>
-                  setStaffForm({ ...staffForm, active: e.target.checked })
+                  setStaffForm({ ...staffForm, daysOff: e.target.value })
                 }
+                rows={3}
               />
-              Active
-            </label>
 
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="submit" style={buttonStyle('#16a34a')}>
-                {editingStaffId ? 'Update Staff Member' : 'Add Staff Member'}
-              </button>
-              {editingStaffId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingStaffId(null);
-                    setStaffForm({
-                      name: '',
-                      hours: emptyHours(),
-                      daysOff: '',
-                      active: true,
-                    });
-                  }}
-                  style={buttonStyle('#6b7280')}
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
+              <label className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  className="accent-brand-indigo"
+                  checked={staffForm.active}
+                  onChange={(e) =>
+                    setStaffForm({ ...staffForm, active: e.target.checked })
+                  }
+                />
+                Active
+              </label>
 
-          <div style={cardStyle}>
-            {staff.length === 0 ? (
-              <div style={{ color: '#6b7280' }}>No staff yet</div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr
-                    style={{ textAlign: 'left', color: '#6b7280', fontSize: 13 }}
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit">
+                  {editingStaffId ? 'Update Staff Member' : 'Add Staff Member'}
+                </Button>
+                {editingStaffId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingStaffId(null);
+                      setStaffForm({
+                        name: '',
+                        hours: emptyHours(),
+                        daysOff: '',
+                        active: true,
+                      });
+                    }}
                   >
-                    <th style={{ paddingBottom: 8 }}>Name</th>
-                    <th style={{ paddingBottom: 8 }}>Hours</th>
-                    <th style={{ paddingBottom: 8 }}>Days Off</th>
-                    <th style={{ paddingBottom: 8 }}>Status</th>
-                    <th style={{ paddingBottom: 8 }}>Actions</th>
-                  </tr>
-                </thead>
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </form>
+          </Card>
+
+          <Card title="Staff">
+            {staff.length === 0 ? (
+              <EmptyState
+                title="No staff yet"
+                hint="Add a staff member with weekly hours using the form above."
+              />
+            ) : (
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Name</TH>
+                    <TH>Hours</TH>
+                    <TH>Days Off</TH>
+                    <TH>Status</TH>
+                    <TH>Actions</TH>
+                  </TR>
+                </THead>
                 <tbody>
                   {staff.map((s) => (
-                    <tr key={s.id} style={{ borderTop: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '10px 0' }}>{s.name}</td>
-                      <td
-                        style={{
-                          padding: '10px 0',
-                          fontSize: 13,
-                          color: '#374151',
-                        }}
-                      >
+                    <TR key={s.id}>
+                      <TD>{s.name}</TD>
+                      <TD className="text-[13px] text-gray-700">
                         {hoursSummary(s.weeklyHours)}
-                      </td>
-                      <td style={{ padding: '10px 0', fontSize: 13 }}>
+                      </TD>
+                      <TD className="text-[13px]">
                         {s.daysOff?.length > 0 ? s.daysOff.length : '—'}
-                      </td>
-                      <td style={{ padding: '10px 0' }}>
-                        <span
-                          style={badgeStyle(
-                            s.active ? '#15803d' : '#6b7280',
-                            s.active ? '#f0fdf4' : '#f3f4f6',
-                          )}
-                        >
-                          {s.active ? 'active' : 'inactive'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '10px 0' }}>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button
+                      </TD>
+                      <TD>
+                        <StatusBadge status={s.active ? 'active' : 'inactive'} />
+                      </TD>
+                      <TD>
+                        <div className="flex flex-wrap gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => handleStaffEdit(s)}
-                            style={buttonStyle('#2563eb')}
                           >
                             Edit
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
                             onClick={() => toggleStaffActive(s)}
-                            style={buttonStyle(s.active ? '#f59e0b' : '#16a34a')}
                           >
                             {s.active ? 'Deactivate' : 'Activate'}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
                             onClick={() => handleStaffDelete(s.id)}
-                            style={buttonStyle('#dc2626')}
                           >
                             Delete
-                          </button>
+                          </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TD>
+                    </TR>
                   ))}
                 </tbody>
-              </table>
+              </Table>
             )}
-          </div>
+          </Card>
         </>
       )}
     </div>

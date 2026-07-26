@@ -1,6 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  Select,
+  StatusBadge,
+  Table,
+  TD,
+  TH,
+  THead,
+  TR,
+  useToast,
+} from '@/components/ui';
 import { isPortalUser } from '../portal';
 
 interface Client {
@@ -37,51 +52,16 @@ const emptyForm = () => ({
   options: [] as ProductOption[],
 });
 
-const inputStyle: React.CSSProperties = {
-  padding: 8,
-  borderRadius: 4,
-  border: '1px solid #d1d5db',
-  fontSize: 14,
-  width: '100%',
-};
-
-const buttonStyle = (color: string): React.CSSProperties => ({
-  padding: '6px 12px',
-  background: color,
-  color: 'white',
-  border: 'none',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 13,
-});
-
-const cardStyle: React.CSSProperties = {
-  marginTop: 16,
-  background: 'white',
-  padding: 16,
-  borderRadius: 8,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-};
-
-const badgeStyle = (color: string, bg: string): React.CSSProperties => ({
-  display: 'inline-block',
-  padding: '2px 8px',
-  borderRadius: 10,
-  fontSize: 12,
-  fontWeight: 600,
-  color,
-  background: bg,
-});
-
 export default function CatalogPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
-  const [message, setMessage] = useState<string | null>(null);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm());
+
+  const toast = useToast();
 
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
@@ -89,11 +69,6 @@ export default function CatalogPage() {
   const headers = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
-  };
-
-  const showInfo = (text: string) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
   };
 
   const fetchClients = async () => {
@@ -175,10 +150,10 @@ export default function CatalogPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      showInfo(data.message || 'Failed to save product');
+      toast(data.message || 'Failed to save product', 'error');
       return;
     }
-    showInfo(editingId ? 'Product updated' : 'Product created');
+    toast(editingId ? 'Product updated' : 'Product created', 'success');
     setEditingId(null);
     setForm(emptyForm());
     fetchProducts(selectedId);
@@ -217,215 +192,184 @@ export default function CatalogPage() {
   };
 
   return (
-    <div>
-      <h1>Catalog</h1>
-      <p style={{ color: '#6b7280', fontSize: 14 }}>
+    <div className="space-y-4">
+      <p className="m-0 text-sm text-muted">
         Products per client. These power the orders module menu that customers
         see on WhatsApp.
       </p>
 
-      {message && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 12,
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: 6,
-            color: '#1e40af',
-          }}
-        >
-          {message}
+      <Card>
+        <div className="max-w-xs">
+          <Select
+            label="Client"
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+          >
+            <option value="">Select a client</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.ordersEnabled ? '' : ' (orders disabled)'}
+              </option>
+            ))}
+          </Select>
         </div>
-      )}
-
-      <div style={{ marginTop: 16, maxWidth: 320 }}>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Client</label>
-        <select
-          value={selectedId}
-          onChange={(e) => setSelectedId(e.target.value)}
-          style={{ ...inputStyle, marginTop: 4 }}
-        >
-          <option value="">Select a client</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-              {c.ordersEnabled ? '' : ' (orders disabled)'}
-            </option>
-          ))}
-        </select>
-      </div>
+      </Card>
 
       {selectedId && (
         <>
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              ...cardStyle,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
-          >
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                placeholder="Product name (e.g. Chicken Kottu)"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-                style={{ ...inputStyle, flex: 2 }}
-              />
-              <input
-                placeholder="Price"
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: e.target.value })}
-                required
-                style={{ ...inputStyle, flex: 1 }}
-              />
-              <input
-                placeholder="Category (e.g. Mains)"
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                style={{ ...inputStyle, flex: 1 }}
-              />
-            </div>
-            <input
-              placeholder="Description (optional)"
-              value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
-              style={inputStyle}
-            />
-
-            <div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 4,
-                }}
-              >
-                <span style={{ fontSize: 13, fontWeight: 600 }}>Options</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setForm({ ...form, options: [...form.options, emptyOption()] })
+          <Card>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr_1fr]">
+                <Input
+                  placeholder="Product name (e.g. Chicken Kottu)"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                />
+                <Input
+                  placeholder="Price"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.price}
+                  onChange={(e) => setForm({ ...form, price: e.target.value })}
+                  required
+                />
+                <Input
+                  placeholder="Category (e.g. Mains)"
+                  value={form.category}
+                  onChange={(e) =>
+                    setForm({ ...form, category: e.target.value })
                   }
-                  style={buttonStyle('#2563eb')}
-                >
-                  Add Option
-                </button>
+                />
               </div>
-              {form.options.length === 0 ? (
-                <div style={{ fontSize: 13, color: '#9ca3af' }}>
-                  No options — add sizes, extras, etc.
+              <Input
+                placeholder="Description (optional)"
+                value={form.description}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value })
+                }
+              />
+
+              <div>
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium">Options</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        options: [...form.options, emptyOption()],
+                      })
+                    }
+                  >
+                    Add Option
+                  </Button>
                 </div>
-              ) : (
-                <div
-                  style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
-                >
-                  {form.options.map((o, i) => (
-                    <div
-                      key={i}
-                      style={{ display: 'flex', gap: 8, alignItems: 'center' }}
-                    >
-                      <input
-                        placeholder="Option name (e.g. Large)"
-                        value={o.name}
-                        onChange={(e) =>
-                          setOption(i, { name: e.target.value })
-                        }
-                        style={{ ...inputStyle, flex: 2 }}
-                      />
-                      <input
-                        placeholder="Price delta"
-                        type="number"
-                        step="0.01"
-                        value={o.priceDelta}
-                        onChange={(e) =>
-                          setOption(i, { priceDelta: Number(e.target.value) })
-                        }
-                        style={{ ...inputStyle, flex: 1 }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setForm({
-                            ...form,
-                            options: form.options.filter((_, j) => j !== i),
-                          })
-                        }
-                        style={buttonStyle('#dc2626')}
+                {form.options.length === 0 ? (
+                  <div className="text-sm text-muted">
+                    No options — add sizes, extras, etc.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {form.options.map((o, i) => (
+                      <div
+                        key={i}
+                        className="flex flex-col gap-2 sm:flex-row sm:items-center"
                       >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                        <Input
+                          className="sm:flex-[2]"
+                          placeholder="Option name (e.g. Large)"
+                          value={o.name}
+                          onChange={(e) =>
+                            setOption(i, { name: e.target.value })
+                          }
+                        />
+                        <Input
+                          className="sm:flex-1"
+                          placeholder="Price delta"
+                          type="number"
+                          step="0.01"
+                          value={o.priceDelta}
+                          onChange={(e) =>
+                            setOption(i, {
+                              priceDelta: Number(e.target.value),
+                            })
+                          }
+                        />
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              options: form.options.filter((_, j) => j !== i),
+                            })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-            <div style={{ display: 'flex', gap: 16, fontSize: 14 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input
-                  type="checkbox"
-                  checked={form.available}
-                  onChange={(e) =>
-                    setForm({ ...form, available: e.target.checked })
-                  }
-                />
-                Available (uncheck when sold out)
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input
-                  type="checkbox"
-                  checked={form.active}
-                  onChange={(e) =>
-                    setForm({ ...form, active: e.target.checked })
-                  }
-                />
-                Active
-              </label>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="submit" style={buttonStyle('#16a34a')}>
-                {editingId ? 'Update Product' : 'Add Product'}
-              </button>
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingId(null);
-                    setForm(emptyForm());
-                  }}
-                  style={buttonStyle('#6b7280')}
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
+              <div className="flex flex-wrap gap-4 text-sm">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    className="accent-brand-indigo"
+                    checked={form.available}
+                    onChange={(e) =>
+                      setForm({ ...form, available: e.target.checked })
+                    }
+                  />
+                  Available (uncheck when sold out)
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    className="accent-brand-indigo"
+                    checked={form.active}
+                    onChange={(e) =>
+                      setForm({ ...form, active: e.target.checked })
+                    }
+                  />
+                  Active
+                </label>
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit">
+                  {editingId ? 'Update Product' : 'Add Product'}
+                </Button>
+                {editingId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingId(null);
+                      setForm(emptyForm());
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </form>
+          </Card>
 
-          <div
-            style={{
-              ...cardStyle,
-              display: 'flex',
-              gap: 16,
-              alignItems: 'flex-end',
-              flexWrap: 'wrap',
-            }}
-          >
-            <div style={{ width: 220 }}>
-              <label style={{ fontSize: 13, fontWeight: 600 }}>Category</label>
-              <select
+          <Card>
+            <div className="max-w-xs">
+              <Select
+                label="Category"
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                style={{ ...inputStyle, marginTop: 4 }}
               >
                 <option value="all">All categories</option>
                 {categories.map((c) => (
@@ -433,97 +377,75 @@ export default function CatalogPage() {
                     {c}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
-          </div>
+          </Card>
 
-          <div style={cardStyle}>
-            {visibleProducts.length === 0 ? (
-              <div style={{ color: '#6b7280' }}>No products found</div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr
-                    style={{ textAlign: 'left', color: '#6b7280', fontSize: 13 }}
-                  >
-                    <th style={{ paddingBottom: 8 }}>Name</th>
-                    <th style={{ paddingBottom: 8 }}>Category</th>
-                    <th style={{ paddingBottom: 8 }}>Price</th>
-                    <th style={{ paddingBottom: 8 }}>Options</th>
-                    <th style={{ paddingBottom: 8 }}>Flags</th>
-                    <th style={{ paddingBottom: 8 }}>Actions</th>
-                  </tr>
-                </thead>
+          {visibleProducts.length === 0 ? (
+            <EmptyState title="No products found" />
+          ) : (
+            <Card className="p-0">
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Name</TH>
+                    <TH>Category</TH>
+                    <TH>Price</TH>
+                    <TH>Options</TH>
+                    <TH>Flags</TH>
+                    <TH>Actions</TH>
+                  </TR>
+                </THead>
                 <tbody>
                   {visibleProducts.map((p) => (
-                    <tr key={p.id} style={{ borderTop: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '10px 8px 10px 0' }}>
+                    <TR key={p.id}>
+                      <TD>
                         {p.name}
                         {p.description && (
-                          <div style={{ fontSize: 12, color: '#6b7280' }}>
+                          <div className="text-xs text-muted">
                             {p.description}
                           </div>
                         )}
-                      </td>
-                      <td style={{ padding: '10px 8px 10px 0' }}>
-                        {p.category || '—'}
-                      </td>
-                      <td style={{ padding: '10px 8px 10px 0' }}>
-                        ${Number(p.price).toFixed(2)}
-                      </td>
-                      <td
-                        style={{
-                          padding: '10px 8px 10px 0',
-                          fontSize: 13,
-                          color: '#374151',
-                        }}
-                      >
+                      </TD>
+                      <TD>{p.category || '—'}</TD>
+                      <TD>${Number(p.price).toFixed(2)}</TD>
+                      <TD className="text-[13px] text-gray-700">
                         {optionsSummary(p.options)}
-                      </td>
-                      <td style={{ padding: '10px 8px 10px 0' }}>
-                        <div
-                          style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
-                        >
-                          <span
-                            style={badgeStyle(
-                              p.available ? '#15803d' : '#b91c1c',
-                              p.available ? '#f0fdf4' : '#fef2f2',
-                            )}
-                          >
+                      </TD>
+                      <TD>
+                        <div className="flex flex-wrap gap-1.5">
+                          <Badge tone={p.available ? 'green' : 'red'}>
                             {p.available ? 'available' : 'sold out'}
-                          </span>
-                          <span
-                            style={badgeStyle(
-                              p.active ? '#15803d' : '#6b7280',
-                              p.active ? '#f0fdf4' : '#f3f4f6',
-                            )}
-                          >
-                            {p.active ? 'active' : 'inactive'}
-                          </span>
+                          </Badge>
+                          <StatusBadge
+                            status={p.active ? 'active' : 'inactive'}
+                          />
                         </div>
-                      </td>
-                      <td style={{ padding: '10px 0' }}>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button
+                      </TD>
+                      <TD>
+                        <div className="flex gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => handleEdit(p)}
-                            style={buttonStyle('#2563eb')}
                           >
                             Edit
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
                             onClick={() => handleDelete(p.id)}
-                            style={buttonStyle('#dc2626')}
                           >
                             Delete
-                          </button>
+                          </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TD>
+                    </TR>
                   ))}
                 </tbody>
-              </table>
-            )}
-          </div>
+              </Table>
+            </Card>
+          )}
         </>
       )}
     </div>

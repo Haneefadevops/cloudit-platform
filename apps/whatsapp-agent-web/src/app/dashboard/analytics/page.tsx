@@ -2,6 +2,23 @@
 
 import { useEffect, useState } from 'react';
 import { getStoredUser, isPortalUser } from '../portal';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  PageLoading,
+  Select,
+  StatCard,
+  StatusBadge,
+  Table,
+  THead,
+  TR,
+  TH,
+  TD,
+  UsageBar,
+  useToast,
+} from '@/components/ui';
 
 interface Analytics {
   period?: { since: string; until: string };
@@ -89,6 +106,7 @@ const formatPct = (rate: number | null | undefined) =>
 const formatLkr = (amount: number) => `LKR ${Number(amount).toLocaleString()}`;
 
 export default function AnalyticsPage() {
+  const toast = useToast();
   const [data, setData] = useState<Analytics | null>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
@@ -109,14 +127,8 @@ export default function AnalyticsPage() {
     bankDetails: string;
   } | null>(null);
   const [slipFiles, setSlipFiles] = useState<Record<string, File | null>>({});
-  const [message, setMessage] = useState<string | null>(null);
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
-
-  const showInfo = (text: string) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
-  };
 
   useEffect(() => {
     const user = getStoredUser();
@@ -176,7 +188,7 @@ export default function AnalyticsPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      showInfo(data.message || 'Failed to create top-up request');
+      toast(data.message || 'Failed to create top-up request', 'error');
       return;
     }
     setShowPackages(false);
@@ -192,7 +204,7 @@ export default function AnalyticsPage() {
   const uploadSlip = async (requestId: string) => {
     const file = slipFiles[requestId];
     if (!file) {
-      showInfo('Choose a slip image or PDF first');
+      toast('Choose a slip image or PDF first', 'info');
       return;
     }
     const formData = new FormData();
@@ -207,10 +219,10 @@ export default function AnalyticsPage() {
     );
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      showInfo(data?.message || 'Failed to upload slip');
+      toast(data?.message || 'Failed to upload slip', 'error');
       return;
     }
-    showInfo('Slip uploaded');
+    toast('Slip uploaded', 'success');
     setSlipFiles((prev) => ({ ...prev, [requestId]: null }));
     fetchRequests(selectedClientId);
   };
@@ -249,111 +261,41 @@ export default function AnalyticsPage() {
   }, [selectedClientId]);
 
   if (!data) {
-    return <div>Loading analytics...</div>;
+    return <PageLoading label="Loading analytics…" />;
   }
 
-  const statCard = (
-    label: string,
-    value: number | string,
-    sub?: React.ReactNode,
-  ) => (
-    <div
-      key={label}
-      style={{
-        background: 'white',
-        padding: 20,
-        borderRadius: 8,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-        minWidth: 160,
-        flex: 1,
-      }}
-    >
-      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>{value}</div>
-      {sub && (
-        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>{sub}</div>
-      )}
-    </div>
-  );
-
   const rangeButton = (key: RangeKey, label: string) => (
-    <button
+    <Button
       key={key}
+      size="sm"
+      variant={range === key ? 'primary' : 'outline'}
+      className="rounded-full"
       onClick={() => setRange(key)}
-      style={{
-        padding: '6px 14px',
-        borderRadius: 16,
-        border: range === key ? '1px solid #2563eb' : '1px solid #d1d5db',
-        background: range === key ? '#eff6ff' : 'white',
-        color: range === key ? '#1d4ed8' : '#374151',
-        cursor: 'pointer',
-        fontSize: 13,
-        fontWeight: range === key ? 600 : 400,
-      }}
     >
       {label}
-    </button>
+    </Button>
   );
 
   const conversationsLeft = usage
     ? (usage.allowanceRemaining ?? 0) + (usage.topUpRemaining ?? 0)
     : 0;
-  const usageColor = !usage
-    ? '#16a34a'
+  const usageToneClass = !usage
+    ? 'text-green-600'
     : usage.remainingPct <= 0
-    ? '#dc2626'
+    ? 'text-red-600'
     : usage.remainingPct <= 0.2
-    ? '#d97706'
-    : '#16a34a';
-
-  const requestStatusStyle = (
-    status: TopUpRequest['status'],
-  ): { color: string; bg: string; label: string } => {
-    switch (status) {
-      case 'pending_payment':
-        return { color: '#92400e', bg: '#fef3c7', label: 'Pending payment' };
-      case 'slip_uploaded':
-        return { color: '#1d4ed8', bg: '#eff6ff', label: 'Slip uploaded' };
-      case 'approved':
-        return { color: '#15803d', bg: '#f0fdf4', label: 'Approved' };
-      case 'rejected':
-        return { color: '#b91c1c', bg: '#fef2f2', label: 'Rejected' };
-      case 'expired':
-        return { color: '#4b5563', bg: '#f3f4f6', label: 'Expired' };
-    }
-  };
+    ? 'text-amber-600'
+    : 'text-green-600';
 
   return (
-    <div>
-      <h1>Analytics</h1>
-
-      {message && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 12,
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: 6,
-            color: '#1e40af',
-          }}
-        >
-          {message}
-        </div>
-      )}
-
-      {!portal && (
-        <div style={{ marginTop: 12, maxWidth: 320 }}>
-          <select
+    <div className="flex flex-col gap-6">
+      {/* Toolbar: client selector + date range */}
+      <div className="flex flex-wrap items-center gap-2">
+        {!portal && (
+          <Select
             value={selectedClientId}
             onChange={(e) => setSelectedClientId(e.target.value)}
-            style={{
-              padding: 8,
-              borderRadius: 4,
-              border: '1px solid #d1d5db',
-              fontSize: 14,
-              width: '100%',
-            }}
+            className="w-full sm:w-64"
           >
             <option value="">All clients</option>
             {clients.map((c) => (
@@ -361,122 +303,56 @@ export default function AnalyticsPage() {
                 {c.name}
               </option>
             ))}
-          </select>
-        </div>
-      )}
-
-      <div
-        style={{
-          marginTop: 16,
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap',
-          alignItems: 'center',
-        }}
-      >
+          </Select>
+        )}
         {rangeButton('today', 'Today')}
         {rangeButton('7d', '7 days')}
         {rangeButton('30d', '30 days')}
         {rangeButton('custom', 'Custom')}
         {range === 'custom' && (
           <>
-            <input
+            <Input
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              style={{
-                padding: 6,
-                borderRadius: 4,
-                border: '1px solid #d1d5db',
-                fontSize: 13,
-              }}
+              className="w-auto"
             />
-            <span style={{ color: '#6b7280', fontSize: 13 }}>to</span>
-            <input
+            <span className="text-sm text-muted">to</span>
+            <Input
               type="date"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              style={{
-                padding: 6,
-                borderRadius: 4,
-                border: '1px solid #d1d5db',
-                fontSize: 13,
-              }}
+              className="w-auto"
             />
-            <button
+            <Button
+              size="sm"
               onClick={() =>
                 setAppliedCustom({ from: customFrom, to: customTo })
               }
-              style={{
-                padding: '6px 14px',
-                background: '#2563eb',
-                color: 'white',
-                border: 'none',
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontSize: 13,
-              }}
             >
               Apply
-            </button>
+            </Button>
           </>
         )}
       </div>
 
       {usage && (
-        <div
-          style={{
-            marginTop: 24,
-            background: 'white',
-            padding: 20,
-            borderRadius: 8,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          }}
-        >
+        <Card title="Portal usage">
           {usage.remainingPct <= 0 && (
-            <div
-              style={{
-                marginBottom: 12,
-                padding: 12,
-                background: '#fef2f2',
-                border: '1px solid #fecaca',
-                borderRadius: 6,
-                color: '#b91c1c',
-                fontWeight: 600,
-                fontSize: 14,
-              }}
-            >
+            <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-700">
               AI paused — contact us to top up and resume instantly.
             </div>
           )}
-          <div
-            style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: usageColor,
-            }}
-          >
+          <div className={`text-lg font-bold ${usageToneClass}`}>
             {conversationsLeft} conversations left this month
           </div>
-          <div
-            style={{
-              marginTop: 10,
-              height: 10,
-              background: '#f3f4f6',
-              borderRadius: 5,
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                width: `${Math.max(0, Math.min(1, usage.remainingPct)) * 100}%`,
-                height: '100%',
-                background: usageColor,
-                borderRadius: 5,
-              }}
-            />
-          </div>
-          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
+          <UsageBar
+            className="mt-3"
+            used={usage.used}
+            limit={usage.planAllowance + usage.topUpCredits}
+            label="Conversations used"
+          />
+          <div className="mt-2 text-xs text-muted">
             {usage.allowanceRemaining} of {usage.planAllowance} plan allowance
             remaining
             {usage.topUpRemaining > 0 &&
@@ -484,119 +360,52 @@ export default function AnalyticsPage() {
           </div>
 
           {confirmedRequest && (
-            <div
-              style={{
-                marginTop: 12,
-                padding: 16,
-                background: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                borderRadius: 6,
-              }}
-            >
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#15803d' }}>
+            <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+              <div className="text-sm font-semibold text-green-700">
                 Top-up request created
               </div>
-              <div
-                style={{
-                  marginTop: 8,
-                  fontSize: 24,
-                  fontWeight: 700,
-                  fontFamily: 'monospace',
-                  letterSpacing: 1,
-                  color: '#111827',
-                }}
-              >
+              <div className="mt-2 font-mono text-2xl font-bold tracking-wider text-brand-navy">
                 {confirmedRequest.reference}
               </div>
-              <div style={{ fontSize: 13, color: '#374151', marginTop: 4 }}>
+              <div className="mt-1 text-sm text-brand-navy">
                 Use this code as the transfer narration •{' '}
                 {confirmedRequest.conversations} conversations •{' '}
                 {formatLkr(confirmedRequest.priceLkr)}
               </div>
               {confirmedRequest.bankDetails && (
-                <pre
-                  style={{
-                    marginTop: 8,
-                    padding: 12,
-                    background: 'white',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 6,
-                    fontSize: 13,
-                    whiteSpace: 'pre-wrap',
-                    fontFamily: 'inherit',
-                    color: '#374151',
-                  }}
-                >
+                <pre className="mt-2 whitespace-pre-wrap rounded-lg border border-line bg-white p-3 font-sans text-sm text-brand-navy">
                   {confirmedRequest.bankDetails}
                 </pre>
               )}
             </div>
           )}
 
-          <div style={{ marginTop: 12 }}>
-            <button
+          <div className="mt-4">
+            <Button
+              size="sm"
+              variant={usage.remainingPct <= 0 ? 'danger' : 'primary'}
               onClick={() => setShowPackages(!showPackages)}
-              style={{
-                padding: '8px 16px',
-                background:
-                  usage.remainingPct <= 0
-                    ? '#dc2626'
-                    : usage.remainingPct <= 0.2
-                    ? '#d97706'
-                    : '#2563eb',
-                color: 'white',
-                border: 'none',
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontSize: 13,
-                fontWeight: 600,
-              }}
             >
               {showPackages ? 'Close package picker' : 'Request top-up'}
-            </button>
+            </Button>
           </div>
 
           {showPackages && (
-            <div
-              style={{
-                marginTop: 12,
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 8,
-              }}
-            >
+            <div className="mt-3 flex flex-wrap gap-2">
               {packages.length === 0 ? (
-                <div style={{ fontSize: 13, color: '#6b7280' }}>
-                  Loading packages...
-                </div>
+                <div className="text-sm text-muted">Loading packages...</div>
               ) : (
                 packages.map((p) => (
                   <button
                     key={p.conversations}
                     onClick={() => requestTopUp(p)}
-                    style={{
-                      padding: '10px 14px',
-                      background: 'white',
-                      border: '1px solid #d1d5db',
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                    }}
+                    className="rounded-lg border border-line bg-white px-3.5 py-2.5 text-center transition-colors hover:border-brand-indigo hover:bg-page"
                   >
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>
+                    <div className="text-base font-bold text-brand-navy">
                       {p.conversations}
                     </div>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>
-                      conversations
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: '#2563eb',
-                        marginTop: 4,
-                      }}
-                    >
+                    <div className="text-xs text-muted">conversations</div>
+                    <div className="mt-1 text-sm font-semibold text-brand-indigo">
                       {formatLkr(p.priceLkr)}
                     </div>
                   </button>
@@ -606,71 +415,31 @@ export default function AnalyticsPage() {
           )}
 
           {requests.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-                Top-up requests
-              </div>
-              {requests.map((r) => {
-                const st = requestStatusStyle(r.status);
-                return (
-                  <div
-                    key={r.id}
-                    style={{
-                      fontSize: 13,
-                      color: '#374151',
-                      padding: '8px 0',
-                      borderTop: '1px solid #f3f4f6',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+            <div className="mt-4">
+              <div className="mb-1 text-sm font-semibold">Top-up requests</div>
+              <div className="divide-y divide-line">
+                {requests.map((r) => (
+                  <div key={r.id} className="py-2.5 text-sm text-brand-navy">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono font-semibold">
                         {r.reference}
                       </span>
                       <span>
                         {r.conversations} conversations •{' '}
                         {formatLkr(r.priceLkr)}
                       </span>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          padding: '2px 8px',
-                          borderRadius: 10,
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: st.color,
-                          background: st.bg,
-                        }}
-                      >
-                        {st.label}
-                      </span>
-                      <span style={{ color: '#9ca3af', fontSize: 12 }}>
+                      <StatusBadge status={r.status} />
+                      <span className="text-xs text-muted">
                         {new Date(r.createdAt).toLocaleDateString()}
                       </span>
                     </div>
                     {r.status === 'rejected' && r.staffNote && (
-                      <div
-                        style={{ marginTop: 4, fontSize: 12, color: '#b91c1c' }}
-                      >
+                      <div className="mt-1 text-xs text-red-700">
                         Reason: {r.staffNote}
                       </div>
                     )}
                     {r.status === 'pending_payment' && (
-                      <div
-                        style={{
-                          marginTop: 6,
-                          display: 'flex',
-                          gap: 8,
-                          alignItems: 'center',
-                          flexWrap: 'wrap',
-                        }}
-                      >
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
                         <input
                           type="file"
                           accept="image/*,.pdf"
@@ -680,214 +449,157 @@ export default function AnalyticsPage() {
                               [r.id]: e.target.files?.[0] || null,
                             }))
                           }
-                          style={{ fontSize: 12 }}
+                          className="text-xs text-muted file:mr-2 file:rounded-md file:border-0 file:bg-page file:px-2.5 file:py-1.5 file:text-xs file:font-medium file:text-brand-navy"
                         />
-                        <button
-                          onClick={() => uploadSlip(r.id)}
-                          style={{
-                            padding: '6px 12px',
-                            background: '#2563eb',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: 6,
-                            cursor: 'pointer',
-                            fontSize: 13,
-                          }}
-                        >
+                        <Button size="sm" onClick={() => uploadSlip(r.id)}>
                           Upload slip
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
           )}
           {usage.topUps && usage.topUps.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-                Top-up history
+            <div className="mt-4">
+              <div className="mb-1 text-sm font-semibold">Top-up history</div>
+              <div className="divide-y divide-line">
+                {usage.topUps.map((t) => (
+                  <div key={t.id} className="py-1.5 text-sm text-brand-navy">
+                    {new Date(t.createdAt).toLocaleDateString()} • +
+                    {t.credits} credits • {formatLkr(t.priceLkr)}
+                    {t.note ? ` • ${t.note}` : ''}
+                  </div>
+                ))}
               </div>
-              {usage.topUps.map((t) => (
-                <div
-                  key={t.id}
-                  style={{
-                    fontSize: 13,
-                    color: '#374151',
-                    padding: '4px 0',
-                    borderTop: '1px solid #f3f4f6',
-                  }}
-                >
-                  {new Date(t.createdAt).toLocaleDateString()} • +
-                  {t.credits} credits • {formatLkr(t.priceLkr)}
-                  {t.note ? ` • ${t.note}` : ''}
-                </div>
-              ))}
             </div>
           )}
-        </div>
+        </Card>
       )}
 
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 16,
-          marginTop: 24,
-        }}
-      >
-        {statCard(
-          'AI Resolution Rate',
-          formatPct(data.aiResolutionRate),
-          `${data.aiResolvedWithoutHandoff} resolved without handoff`,
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <StatCard
+          label="AI Resolution Rate"
+          value={formatPct(data.aiResolutionRate)}
+          hint={`${data.aiResolvedWithoutHandoff} resolved without handoff`}
+        />
+        <StatCard label="Total Conversations" value={data.totalConversations} />
+        <StatCard label="Active" value={data.activeConversations} />
+        <StatCard label="Resolved" value={data.resolvedConversations} />
+        <StatCard
+          label="Handoff Rate"
+          value={formatPct(data.handoffRate)}
+          hint={`${data.humanHandoffs} handoffs`}
+        />
+        <StatCard label="Total Messages" value={data.totalMessages} />
+        <StatCard
+          label="Avg Resolution Time"
+          value={formatDuration(data.avgResolutionTimeMinutes)}
+        />
+        <StatCard
+          label="Avg Handoff Response"
+          value={
+            data.avgHandoffResponseSeconds == null
+              ? '-'
+              : `${data.avgHandoffResponseSeconds}s`
+          }
+        />
+        <StatCard
+          label="CSAT Average"
+          value={data.csat.average == null ? '-' : `${data.csat.average} / 5`}
+          hint={`${data.csat.responses} responses`}
+        />
+        {data.bookings && (
+          <StatCard
+            label="Bookings"
+            value={data.bookings.total}
+            hint={`${data.bookings.confirmed} confirmed • no-show ${formatPct(data.bookings.noShowRate)} • ${data.bookings.upcomingThisWeek} upcoming this week`}
+          />
         )}
-        {statCard('Total Conversations', data.totalConversations)}
-        {statCard('Active', data.activeConversations)}
-        {statCard('Resolved', data.resolvedConversations)}
-        {statCard(
-          'Handoff Rate',
-          formatPct(data.handoffRate),
-          `${data.humanHandoffs} handoffs`,
+        {data.orders && (
+          <StatCard
+            label="Orders"
+            value={data.orders.total}
+            hint={`Revenue ${formatLkr(data.orders.revenue)} • ${Object.entries(data.orders.byStatus || {})
+              .map(([s, n]) => `${s.replace(/_/g, ' ')}: ${n}`)
+              .join(' • ')}`}
+          />
         )}
-        {statCard('Total Messages', data.totalMessages)}
-        {statCard(
-          'Avg Resolution Time',
-          formatDuration(data.avgResolutionTimeMinutes),
-        )}
-        {statCard(
-          'Avg Handoff Response',
-          data.avgHandoffResponseSeconds == null
-            ? '-'
-            : `${data.avgHandoffResponseSeconds}s`,
-        )}
-        {statCard(
-          'CSAT Average',
-          data.csat.average == null ? '-' : `${data.csat.average} / 5`,
-          `${data.csat.responses} responses`,
-        )}
-        {data.bookings &&
-          statCard(
-            'Bookings',
-            data.bookings.total,
-            <>
-              {data.bookings.confirmed} confirmed • no-show{' '}
-              {formatPct(data.bookings.noShowRate)}
-              <br />
-              {data.bookings.upcomingThisWeek} upcoming this week
-            </>,
-          )}
-        {data.orders &&
-          statCard(
-            'Orders',
-            data.orders.total,
-            <>
-              Revenue {formatLkr(data.orders.revenue)}
-              <br />
-              {Object.entries(data.orders.byStatus || {})
-                .map(([s, n]) => `${s.replace(/_/g, ' ')}: ${n}`)
-                .join(' • ')}
-            </>,
-          )}
         {data.tokens && (
           <>
-            {statCard('Tokens (prompt)', data.tokens.prompt)}
-            {statCard('Tokens (completion)', data.tokens.completion)}
-            {statCard('Tokens (total)', data.tokens.total)}
-            {statCard(
-              'Estimated cost',
-              `$${(data.estimatedCostUsd ?? 0) < 0.01 && (data.estimatedCostUsd ?? 0) > 0 ? (data.estimatedCostUsd ?? 0).toFixed(4) : (data.estimatedCostUsd ?? 0).toFixed(2)}`,
-            )}
+            <StatCard label="Tokens (prompt)" value={data.tokens.prompt} />
+            <StatCard
+              label="Tokens (completion)"
+              value={data.tokens.completion}
+            />
+            <StatCard label="Tokens (total)" value={data.tokens.total} />
+            <StatCard
+              label="Estimated cost"
+              value={`$${(data.estimatedCostUsd ?? 0) < 0.01 && (data.estimatedCostUsd ?? 0) > 0 ? (data.estimatedCostUsd ?? 0).toFixed(4) : (data.estimatedCostUsd ?? 0).toFixed(2)}`}
+            />
           </>
         )}
       </div>
 
-      <div style={{ marginTop: 32 }}>
-        <h2>Top Handoff Reasons</h2>
-        <div
-          style={{
-            marginTop: 12,
-            background: 'white',
-            padding: 16,
-            borderRadius: 8,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          }}
-        >
-          {data.topHandoffReasons.length === 0 ? (
-            <div style={{ color: '#6b7280' }}>No handoffs yet</div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', color: '#6b7280', fontSize: 13 }}>
-                  <th style={{ paddingBottom: 8 }}>Reason</th>
-                  <th style={{ paddingBottom: 8 }}>Count</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.topHandoffReasons.map((r, i) => (
-                  <tr key={i} style={{ borderTop: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '10px 0' }}>{r.reason}</td>
-                    <td style={{ padding: '10px 0' }}>{r.count}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+      <Card title="Top Handoff Reasons">
+        {data.topHandoffReasons.length === 0 ? (
+          <EmptyState title="No handoffs yet" />
+        ) : (
+          <Table>
+            <THead>
+              <TR>
+                <TH>Reason</TH>
+                <TH>Count</TH>
+              </TR>
+            </THead>
+            <tbody>
+              {data.topHandoffReasons.map((r, i) => (
+                <TR key={i}>
+                  <TD>{r.reason}</TD>
+                  <TD>{r.count}</TD>
+                </TR>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
 
-      <div style={{ marginTop: 32 }}>
-        <h2>Daily Conversation Volume</h2>
-        <div
-          style={{
-            marginTop: 12,
-            background: 'white',
-            padding: 16,
-            borderRadius: 8,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            display: 'flex',
-            alignItems: 'flex-end',
-            gap: 12,
-            height: 200,
-          }}
-        >
-          {data.dailyVolume.map((d) => (
-            <div
-              key={d.date}
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
+      <Card title="Daily Conversation Volume">
+        {data.dailyVolume.length === 0 ? (
+          <EmptyState title="No conversations in this period" />
+        ) : (
+          <div className="flex h-[200px] items-end gap-3">
+            {data.dailyVolume.map((d) => (
               <div
-                style={{
-                  width: '100%',
-                  background: '#2563eb',
-                  borderRadius: 4,
-                  minHeight: 4,
-                  height: `${Math.max(
-                    4,
-                    (d.count /
-                      Math.max(
-                        1,
-                        ...data.dailyVolume.map((x) => x.count),
-                      )) *
-                      140,
-                  )}px`,
-                }}
-              />
-              <div style={{ fontSize: 11, color: '#6b7280' }}>
-                {new Date(d.date).toLocaleDateString(undefined, {
-                  weekday: 'short',
-                })}
+                key={d.date}
+                className="flex flex-1 flex-col items-center gap-1.5"
+              >
+                <div
+                  className="w-full rounded bg-brand-indigo"
+                  style={{
+                    height: `${Math.max(
+                      4,
+                      (d.count /
+                        Math.max(
+                          1,
+                          ...data.dailyVolume.map((x) => x.count),
+                        )) *
+                        140,
+                    )}px`,
+                  }}
+                />
+                <div className="text-[11px] text-muted">
+                  {new Date(d.date).toLocaleDateString(undefined, {
+                    weekday: 'short',
+                  })}
+                </div>
+                <div className="text-xs font-semibold">{d.count}</div>
               </div>
-              <div style={{ fontSize: 12, fontWeight: 600 }}>{d.count}</div>
-            </div>
-          ))}
-        </div>
-      </div>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

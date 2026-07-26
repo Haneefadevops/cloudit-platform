@@ -1,6 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  PageLoading,
+  Select,
+  StatusBadge,
+  Table,
+  TD,
+  TH,
+  THead,
+  TR,
+  statusTone,
+  useToast,
+  type BadgeTone,
+} from '@/components/ui';
 
 interface Client {
   id: string;
@@ -52,49 +69,17 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
   no_show: 'No-show',
 };
 
-const STATUS_COLORS: Record<BookingStatus, { color: string; bg: string }> = {
-  pending: { color: '#92400e', bg: '#fef3c7' },
-  confirmed: { color: '#15803d', bg: '#f0fdf4' },
-  completed: { color: '#1d4ed8', bg: '#eff6ff' },
-  cancelled: { color: '#b91c1c', bg: '#fef2f2' },
-  no_show: { color: '#4b5563', bg: '#f3f4f6' },
+// Status-colored calendar blocks, keyed by the same tone StatusBadge uses.
+const TONE_BLOCK_CLASSES: Record<BadgeTone, string> = {
+  amber: 'border-amber-500 bg-amber-50',
+  teal: 'border-teal-500 bg-teal-50',
+  green: 'border-green-600 bg-green-50',
+  gray: 'border-gray-400 bg-gray-50',
+  red: 'border-red-500 bg-red-50',
+  navy: 'border-brand-navy bg-page',
+  indigo: 'border-indigo-500 bg-indigo-50',
+  blue: 'border-blue-600 bg-blue-50',
 };
-
-const inputStyle: React.CSSProperties = {
-  padding: 8,
-  borderRadius: 4,
-  border: '1px solid #d1d5db',
-  fontSize: 14,
-  width: '100%',
-};
-
-const buttonStyle = (color: string): React.CSSProperties => ({
-  padding: '6px 12px',
-  background: color,
-  color: 'white',
-  border: 'none',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 13,
-});
-
-const cardStyle: React.CSSProperties = {
-  marginTop: 16,
-  background: 'white',
-  padding: 16,
-  borderRadius: 8,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-};
-
-const badgeStyle = (color: string, bg: string): React.CSSProperties => ({
-  display: 'inline-block',
-  padding: '2px 8px',
-  borderRadius: 10,
-  fontSize: 12,
-  fontWeight: 600,
-  color,
-  background: bg,
-});
 
 const formatStartAt = (iso: string) =>
   new Date(iso).toLocaleString(undefined, {
@@ -129,10 +114,10 @@ const addDays = (d: Date, n: number) => {
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function BookingsPage() {
+  const toast = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [isPortalUser, setIsPortalUser] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
 
   const [view, setView] = useState<'list' | 'calendar'>('list');
 
@@ -155,11 +140,6 @@ export default function BookingsPage() {
   const headers = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
-  };
-
-  const showInfo = (text: string) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
   };
 
   const fetchClients = async () => {
@@ -260,10 +240,10 @@ export default function BookingsPage() {
     );
     const data = await res.json();
     if (!res.ok) {
-      showInfo(data.message || 'Failed to update booking');
+      toast(data.message || 'Failed to update booking', 'error');
       return;
     }
-    showInfo(`Booking ${STATUS_LABELS[status].toLowerCase()}`);
+    toast(`Booking ${STATUS_LABELS[status].toLowerCase()}`, 'success');
     refreshCurrentView();
   };
 
@@ -283,43 +263,46 @@ export default function BookingsPage() {
   const renderActions = (booking: Booking) => {
     if (booking.status === 'pending') {
       return (
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            size="sm"
             onClick={() => handleAction(booking, 'confirmed')}
-            style={buttonStyle('#16a34a')}
           >
             Confirm
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
+            variant="danger"
             onClick={() => handleAction(booking, 'cancelled')}
-            style={buttonStyle('#dc2626')}
           >
             Cancel
-          </button>
+          </Button>
         </div>
       );
     }
     if (booking.status === 'confirmed') {
       return (
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            size="sm"
             onClick={() => handleAction(booking, 'completed')}
-            style={buttonStyle('#2563eb')}
           >
             Complete
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             onClick={() => handleAction(booking, 'no_show')}
-            style={buttonStyle('#6b7280')}
           >
             No-show
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
+            variant="danger"
             onClick={() => handleAction(booking, 'cancelled')}
-            style={buttonStyle('#dc2626')}
           >
             Cancel
-          </button>
+          </Button>
         </div>
       );
     }
@@ -347,45 +330,20 @@ export default function BookingsPage() {
   };
 
   return (
-    <div>
-      <h1>Bookings</h1>
-      <p style={{ color: '#6b7280', fontSize: 14 }}>
+    <div className="flex flex-col gap-4">
+      <p className="m-0 text-sm text-muted">
         View and manage bookings per client. Confirming or cancelling a booking
         automatically messages the customer on WhatsApp. Times are shown in
         your browser&apos;s timezone.
       </p>
 
-      {message && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 12,
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: 6,
-            color: '#1e40af',
-          }}
-        >
-          {message}
-        </div>
-      )}
-
-      <div
-        style={{
-          marginTop: 16,
-          display: 'flex',
-          gap: 16,
-          alignItems: 'flex-end',
-          flexWrap: 'wrap',
-        }}
-      >
+      <div className="flex flex-wrap items-end gap-4">
         {!isPortalUser && (
-          <div style={{ maxWidth: 320, flex: 1 }}>
-            <label style={{ fontSize: 13, fontWeight: 600 }}>Client</label>
-            <select
+          <div className="w-full max-w-xs flex-1">
+            <Select
+              label="Client"
               value={selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
-              style={{ ...inputStyle, marginTop: 4 }}
             >
               <option value="">Select a client</option>
               {clients.map((c) => (
@@ -394,45 +352,38 @@ export default function BookingsPage() {
                   {c.bookingsEnabled ? '' : ' (bookings disabled)'}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
         <div>
-          <label style={{ fontSize: 13, fontWeight: 600 }}>View</label>
-          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-            <button
+          <span className="mb-1 block text-sm font-medium">View</span>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant={view === 'list' ? 'primary' : 'outline'}
               onClick={() => setView('list')}
-              style={buttonStyle(view === 'list' ? '#111827' : '#9ca3af')}
             >
               List
-            </button>
-            <button
+            </Button>
+            <Button
+              size="sm"
+              variant={view === 'calendar' ? 'primary' : 'outline'}
               onClick={() => setView('calendar')}
-              style={buttonStyle(view === 'calendar' ? '#111827' : '#9ca3af')}
             >
               Calendar
-            </button>
+            </Button>
           </div>
         </div>
       </div>
 
       {selectedId && view === 'list' && (
         <>
-          <div
-            style={{
-              ...cardStyle,
-              display: 'flex',
-              gap: 16,
-              alignItems: 'flex-end',
-              flexWrap: 'wrap',
-            }}
-          >
-            <div style={{ width: 180 }}>
-              <label style={{ fontSize: 13, fontWeight: 600 }}>Status</label>
-              <select
+          <Card className="flex flex-wrap items-end gap-4">
+            <div className="w-full sm:w-44">
+              <Select
+                label="Status"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                style={{ ...inputStyle, marginTop: 4 }}
               >
                 <option value="all">All statuses</option>
                 {STATUSES.map((s) => (
@@ -440,97 +391,77 @@ export default function BookingsPage() {
                     {STATUS_LABELS[s]}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
-            <div style={{ width: 160 }}>
-              <label style={{ fontSize: 13, fontWeight: 600 }}>From</label>
-              <input
+            <div className="w-full sm:w-40">
+              <Input
+                label="From"
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                style={{ ...inputStyle, marginTop: 4 }}
               />
             </div>
-            <div style={{ width: 160 }}>
-              <label style={{ fontSize: 13, fontWeight: 600 }}>To</label>
-              <input
+            <div className="w-full sm:w-40">
+              <Input
+                label="To"
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                style={{ ...inputStyle, marginTop: 4 }}
               />
             </div>
-          </div>
+          </Card>
 
-          <div style={cardStyle}>
+          <Card>
             {loading ? (
-              <div style={{ color: '#6b7280' }}>Loading…</div>
+              <PageLoading />
             ) : bookings.length === 0 ? (
-              <div style={{ color: '#6b7280' }}>No bookings found</div>
+              <EmptyState
+                title="No bookings found"
+                hint="Try adjusting the filters above."
+              />
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr
-                    style={{ textAlign: 'left', color: '#6b7280', fontSize: 13 }}
-                  >
-                    <th style={{ paddingBottom: 8 }}>When</th>
-                    <th style={{ paddingBottom: 8 }}>Service</th>
-                    <th style={{ paddingBottom: 8 }}>Staff</th>
-                    <th style={{ paddingBottom: 8 }}>Customer</th>
-                    <th style={{ paddingBottom: 8 }}>Status</th>
-                    <th style={{ paddingBottom: 8 }}>Details</th>
-                    <th style={{ paddingBottom: 8 }}>Actions</th>
-                  </tr>
-                </thead>
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>When</TH>
+                    <TH>Service</TH>
+                    <TH>Staff</TH>
+                    <TH>Customer</TH>
+                    <TH>Status</TH>
+                    <TH>Details</TH>
+                    <TH>Actions</TH>
+                  </TR>
+                </THead>
                 <tbody>
                   {bookings.map((b) => {
                     const answers = intakeEntries(b);
                     return (
-                      <tr key={b.id} style={{ borderTop: '1px solid #f3f4f6' }}>
-                        <td style={{ padding: '10px 8px 10px 0' }}>
-                          {formatStartAt(b.startAt)}
-                        </td>
-                        <td style={{ padding: '10px 8px 10px 0' }}>
+                      <TR key={b.id}>
+                        <TD>{formatStartAt(b.startAt)}</TD>
+                        <TD>
                           {b.service?.name}
-                          <div style={{ fontSize: 12, color: '#6b7280' }}>
+                          <div className="text-xs text-muted">
                             {b.service?.durationMinutes} min
                           </div>
-                        </td>
-                        <td style={{ padding: '10px 8px 10px 0' }}>
-                          {b.staff?.name || '—'}
-                        </td>
-                        <td style={{ padding: '10px 8px 10px 0' }}>
+                        </TD>
+                        <TD>{b.staff?.name || '—'}</TD>
+                        <TD>
                           {b.customer?.name}
-                          <div style={{ fontSize: 12, color: '#6b7280' }}>
+                          <div className="text-xs text-muted">
                             {b.customer?.phoneNumber}
                           </div>
-                        </td>
-                        <td style={{ padding: '10px 8px 10px 0' }}>
-                          <span
-                            style={badgeStyle(
-                              STATUS_COLORS[b.status].color,
-                              STATUS_COLORS[b.status].bg,
-                            )}
-                          >
-                            {STATUS_LABELS[b.status]}
-                          </span>
-                        </td>
-                        <td
-                          style={{
-                            padding: '10px 8px 10px 0',
-                            fontSize: 12,
-                            color: '#374151',
-                          }}
-                        >
+                        </TD>
+                        <TD>
+                          <StatusBadge status={b.status} />
+                        </TD>
+                        <TD className="text-xs text-gray-700">
                           {answers.length > 0 && (
                             <details>
-                              <summary
-                                style={{ cursor: 'pointer', color: '#2563eb' }}
-                              >
+                              <summary className="cursor-pointer text-brand-indigo">
                                 {answers.length} intake answer
                                 {answers.length === 1 ? '' : 's'}
                               </summary>
-                              <div style={{ marginTop: 4 }}>
+                              <div className="mt-1">
                                 {answers.map(([q, a]) => (
                                   <div key={q}>
                                     <strong>{q}</strong>: {a}
@@ -540,69 +471,55 @@ export default function BookingsPage() {
                             </details>
                           )}
                           {b.notes && (
-                            <div style={{ marginTop: answers.length ? 4 : 0 }}>
+                            <div className={answers.length ? 'mt-1' : undefined}>
                               <strong>Notes:</strong> {b.notes}
                             </div>
                           )}
                           {answers.length === 0 && !b.notes && '—'}
-                        </td>
-                        <td style={{ padding: '10px 0' }}>
-                          {renderActions(b)}
-                        </td>
-                      </tr>
+                        </TD>
+                        <TD>{renderActions(b)}</TD>
+                      </TR>
                     );
                   })}
                 </tbody>
-              </table>
+              </Table>
             )}
-          </div>
+          </Card>
         </>
       )}
 
       {selectedId && view === 'calendar' && (
-        <div style={cardStyle}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              flexWrap: 'wrap',
-            }}
-          >
-            <button
+        <Card>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
               onClick={() => setWeekStart(addDays(weekStart, -7))}
-              style={buttonStyle('#6b7280')}
             >
               ‹ Prev week
-            </button>
-            <button
+            </Button>
+            <Button
+              size="sm"
               onClick={() => setWeekStart(startOfWeek(new Date()))}
-              style={buttonStyle('#2563eb')}
             >
               Today
-            </button>
-            <button
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               onClick={() => setWeekStart(addDays(weekStart, 7))}
-              style={buttonStyle('#6b7280')}
             >
               Next week ›
-            </button>
-            <h2 style={{ fontSize: 16, margin: 0, marginLeft: 8 }}>
+            </Button>
+            <h2 className="m-0 ml-2 text-base font-semibold">
               {weekRangeLabel}
             </h2>
           </div>
 
           {calendarLoading ? (
-            <div style={{ marginTop: 16, color: '#6b7280' }}>Loading…</div>
+            <PageLoading />
           ) : (
-            <div
-              style={{
-                marginTop: 16,
-                display: 'grid',
-                gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-                gap: 8,
-              }}
-            >
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-7">
               {DAY_LABELS.map((label, i) => {
                 const day = addDays(weekStart, i);
                 const dayBookings = bookingsForDay(day);
@@ -611,21 +528,18 @@ export default function BookingsPage() {
                 return (
                   <div
                     key={label}
-                    style={{
-                      border: '1px solid #e5e7eb',
-                      borderRadius: 6,
-                      minHeight: 120,
-                      background: isToday ? '#f0f9ff' : 'white',
-                    }}
+                    className={`min-h-[120px] rounded-lg border ${
+                      isToday
+                        ? 'border-brand-teal bg-teal-50/40 ring-1 ring-brand-teal'
+                        : 'border-line bg-white'
+                    }`}
                   >
                     <div
-                      style={{
-                        padding: '6px 8px',
-                        borderBottom: '1px solid #e5e7eb',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: isToday ? '#0369a1' : '#6b7280',
-                      }}
+                      className={`border-b px-2 py-1.5 text-xs font-semibold ${
+                        isToday
+                          ? 'border-brand-teal/40 text-teal-700'
+                          : 'border-line text-muted'
+                      }`}
                     >
                       {label}{' '}
                       {day.toLocaleDateString(undefined, {
@@ -633,16 +547,8 @@ export default function BookingsPage() {
                         day: 'numeric',
                       })}
                     </div>
-                    <div
-                      style={{
-                        padding: 6,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6,
-                      }}
-                    >
+                    <div className="flex flex-col gap-1.5 p-1.5">
                       {dayBookings.map((b) => {
-                        const colors = STATUS_COLORS[b.status];
                         const expanded = expandedBookingId === b.id;
                         return (
                           <div
@@ -650,37 +556,21 @@ export default function BookingsPage() {
                             onClick={() =>
                               setExpandedBookingId(expanded ? null : b.id)
                             }
-                            style={{
-                              borderLeft: `4px solid ${colors.color}`,
-                              background: colors.bg,
-                              borderRadius: 4,
-                              padding: '4px 6px',
-                              fontSize: 12,
-                              cursor: 'pointer',
-                            }}
+                            className={`cursor-pointer rounded border-l-4 px-1.5 py-1 text-xs ${TONE_BLOCK_CLASSES[statusTone(b.status)]}`}
                           >
-                            <div style={{ fontWeight: 600 }}>
+                            <div className="font-semibold">
                               {formatTime(b.startAt)} · {b.service?.name}
                             </div>
-                            <div style={{ color: '#374151' }}>
+                            <div className="text-gray-700">
                               {b.customer?.name}
                               {b.staff?.name ? ` · ${b.staff.name}` : ''}
                             </div>
                             {expanded && (
-                              <div style={{ marginTop: 6 }}>
-                                <div style={{ marginBottom: 6 }}>
-                                  <span
-                                    style={badgeStyle(colors.color, 'white')}
-                                  >
-                                    {STATUS_LABELS[b.status]}
-                                  </span>
+                              <div className="mt-1.5">
+                                <div className="mb-1.5">
+                                  <StatusBadge status={b.status} />
                                 </div>
-                                <div
-                                  style={{
-                                    color: '#6b7280',
-                                    marginBottom: 6,
-                                  }}
-                                >
+                                <div className="mb-1.5 text-muted">
                                   {b.customer?.phoneNumber}
                                   {b.notes ? ` · ${b.notes}` : ''}
                                 </div>
@@ -691,7 +581,7 @@ export default function BookingsPage() {
                         );
                       })}
                       {dayBookings.length === 0 && (
-                        <div style={{ fontSize: 12, color: '#d1d5db' }}>—</div>
+                        <div className="text-xs text-gray-300">—</div>
                       )}
                     </div>
                   </div>
@@ -699,7 +589,7 @@ export default function BookingsPage() {
               })}
             </div>
           )}
-        </div>
+        </Card>
       )}
     </div>
   );

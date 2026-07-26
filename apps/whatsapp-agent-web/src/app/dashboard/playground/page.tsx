@@ -2,6 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { isPortalUser } from '../portal';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Select,
+  Spinner,
+  Textarea,
+  useToast,
+} from '@/components/ui';
 
 interface Client {
   id: string;
@@ -56,48 +66,20 @@ interface PlaygroundResponse {
   wallet: UsageWallet | null;
 }
 
-const inputStyle: React.CSSProperties = {
-  padding: 8,
-  borderRadius: 4,
-  border: '1px solid #d1d5db',
-  fontSize: 14,
-  width: '100%',
-};
-
-const buttonStyle = (color: string): React.CSSProperties => ({
-  padding: '8px 16px',
-  background: color,
-  color: 'white',
-  border: 'none',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 14,
-  fontWeight: 600,
-});
-
-const sectionStyle: React.CSSProperties = {
-  marginTop: 16,
-  padding: 12,
-  border: '1px solid #e5e7eb',
-  borderRadius: 6,
-  background: '#f9fafb',
-};
-
 export default function PlaygroundPage() {
+  const toast = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [message, setMessage] = useState('');
   const [historyJson, setHistoryJson] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PlaygroundResponse | null>(null);
 
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
 
   const showError = (text: string) => {
-    setError(text);
-    setTimeout(() => setError(null), 5000);
+    toast(text, 'error');
   };
 
   const fetchClients = async () => {
@@ -155,7 +137,6 @@ export default function PlaygroundPage() {
 
     setLoading(true);
     setResult(null);
-    setError(null);
 
     try {
       const res = await fetch(`/api/playground/${selectedId}/message`, {
@@ -180,37 +161,20 @@ export default function PlaygroundPage() {
   };
 
   return (
-    <div>
-      <h1>AI Testing Playground</h1>
-      <p style={{ color: '#6b7280', fontSize: 14 }}>
+    <div className="flex flex-col gap-4">
+      <p className="m-0 text-sm text-muted">
         Send a test message to the AI and inspect the reply, handoff decision,
         token usage, and knowledge sources.
       </p>
 
-      {error && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 12,
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
-            borderRadius: 6,
-            color: '#b91c1c',
-          }}
-        >
-          {error}
-        </div>
-      )}
-
-      <div style={{ marginTop: 16, maxWidth: 400 }}>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Client</label>
-        <select
+      <Card className="max-w-md">
+        <Select
+          label="Client"
           value={selectedId}
           onChange={(e) => {
             setSelectedId(e.target.value);
             setResult(null);
           }}
-          style={{ ...inputStyle, marginTop: 4 }}
         >
           <option value="">Select a client</option>
           {clients.map((c) => (
@@ -218,180 +182,80 @@ export default function PlaygroundPage() {
               {c.name}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Card>
 
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          marginTop: 24,
-          maxWidth: 640,
-          background: 'white',
-          padding: 16,
-          borderRadius: 8,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-        }}
-      >
-        <div>
-          <label style={{ fontSize: 13, fontWeight: 600 }}>
-            Customer message
-          </label>
-          <textarea
+      <Card title="Test message" className="max-w-2xl">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <Textarea
+            label="Customer message"
             placeholder="Type a customer question..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={4}
             required
-            style={{
-              ...inputStyle,
-              marginTop: 4,
-              resize: 'vertical',
-              fontFamily: 'inherit',
-            }}
+            className="resize-y"
           />
-        </div>
 
-        <div>
-          <label style={{ fontSize: 13, fontWeight: 600 }}>
-            Conversation history (optional JSON)
-          </label>
-          <textarea
-            placeholder={`[{ "role": "user", "content": "Hello" }, { "role": "assistant", "content": "Hi!" }]`}
-            value={historyJson}
-            onChange={(e) => setHistoryJson(e.target.value)}
-            rows={3}
-            style={{
-              ...inputStyle,
-              marginTop: 4,
-              resize: 'vertical',
-              fontFamily: 'monospace',
-            }}
-          />
-          <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0' }}>
-            Optional JSON array of previous messages.
-          </p>
-        </div>
+          <div>
+            <Textarea
+              label="Conversation history (optional JSON)"
+              placeholder={`[{ "role": "user", "content": "Hello" }, { "role": "assistant", "content": "Hi!" }]`}
+              value={historyJson}
+              onChange={(e) => setHistoryJson(e.target.value)}
+              rows={3}
+              className="resize-y font-mono"
+            />
+            <p className="m-0 mt-1 text-xs text-muted">
+              Optional JSON array of previous messages.
+            </p>
+          </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            type="submit"
-            disabled={loading}
-            style={buttonStyle('#2563eb')}
-          >
-            {loading ? 'Testing...' : 'Test'}
-          </button>
-          {loading && (
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              style={{ animation: 'spin 1s linear infinite' }}
-            >
-              <circle
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="#d1d5db"
-                strokeWidth="3"
-                fill="none"
-              />
-              <path
-                d="M12 2a10 10 0 0 1 10 10"
-                stroke="#2563eb"
-                strokeWidth="3"
-                fill="none"
-                strokeLinecap="round"
-              />
-              <style>{`
-                @keyframes spin { to { transform: rotate(360deg); } }
-              `}</style>
-            </svg>
-          )}
-        </div>
-      </form>
+          <div className="flex items-center gap-3">
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Testing...' : 'Test'}
+            </Button>
+            {loading && <Spinner className="h-[18px] w-[18px]" />}
+          </div>
+        </form>
+      </Card>
 
       {result && (
-        <div
-          style={{
-            marginTop: 24,
-            maxWidth: 720,
-            background: 'white',
-            padding: 16,
-            borderRadius: 8,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 16,
-          }}
-        >
+        <Card className="flex max-w-3xl flex-col gap-4">
           <div>
-            <h3 style={{ marginTop: 0, fontSize: 16 }}>AI Reply</h3>
+            <h3 className="m-0 mb-3 text-base font-semibold">AI Reply</h3>
             {result.paused && (
-              <div
-                style={{
-                  marginBottom: 12,
-                  padding: 12,
-                  background: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  borderRadius: 6,
-                  color: '#b91c1c',
-                  fontWeight: 600,
-                  fontSize: 14,
-                }}
-              >
+              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
                 AI paused — allowance exhausted (this is what customers
                 experience at 0 balance)
               </div>
             )}
-            <div
-              style={{
-                padding: 12,
-                background: '#f9fafb',
-                borderRadius: 6,
-                border: '1px solid #e5e7eb',
-                fontSize: 14,
-                lineHeight: 1.5,
-                whiteSpace: 'pre-wrap',
-              }}
-            >
+            <div className="whitespace-pre-wrap rounded-lg border border-line bg-page p-3 text-sm leading-normal">
               {result.reply}
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <div style={sectionStyle}>
-              <div style={{ fontSize: 12, color: '#6b7280' }}>Handoff</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span
-                  style={{
-                    display: 'inline-block',
-                    padding: '2px 8px',
-                    borderRadius: 12,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: 'white',
-                    background: result.handoffRecommended ? '#ef4444' : '#16a34a',
-                  }}
-                >
+          <div className="flex flex-wrap gap-4">
+            <div className="rounded-lg border border-line bg-page p-3">
+              <div className="text-xs text-muted">Handoff</div>
+              <div className="mt-1 flex items-center gap-2">
+                <Badge tone={result.handoffRecommended ? 'red' : 'green'}>
                   {result.handoffRecommended ? 'Recommended' : 'Not recommended'}
-                </span>
+                </Badge>
               </div>
               {result.handoffRecommended && result.handoffReason && (
-                <div style={{ fontSize: 13, marginTop: 6, color: '#374151' }}>
+                <div className="mt-1.5 text-[13px] text-gray-700">
                   {result.handoffReason}
                 </div>
               )}
             </div>
 
-            <div style={sectionStyle}>
-              <div style={{ fontSize: 12, color: '#6b7280' }}>Token usage</div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>
+            <div className="rounded-lg border border-line bg-page p-3">
+              <div className="text-xs text-muted">Token usage</div>
+              <div className="text-sm font-semibold">
                 {result.usage.total_tokens} total
               </div>
-              <div style={{ fontSize: 12, color: '#6b7280' }}>
+              <div className="text-xs text-muted">
                 prompt {result.usage.prompt_tokens} • completion{' '}
                 {result.usage.completion_tokens}
               </div>
@@ -399,23 +263,15 @@ export default function PlaygroundPage() {
           </div>
 
           {result.action && (
-            <div style={{ ...sectionStyle, marginTop: 16 }}>
-              <div style={{ fontSize: 12, color: '#6b7280' }}>
+            <div className="rounded-lg border border-line bg-page p-3">
+              <div className="text-xs text-muted">
                 Booking action (executed by the backend)
               </div>
-              <pre
-                style={{
-                  fontSize: 12,
-                  background: '#f3f4f6',
-                  padding: 8,
-                  borderRadius: 4,
-                  overflow: 'auto',
-                }}
-              >
+              <pre className="mt-2 overflow-auto rounded-lg bg-brand-navy p-3 text-xs text-brand-teal">
                 {JSON.stringify(result.action, null, 2)}
               </pre>
               {result.actionResult && (
-                <div style={{ fontSize: 13, color: '#374151' }}>
+                <div className="mt-2 text-[13px] text-gray-700">
                   {result.actionResult}
                 </div>
               )}
@@ -423,51 +279,33 @@ export default function PlaygroundPage() {
           )}
 
           <div>
-            <h3 style={{ marginTop: 0, fontSize: 16 }}>Knowledge Sources</h3>
+            <h3 className="m-0 mb-3 text-base font-semibold">
+              Knowledge Sources
+            </h3>
             {result.sources.length === 0 ? (
-              <p style={{ color: '#6b7280', fontSize: 14 }}>No sources used.</p>
+              <EmptyState title="No sources used." />
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="flex flex-col gap-2">
                 {result.sources.map((s, i) => (
                   <div
                     key={i}
-                    style={{
-                      padding: 12,
-                      border: '1px solid #e5e7eb',
-                      borderRadius: 6,
-                      background: '#f9fafb',
-                    }}
+                    className="rounded-lg border border-line bg-page p-3"
                   >
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 4,
-                      }}
-                    >
-                      <span style={{ fontSize: 12, color: '#6b7280' }}>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-xs text-muted">
                         Document {s.documentId}
                       </span>
-                      <span
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: '#2563eb',
-                        }}
-                      >
+                      <span className="text-xs font-semibold text-brand-indigo">
                         {(s.score * 100).toFixed(1)}%
                       </span>
                     </div>
-                    <div style={{ fontSize: 13, color: '#374151' }}>
-                      {s.preview}
-                    </div>
+                    <div className="text-[13px] text-gray-700">{s.preview}</div>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

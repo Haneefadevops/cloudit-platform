@@ -2,6 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { isPortalUser } from '../portal';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  Modal,
+  Select,
+  Spinner,
+  StatusBadge,
+  Textarea,
+  UsageBar,
+  useToast,
+} from '@/components/ui';
 
 interface Client {
   id: string;
@@ -70,45 +84,15 @@ interface UsageInfo {
   periodEnd: string;
 }
 
-const inputStyle: React.CSSProperties = {
-  padding: 8,
-  borderRadius: 4,
-  border: '1px solid #d1d5db',
-  fontSize: 14,
-  width: '100%',
-};
-
-const buttonStyle = (color: string): React.CSSProperties => ({
-  padding: '6px 12px',
-  background: color,
-  color: 'white',
-  border: 'none',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 13,
-});
-
-const sectionStyle: React.CSSProperties = {
-  marginTop: 16,
-  padding: 12,
-  border: '1px solid #e5e7eb',
-  borderRadius: 6,
-  background: '#f9fafb',
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontWeight: 600,
-  fontSize: 14,
-  marginBottom: 8,
-  color: '#374151',
-};
+const sectionClass = 'rounded-xl border border-line bg-page/60 p-4';
+const sectionTitleClass = 'mb-3 text-sm font-semibold text-brand-navy';
 
 export default function ClientsPage() {
+  const toast = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [statusMap, setStatusMap] = useState<Record<string, ChatwootStatus>>({});
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState<Client | null>(null);
   const [metaGuideClient, setMetaGuideClient] = useState<Client | null>(null);
   const [portalUsers, setPortalUsers] = useState<PortalUser[]>([]);
@@ -162,11 +146,6 @@ export default function ClientsPage() {
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
 
-  const showInfo = (text: string) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
-  };
-
   const fetchClients = async () => {
     if (!token) return [];
     const res = await fetch('/api/clients', {
@@ -206,13 +185,14 @@ export default function ClientsPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      showInfo(data.message || 'Failed to record top-up');
+      toast(data.message || 'Failed to record top-up', 'error');
       return;
     }
-    showInfo(
+    toast(
       `Topped up ${Number(topUpForm.credits)} credits (LKR ${Number(
         topUpForm.priceLkr,
       ).toLocaleString()})`,
+      'success',
     );
     setTopUpClientId(null);
     setTopUpForm({ credits: 500, priceLkr: 3000, note: '' });
@@ -339,7 +319,7 @@ export default function ClientsPage() {
       });
       const client = await res.json();
       if (!res.ok) {
-        showInfo(client.error || client.message || 'Failed to save client');
+        toast(client.error || client.message || 'Failed to save client', 'error');
         return;
       }
 
@@ -353,14 +333,15 @@ export default function ClientsPage() {
         );
         const setupData = await setupRes.json();
         if (!setupRes.ok) {
-          showInfo(setupData.error || 'Client saved but Chatwoot setup failed');
+          toast(setupData.error || 'Client saved but Chatwoot setup failed', 'error');
         } else {
-          showInfo(
+          toast(
             `Client saved. Chatwoot account ${setupData.chatwootAccountId} connected.`,
+            'success',
           );
         }
       } else {
-        showInfo(editing ? 'Client updated' : 'Client created');
+        toast(editing ? 'Client updated' : 'Client created', 'success');
       }
 
       resetForm();
@@ -427,7 +408,7 @@ export default function ClientsPage() {
   const createPortalUser = async () => {
     if (!editing) return;
     if (!portalForm.email || !portalForm.password) {
-      showInfo('Email and temporary password are required');
+      toast('Email and temporary password are required', 'error');
       return;
     }
     const res = await fetch(`/api/clients/${editing.id}/portal-users`, {
@@ -444,10 +425,10 @@ export default function ClientsPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      showInfo(data.message || 'Failed to create portal user');
+      toast(data.message || 'Failed to create portal user', 'error');
       return;
     }
-    showInfo(`Portal login created for ${data.email || portalForm.email}`);
+    toast(`Portal login created for ${data.email || portalForm.email}`, 'success');
     setPortalForm({ email: '', password: '', name: '' });
     fetchPortalUsers(editing.id);
   };
@@ -469,7 +450,7 @@ export default function ClientsPage() {
     );
     const data = await res.json();
     if (!res.ok) {
-      showInfo(data.message || 'Failed to reset password');
+      toast(data.message || 'Failed to reset password', 'error');
       return;
     }
     alert(
@@ -484,11 +465,11 @@ export default function ClientsPage() {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
-      showInfo('Client deleted');
+      toast('Client deleted', 'success');
       const list = await fetchClients();
       await Promise.all(list.map((c) => fetchStatus(c.id)));
     } else {
-      showInfo('Failed to delete client');
+      toast('Failed to delete client', 'error');
     }
   };
 
@@ -503,11 +484,11 @@ export default function ClientsPage() {
       body: JSON.stringify({ status: newStatus }),
     });
     if (res.ok) {
-      showInfo(`Client ${newStatus === 'active' ? 'activated' : 'paused'}`);
+      toast(`Client ${newStatus === 'active' ? 'activated' : 'paused'}`, 'success');
       const list = await fetchClients();
       await Promise.all(list.map((c) => fetchStatus(c.id)));
     } else {
-      showInfo('Failed to update status');
+      toast('Failed to update status', 'error');
     }
   };
 
@@ -520,10 +501,11 @@ export default function ClientsPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        showInfo(data.error || 'Chatwoot setup failed');
+        toast(data.error || 'Chatwoot setup failed', 'error');
       } else {
-        showInfo(
+        toast(
           `Chatwoot connected: account ${data.chatwootAccountId}, inbox ${data.chatwootInboxId}`,
+          'success',
         );
       }
       const list = await fetchClients();
@@ -545,106 +527,76 @@ export default function ClientsPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    showInfo('Copied to clipboard');
+    toast('Copied to clipboard', 'info');
   };
 
   return (
-    <div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <h1>Clients</h1>
-        <button
+    <div className="flex flex-col gap-4">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="m-0 text-sm text-muted">
+          {clients.length} client{clients.length === 1 ? '' : 's'}
+        </p>
+        <Button
           onClick={() => {
             resetForm();
             setShowForm(true);
           }}
-          style={buttonStyle('#2563eb')}
         >
           Add Client
-        </button>
+        </Button>
       </div>
 
-      {message && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 12,
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: 6,
-            color: '#1e40af',
-          }}
-        >
-          {message}
-        </div>
-      )}
-
-      {showForm && (
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            marginTop: 16,
-            background: 'white',
-            padding: 16,
-            borderRadius: 8,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
-        >
-          <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>1. Business Information</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input
+      {/* Add / Edit client form */}
+      <Modal
+        open={showForm}
+        onClose={resetForm}
+        title={editing ? 'Edit Client' : 'Add Client'}
+        wide
+      >
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <fieldset className={sectionClass}>
+            <div className={sectionTitleClass}>1. Business Information</div>
+            <div className="flex flex-col gap-3">
+              <Input
                 placeholder="Company / brand name *"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
-                style={inputStyle}
               />
-              <input
+              <Input
                 placeholder="Industry / business type"
                 value={form.industry}
                 onChange={(e) => setForm({ ...form, industry: e.target.value })}
-                style={inputStyle}
               />
-              <input
+              <Input
                 placeholder="Website"
                 value={form.website}
                 onChange={(e) => setForm({ ...form, website: e.target.value })}
-                style={inputStyle}
               />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Input
                   placeholder="Timezone (e.g. Asia/Colombo)"
                   value={form.timezone}
                   onChange={(e) =>
                     setForm({ ...form, timezone: e.target.value })
                   }
-                  style={inputStyle}
                 />
-                <input
+                <Input
                   placeholder="Default language (e.g. en)"
                   value={form.language}
                   onChange={(e) =>
                     setForm({ ...form, language: e.target.value })
                   }
-                  style={inputStyle}
                 />
               </div>
             </div>
-          </div>
+          </fieldset>
 
-          <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>2. Contact & Access</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input
+          <fieldset className={sectionClass}>
+            <div className={sectionTitleClass}>2. Contact & Access</div>
+            <div className="flex flex-col gap-3">
+              <Input
                 placeholder="Primary admin email (Chatwoot login) *"
                 type="email"
                 value={form.adminEmail}
@@ -652,128 +604,109 @@ export default function ClientsPage() {
                   setForm({ ...form, adminEmail: e.target.value })
                 }
                 required
-                style={inputStyle}
               />
-              <input
+              <Input
                 placeholder="Primary admin phone"
                 value={form.adminPhone}
                 onChange={(e) =>
                   setForm({ ...form, adminPhone: e.target.value })
                 }
-                style={inputStyle}
               />
             </div>
-          </div>
+          </fieldset>
 
-          <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>3. WhatsApp Configuration</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input
+          <fieldset className={sectionClass}>
+            <div className={sectionTitleClass}>3. WhatsApp Configuration</div>
+            <div className="flex flex-col gap-3">
+              <Input
                 placeholder="WhatsApp Business number (e.g. +94751234567) *"
                 value={form.whatsappNumber}
                 onChange={(e) =>
                   setForm({ ...form, whatsappNumber: e.target.value })
                 }
                 required
-                style={inputStyle}
               />
-              <input
+              <Input
                 placeholder="WhatsApp Phone Number ID *"
                 value={form.whatsappPhoneNumberId}
                 onChange={(e) =>
                   setForm({ ...form, whatsappPhoneNumberId: e.target.value })
                 }
                 required
-                style={inputStyle}
               />
-              <input
+              <Input
                 placeholder="Meta Access Token *"
                 value={form.metaAccessToken}
                 onChange={(e) =>
                   setForm({ ...form, metaAccessToken: e.target.value })
                 }
                 required
-                style={inputStyle}
               />
             </div>
-          </div>
+          </fieldset>
 
-          <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>4. AI Behavior (defaults, editable later)</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <textarea
+          <fieldset className={sectionClass}>
+            <div className={sectionTitleClass}>4. AI Behavior (defaults, editable later)</div>
+            <div className="flex flex-col gap-3">
+              <Textarea
                 placeholder="Business description"
                 value={form.businessDescription}
                 onChange={(e) =>
                   setForm({ ...form, businessDescription: e.target.value })
                 }
                 rows={3}
-                style={{ ...inputStyle, resize: 'vertical' }}
               />
-              <input
+              <Input
                 placeholder="Welcome message"
                 value={form.welcomeMessage}
                 onChange={(e) =>
                   setForm({ ...form, welcomeMessage: e.target.value })
                 }
-                style={inputStyle}
               />
-              <input
+              <Input
                 placeholder="Fallback message"
                 value={form.fallbackMessage}
                 onChange={(e) =>
                   setForm({ ...form, fallbackMessage: e.target.value })
                 }
-                style={inputStyle}
               />
-              <input
+              <Input
                 placeholder="Handoff keywords (comma separated)"
                 value={form.handoffKeywords}
                 onChange={(e) =>
                   setForm({ ...form, handoffKeywords: e.target.value })
                 }
-                style={inputStyle}
               />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Input
                   placeholder="Opens at (HH:MM)"
                   value={form.operatingHoursStart}
                   onChange={(e) =>
                     setForm({ ...form, operatingHoursStart: e.target.value })
                   }
-                  style={inputStyle}
                 />
-                <input
+                <Input
                   placeholder="Closes at (HH:MM)"
                   value={form.operatingHoursEnd}
                   onChange={(e) =>
                     setForm({ ...form, operatingHoursEnd: e.target.value })
                   }
-                  style={inputStyle}
                 />
               </div>
-              <input
+              <Input
                 placeholder="Closed days (comma separated)"
                 value={form.closedDays}
                 onChange={(e) =>
                   setForm({ ...form, closedDays: e.target.value })
                 }
-                style={inputStyle}
               />
             </div>
-          </div>
+          </fieldset>
 
-          <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>5. Modules</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 14,
-                }}
-              >
+          <fieldset className={sectionClass}>
+            <div className={sectionTitleClass}>5. Modules</div>
+            <div className="flex flex-col gap-3">
+              <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={form.bookingsEnabled}
@@ -785,44 +718,34 @@ export default function ClientsPage() {
               </label>
               {form.bookingsEnabled && (
                 <>
-                  <div>
-                    <label style={{ fontSize: 13, fontWeight: 600 }}>
-                      Booking approval mode
-                    </label>
-                    <select
-                      value={form.bookingApprovalMode}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          bookingApprovalMode: e.target.value,
-                        })
-                      }
-                      style={{ ...inputStyle, marginTop: 4 }}
-                    >
-                      <option value="approval">
-                        Require approval before confirming
-                      </option>
-                      <option value="auto">Auto-confirm bookings</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 13, fontWeight: 600 }}>
-                      Reminder hours before appointment (0 disables)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={form.bookingReminderHours}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          bookingReminderHours: Number(e.target.value),
-                        })
-                      }
-                      style={{ ...inputStyle, marginTop: 4 }}
-                    />
-                  </div>
-                  <textarea
+                  <Select
+                    label="Booking approval mode"
+                    value={form.bookingApprovalMode}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        bookingApprovalMode: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="approval">
+                      Require approval before confirming
+                    </option>
+                    <option value="auto">Auto-confirm bookings</option>
+                  </Select>
+                  <Input
+                    label="Reminder hours before appointment (0 disables)"
+                    type="number"
+                    min={0}
+                    value={form.bookingReminderHours}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        bookingReminderHours: Number(e.target.value),
+                      })
+                    }
+                  />
+                  <Textarea
                     placeholder="Booking confirmation message template (optional)"
                     value={form.bookingConfirmationTemplate}
                     onChange={(e) =>
@@ -832,18 +755,10 @@ export default function ClientsPage() {
                       })
                     }
                     rows={3}
-                    style={{ ...inputStyle, resize: 'vertical' }}
                   />
                 </>
               )}
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 14,
-                }}
-              >
+              <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={form.ordersEnabled}
@@ -855,14 +770,8 @@ export default function ClientsPage() {
               </label>
               {form.ordersEnabled && (
                 <>
-                  <div style={{ display: 'flex', gap: 16, fontSize: 14 }}>
-                    <label
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                      }}
-                    >
+                  <div className="flex gap-4 text-sm">
+                    <label className="flex items-center gap-1.5">
                       <input
                         type="checkbox"
                         checked={form.deliveryEnabled}
@@ -875,13 +784,7 @@ export default function ClientsPage() {
                       />
                       Delivery
                     </label>
-                    <label
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                      }}
-                    >
+                    <label className="flex items-center gap-1.5">
                       <input
                         type="checkbox"
                         checked={form.pickupEnabled}
@@ -892,7 +795,7 @@ export default function ClientsPage() {
                       Pickup
                     </label>
                   </div>
-                  <input
+                  <Input
                     placeholder="Payment instructions (e.g. bank transfer details)"
                     value={form.paymentInstructions}
                     onChange={(e) =>
@@ -901,10 +804,9 @@ export default function ClientsPage() {
                         paymentInstructions: e.target.value,
                       })
                     }
-                    style={inputStyle}
                   />
                   <div>
-                    <textarea
+                    <Textarea
                       placeholder="Order confirmation message template (optional)"
                       value={form.orderConfirmationTemplate}
                       onChange={(e) =>
@@ -914,56 +816,37 @@ export default function ClientsPage() {
                         })
                       }
                       rows={3}
-                      style={{ ...inputStyle, resize: 'vertical' }}
                     />
-                    <div
-                      style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}
-                    >
+                    <div className="mt-1 text-xs text-muted">
                       Variables: {'{{customer_name}}'}, {'{{business_name}}'},{' '}
                       {'{{total}}'}, {'{{items}}'}, {'{{address}}'}
                     </div>
                   </div>
                 </>
               )}
-              <div
-                style={{
-                  borderTop: '1px solid #f3f4f6',
-                  paddingTop: 8,
-                  display: 'flex',
-                  gap: 16,
-                  flexWrap: 'wrap',
-                }}
-              >
+              <div className="grid grid-cols-1 gap-3 border-t border-line pt-3 sm:grid-cols-2">
+                <Input
+                  label="Plan allowance (conversations/month)"
+                  type="number"
+                  min={0}
+                  value={form.planAllowance}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      planAllowance: Number(e.target.value),
+                    })
+                  }
+                />
                 <div>
-                  <label style={{ fontSize: 13, fontWeight: 600 }}>
-                    Plan allowance (conversations/month)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.planAllowance}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        planAllowance: Number(e.target.value),
-                      })
-                    }
-                    style={{ ...inputStyle, marginTop: 4, width: 180 }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 13, fontWeight: 600 }}>
-                    Usage period start (monthly reset anchor)
-                  </label>
-                  <input
+                  <Input
+                    label="Usage period start (monthly reset anchor)"
                     type="date"
                     value={form.usageResetAt}
                     onChange={(e) =>
                       setForm({ ...form, usageResetAt: e.target.value })
                     }
-                    style={{ ...inputStyle, marginTop: 4, width: 180 }}
                   />
-                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                  <div className="mt-1 text-xs text-muted">
                     {form.usageResetAt
                       ? `Current period started ${form.usageResetAt}. Set it back a month to test the reset (top-up credits are kept).`
                       : 'Leave empty to keep the current anchor.'}
@@ -971,128 +854,87 @@ export default function ClientsPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </fieldset>
 
           {editing && (
-            <div style={sectionStyle}>
-              <div style={sectionTitleStyle}>6. Portal access</div>
-              <div
-                style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
-              >
+            <fieldset className={sectionClass}>
+              <div className={sectionTitleClass}>6. Portal access</div>
+              <div className="flex flex-col gap-3">
                 {portalUsers.length === 0 ? (
-                  <div style={{ fontSize: 13, color: '#6b7280' }}>
-                    No portal logins yet
-                  </div>
+                  <div className="text-sm text-muted">No portal logins yet</div>
                 ) : (
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 4,
-                    }}
-                  >
+                  <div className="flex flex-col gap-2">
                     {portalUsers.map((u) => (
                       <div
                         key={u.id}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: 8,
-                          fontSize: 14,
-                          background: 'white',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 6,
-                          padding: '6px 10px',
-                        }}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm"
                       >
                         <span>
                           <strong>{u.email}</strong>
                           {u.name ? ` — ${u.name}` : ''}
                           {u.createdAt && (
-                            <span
-                              style={{ color: '#6b7280', fontSize: 12 }}
-                            >
+                            <span className="text-xs text-muted">
                               {' '}
                               • created{' '}
                               {new Date(u.createdAt).toLocaleDateString()}
                             </span>
                           )}
                         </span>
-                        <button
+                        <Button
                           type="button"
+                          variant="outline"
+                          size="sm"
                           onClick={() => resetPortalPassword(u)}
-                          style={buttonStyle('#f59e0b')}
                         >
                           Reset password
-                        </button>
+                        </Button>
                       </div>
                     ))}
                   </div>
                 )}
 
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: 8,
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    marginTop: 4,
-                  }}
-                >
-                  <input
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <Input
                     placeholder="Portal login email *"
                     type="email"
                     value={portalForm.email}
                     onChange={(e) =>
                       setPortalForm({ ...portalForm, email: e.target.value })
                     }
-                    style={{ ...inputStyle, flex: 2, minWidth: 200 }}
+                    className="min-w-[200px] flex-[2]"
                   />
-                  <input
+                  <Input
                     placeholder="Temporary password *"
                     type="text"
                     value={portalForm.password}
                     onChange={(e) =>
                       setPortalForm({ ...portalForm, password: e.target.value })
                     }
-                    style={{ ...inputStyle, flex: 1, minWidth: 140 }}
+                    className="min-w-[140px] flex-1"
                   />
-                  <input
+                  <Input
                     placeholder="Name (optional)"
                     value={portalForm.name}
                     onChange={(e) =>
                       setPortalForm({ ...portalForm, name: e.target.value })
                     }
-                    style={{ ...inputStyle, flex: 1, minWidth: 120 }}
+                    className="min-w-[120px] flex-1"
                   />
-                  <button
-                    type="button"
-                    onClick={createPortalUser}
-                    style={buttonStyle('#16a34a')}
-                  >
+                  <Button type="button" size="sm" onClick={createPortalUser}>
                     Create portal login
-                  </button>
+                  </Button>
                 </div>
-                <div style={{ fontSize: 12, color: '#6b7280' }}>
+                <div className="text-xs text-muted">
                   Portal users sign in with this email/password and only see
                   their own bookings, orders and analytics. There is no email
                   reset — share the password with the client directly.
                 </div>
               </div>
-            </div>
+            </fieldset>
           )}
 
           {!editing && (
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 14,
-                marginTop: 4,
-              }}
-            >
+            <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={form.autoSetup}
@@ -1104,475 +946,380 @@ export default function ClientsPage() {
             </label>
           )}
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button
+          <div className="flex gap-2">
+            <Button
               type="submit"
               disabled={loading === 'create' || loading === 'update'}
-              style={buttonStyle('#16a34a')}
             >
               {loading === 'create' || loading === 'update'
                 ? 'Saving...'
                 : editing
                 ? 'Update Client'
                 : 'Create Client'}
-            </button>
-            <button
-              type="button"
-              onClick={resetForm}
-              style={buttonStyle('#6b7280')}
-            >
+            </Button>
+            <Button type="button" variant="outline" onClick={resetForm}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
-      )}
+      </Modal>
 
-      <div
-        style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 24 }}
-      >
-        {clients.map((c) => {
-          const status = statusMap[c.id];
-          const isConnected = status?.connected || !!c.chatwootAccountId;
-          const metaActive =
-            c.metaWebhookStatus === 'active' &&
-            c.lastWebhookAt &&
-            Date.now() - new Date(c.lastWebhookAt).getTime() < 24 * 60 * 60 * 1000;
-          return (
-            <div
-              key={c.id}
-              style={{
-                background: 'white',
-                padding: 16,
-                borderRadius: 8,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
+      {/* Client list */}
+      {clients.length === 0 ? (
+        <div>
+          <EmptyState
+            title="No clients yet"
+            hint="Add your first client to connect WhatsApp, Chatwoot and the AI agent."
+            action={
+              <Button
+                onClick={() => {
+                  resetForm();
+                  setShowForm(true);
                 }}
               >
-                <div>
-                  <strong>{c.name}</strong>
-                  <div style={{ color: '#6b7280', fontSize: 14 }}>
-                    {c.whatsappNumber} •{' '}
-                    <span
-                      style={{
-                        color: c.status === 'active' ? '#16a34a' : '#ef4444',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {c.status}
-                    </span>{' '}
-                    •{' '}
-                    <span
-                      style={{
-                        color: metaActive ? '#16a34a' : '#9ca3af',
-                        fontWeight: 600,
-                      }}
-                    >
-                      Meta {metaActive ? 'active' : 'pending'}
-                    </span>
-                  </div>
-                  {c.adminEmail && (
-                    <div style={{ color: '#6b7280', fontSize: 13 }}>
-                      Admin: {c.adminEmail}
+                Add Client
+              </Button>
+            }
+          />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {clients.map((c) => {
+            const status = statusMap[c.id];
+            const isConnected = status?.connected || !!c.chatwootAccountId;
+            const metaActive =
+              c.metaWebhookStatus === 'active' &&
+              c.lastWebhookAt &&
+              Date.now() - new Date(c.lastWebhookAt).getTime() < 24 * 60 * 60 * 1000;
+            return (
+              <Card key={c.id}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong className="text-brand-navy">{c.name}</strong>
+                      <StatusBadge status={c.status} />
+                      <Badge tone={metaActive ? 'teal' : 'gray'}>
+                        Meta {metaActive ? 'active' : 'pending'}
+                      </Badge>
+                      <Badge tone={isConnected ? 'teal' : 'gray'}>
+                        Chatwoot {isConnected ? 'connected' : 'not connected'}
+                      </Badge>
                     </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => handleEdit(c)} style={buttonStyle('#2563eb')}>
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => toggleStatus(c)}
-                    style={buttonStyle(c.status === 'active' ? '#f59e0b' : '#16a34a')}
-                  >
-                    {c.status === 'active' ? 'Pause' : 'Activate'}
-                  </button>
-                  <button
-                    onClick={() => handleDelete(c.id)}
-                    style={buttonStyle('#ef4444')}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  marginTop: 12,
-                  fontSize: 13,
-                  color: isConnected ? '#15803d' : '#b45309',
-                  background: isConnected ? '#f0fdf4' : '#fffbeb',
-                  padding: '8px 12px',
-                  borderRadius: 6,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <span>
-                  {status === undefined
-                    ? 'Loading Chatwoot status...'
-                    : isConnected
-                    ? `Chatwoot connected • Account ${
-                        status?.accountId ?? c.chatwootAccountId
-                      }${status?.accountName ? ` (${status.accountName})` : ''}`
-                    : 'Chatwoot not connected'}
-                </span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {isConnected ? (
-                    <>
-                      <button
-                        onClick={() => openChatwoot(c)}
-                        style={buttonStyle('#2563eb')}
-                      >
-                        Open Chatwoot
-                      </button>
-                      <button
-                        onClick={() => setMetaGuideClient(c)}
-                        style={buttonStyle('#7c3aed')}
-                      >
-                        Meta Setup
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setupChatwoot(c.id)}
-                      disabled={loading === `setup-${c.id}`}
-                      style={{
-                        ...buttonStyle('#2563eb'),
-                        opacity: loading === `setup-${c.id}` ? 0.7 : 1,
-                      }}
+                    <div className="mt-1 text-sm text-muted">
+                      {c.whatsappNumber}
+                    </div>
+                    {c.adminEmail && (
+                      <div className="mt-0.5 text-xs text-muted">
+                        Admin: {c.adminEmail}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleEdit(c)}>
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleStatus(c)}
                     >
-                      {loading === `setup-${c.id}` ? 'Setting up...' : 'Setup Chatwoot'}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => fetchStatus(c.id)}
-                    style={buttonStyle('#6b7280')}
-                  >
-                    Refresh Status
-                  </button>
+                      {c.status === 'active' ? 'Pause' : 'Activate'}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleDelete(c.id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
                 </div>
-              </div>
 
-              {(() => {
-                const usage = usageMap[c.id];
-                if (usage === undefined) {
+                <div
+                  className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm ${
+                    status === undefined
+                      ? 'bg-page text-muted'
+                      : isConnected
+                      ? 'bg-green-50 text-green-800'
+                      : 'bg-amber-50 text-amber-800'
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    {status === undefined && <Spinner className="h-4 w-4" />}
+                    {status === undefined
+                      ? 'Loading Chatwoot status...'
+                      : isConnected
+                      ? `Chatwoot connected • Account ${
+                          status?.accountId ?? c.chatwootAccountId
+                        }${status?.accountName ? ` (${status.accountName})` : ''}`
+                      : 'Chatwoot not connected'}
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {isConnected ? (
+                      <>
+                        <Button size="sm" onClick={() => openChatwoot(c)}>
+                          Open Chatwoot
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setMetaGuideClient(c)}
+                        >
+                          Meta Setup
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => setupChatwoot(c.id)}
+                        disabled={loading === `setup-${c.id}`}
+                      >
+                        {loading === `setup-${c.id}`
+                          ? 'Setting up...'
+                          : 'Setup Chatwoot'}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => fetchStatus(c.id)}
+                    >
+                      Refresh Status
+                    </Button>
+                  </div>
+                </div>
+
+                {(() => {
+                  const usage = usageMap[c.id];
+                  if (usage === undefined) {
+                    return (
+                      <div className="mt-3 inline-flex items-center gap-2 text-sm text-muted">
+                        <Spinner className="h-4 w-4" />
+                        Loading usage...
+                      </div>
+                    );
+                  }
+                  if (usage === null) return null;
+                  const left =
+                    (usage.allowanceRemaining ?? 0) + (usage.topUpRemaining ?? 0);
+                  const low = usage.remainingPct <= 0.2;
+                  const empty = usage.remainingPct <= 0;
+                  const usageLimit =
+                    (usage.planAllowance ?? 0) + (usage.topUpCredits ?? 0);
                   return (
-                    <div style={{ marginTop: 12, fontSize: 13, color: '#9ca3af' }}>
-                      Loading usage...
+                    <div
+                      className={`mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${
+                        empty
+                          ? 'border-red-200 bg-red-50 text-red-700'
+                          : low
+                          ? 'border-amber-200 bg-amber-50 text-amber-800'
+                          : 'border-green-200 bg-green-50 text-green-800'
+                      }`}
+                    >
+                      <div className="min-w-[220px] flex-1">
+                        <UsageBar
+                          used={usage.used ?? 0}
+                          limit={usageLimit}
+                          label="Conversations"
+                        />
+                        <div className="mt-1.5">
+                          <strong>{left}</strong> conversations left
+                          {empty
+                            ? ' — AI paused'
+                            : low
+                            ? ' — running low'
+                            : ''}
+                          <span className="text-muted">
+                            {' '}
+                            ({usage.allowanceRemaining}/{usage.planAllowance} plan
+                            {usage.topUpRemaining > 0 &&
+                              ` + ${usage.topUpRemaining} top-up`}
+                            )
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setTopUpClientId(
+                            topUpClientId === c.id ? null : c.id,
+                          );
+                          setTopUpForm({ credits: 500, priceLkr: 3000, note: '' });
+                        }}
+                      >
+                        Top up
+                      </Button>
                     </div>
                   );
-                }
-                if (usage === null) return null;
-                const left =
-                  (usage.allowanceRemaining ?? 0) + (usage.topUpRemaining ?? 0);
-                const low = usage.remainingPct <= 0.2;
-                const empty = usage.remainingPct <= 0;
-                const color = empty ? '#b91c1c' : low ? '#b45309' : '#15803d';
-                return (
-                  <div
-                    style={{
-                      marginTop: 12,
-                      fontSize: 13,
-                      padding: '8px 12px',
-                      borderRadius: 6,
-                      color,
-                      background: empty ? '#fef2f2' : low ? '#fffbeb' : '#f0fdf4',
-                      border: low
-                        ? `1px solid ${empty ? '#fecaca' : '#fde68a'}`
-                        : '1px solid #bbf7d0',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                      gap: 8,
-                    }}
-                  >
-                    <span>
-                      <strong>{left}</strong> conversations left
-                      {empty
-                        ? ' — AI paused'
-                        : low
-                        ? ' — running low'
-                        : ''}
-                      <span style={{ color: '#6b7280' }}>
-                        {' '}
-                        ({usage.allowanceRemaining}/{usage.planAllowance} plan
-                        {usage.topUpRemaining > 0 &&
-                          ` + ${usage.topUpRemaining} top-up`}
-                        )
-                      </span>
-                    </span>
-                    <button
-                      onClick={() => {
-                        setTopUpClientId(
-                          topUpClientId === c.id ? null : c.id,
-                        );
-                        setTopUpForm({ credits: 500, priceLkr: 3000, note: '' });
-                      }}
-                      style={buttonStyle('#7c3aed')}
+                })()}
+
+                {topUpClientId === c.id && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-page/60 px-3 py-2">
+                    <Input
+                      type="number"
+                      min={1}
+                      value={topUpForm.credits}
+                      onChange={(e) =>
+                        setTopUpForm({
+                          ...topUpForm,
+                          credits: Number(e.target.value),
+                        })
+                      }
+                      placeholder="Credits"
+                      className="w-[110px]"
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      value={topUpForm.priceLkr}
+                      onChange={(e) =>
+                        setTopUpForm({
+                          ...topUpForm,
+                          priceLkr: Number(e.target.value),
+                        })
+                      }
+                      placeholder="Price (LKR)"
+                      className="w-[130px]"
+                    />
+                    <Input
+                      value={topUpForm.note}
+                      onChange={(e) =>
+                        setTopUpForm({ ...topUpForm, note: e.target.value })
+                      }
+                      placeholder="Note (optional)"
+                      className="min-w-[160px] flex-1"
+                    />
+                    <Button size="sm" onClick={() => handleTopUp(c.id)}>
+                      Confirm top-up
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setTopUpClientId(null)}
                     >
-                      Top up
-                    </button>
-                  </div>
-                );
-              })()}
-
-              {topUpClientId === c.id && (
-                <div
-                  style={{
-                    marginTop: 8,
-                    display: 'flex',
-                    gap: 8,
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    padding: '8px 12px',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 6,
-                    background: '#f9fafb',
-                  }}
-                >
-                  <input
-                    type="number"
-                    min={1}
-                    value={topUpForm.credits}
-                    onChange={(e) =>
-                      setTopUpForm({
-                        ...topUpForm,
-                        credits: Number(e.target.value),
-                      })
-                    }
-                    placeholder="Credits"
-                    style={{ ...inputStyle, width: 110 }}
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    value={topUpForm.priceLkr}
-                    onChange={(e) =>
-                      setTopUpForm({
-                        ...topUpForm,
-                        priceLkr: Number(e.target.value),
-                      })
-                    }
-                    placeholder="Price (LKR)"
-                    style={{ ...inputStyle, width: 130 }}
-                  />
-                  <input
-                    value={topUpForm.note}
-                    onChange={(e) =>
-                      setTopUpForm({ ...topUpForm, note: e.target.value })
-                    }
-                    placeholder="Note (optional)"
-                    style={{ ...inputStyle, flex: 1, minWidth: 160 }}
-                  />
-                  <button
-                    onClick={() => handleTopUp(c.id)}
-                    style={buttonStyle('#16a34a')}
-                  >
-                    Confirm top-up
-                  </button>
-                  <button
-                    onClick={() => setTopUpClientId(null)}
-                    style={buttonStyle('#6b7280')}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-
-              {isConnected && (
-                <div
-                  style={{
-                    marginTop: 12,
-                    display: 'flex',
-                    gap: 8,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <a
-                    href={`/dashboard/ai-settings?clientId=${c.id}`}
-                    style={{
-                      ...buttonStyle('#059669'),
-                      textDecoration: 'none',
-                      display: 'inline-block',
-                    }}
-                  >
-                    Edit AI Settings
-                  </a>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {metaGuideClient && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 24,
-            zIndex: 50,
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setMetaGuideClient(null);
-          }}
-        >
-          <div
-            style={{
-              background: 'white',
-              borderRadius: 8,
-              padding: 24,
-              maxWidth: 560,
-              width: '100%',
-              maxHeight: '90vh',
-              overflow: 'auto',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 16,
-              }}
-            >
-              <h2 style={{ margin: 0 }}>Meta Webhook Setup</h2>
-              <button
-                onClick={() => setMetaGuideClient(null)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  fontSize: 20,
-                  cursor: 'pointer',
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <p style={{ margin: 0, fontSize: 14, color: '#4b5563' }}>
-                Copy the values below into your Meta Developers app WhatsApp
-                product configuration.
-              </p>
-
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 600 }}>Callback URL</label>
-                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                  <input
-                    readOnly
-                    value={callbackUrl}
-                    style={inputStyle}
-                  />
-                  <button
-                    onClick={() => copyToClipboard(callbackUrl)}
-                    style={buttonStyle('#2563eb')}
-                  >
-                    Copy
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 600 }}>Verify Token</label>
-                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                  <input
-                    readOnly
-                    value={metaGuideClient.verifyToken || 'Not generated'}
-                    style={inputStyle}
-                  />
-                  <button
-                    onClick={() =>
-                      metaGuideClient.verifyToken &&
-                      copyToClipboard(metaGuideClient.verifyToken)
-                    }
-                    style={buttonStyle('#2563eb')}
-                  >
-                    Copy
-                  </button>
-                </div>
-              </div>
-
-              <div style={sectionStyle}>
-                <div style={sectionTitleStyle}>Steps</div>
-                <ol
-                  style={{
-                    margin: 0,
-                    paddingLeft: 20,
-                    fontSize: 14,
-                    color: '#374151',
-                    lineHeight: 1.6,
-                  }}
-                >
-                  <li>Open{' '}
-                    <a
-                      href="https://developers.facebook.com/apps/"
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: '#2563eb' }}
-                    >
-                      Meta Developers
-                    </a>{' '}
-                    and select your app.
-                  </li>
-                  <li>Go to WhatsApp → Configuration.</li>
-                  <li>Paste the Callback URL above into the Callback URL field.</li>
-                  <li>Paste the Verify Token above into the Verify Token field.</li>
-                  <li>Click Verify and Save.</li>
-                  <li>Subscribe to <strong>messages</strong> and{' '}
-                    <strong>message_deliveries</strong> webhook fields.
-                  </li>
-                </ol>
-              </div>
-
-              <div
-                style={{
-                  marginTop: 8,
-                  padding: 12,
-                  borderRadius: 6,
-                  background:
-                    metaGuideClient.metaWebhookStatus === 'active' ? '#f0fdf4' : '#fffbeb',
-                  color:
-                    metaGuideClient.metaWebhookStatus === 'active'
-                      ? '#15803d'
-                      : '#b45309',
-                  fontSize: 13,
-                }}
-              >
-                Status:{' '}
-                <strong>
-                  {metaGuideClient.metaWebhookStatus === 'active'
-                    ? 'Recent webhook received'
-                    : 'Waiting for first webhook'}
-                </strong>
-                {metaGuideClient.lastWebhookAt && (
-                  <div>
-                    Last received: {new Date(metaGuideClient.lastWebhookAt).toLocaleString()}
+                      Cancel
+                    </Button>
                   </div>
                 )}
-              </div>
 
-              <button
-                onClick={() => setMetaGuideClient(null)}
-                style={{ ...buttonStyle('#6b7280'), marginTop: 8 }}
-              >
+                {isConnected && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <a
+                      href={`/dashboard/ai-settings?clientId=${c.id}`}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs font-medium text-brand-navy transition-colors hover:bg-page"
+                    >
+                      Edit AI Settings
+                    </a>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Meta webhook setup guide */}
+      {metaGuideClient && (
+        <Modal
+          open
+          onClose={() => setMetaGuideClient(null)}
+          title="Meta Webhook Setup"
+        >
+          <div className="flex flex-col gap-3">
+            <p className="m-0 text-sm text-muted">
+              Copy the values below into your Meta Developers app WhatsApp
+              product configuration.
+            </p>
+
+            <div>
+              <span className="mb-1 block text-sm font-medium">Callback URL</span>
+              <div className="flex gap-2">
+                <Input readOnly value={callbackUrl} />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => copyToClipboard(callbackUrl)}
+                >
+                  Copy
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <span className="mb-1 block text-sm font-medium">Verify Token</span>
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={metaGuideClient.verifyToken || 'Not generated'}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    metaGuideClient.verifyToken &&
+                    copyToClipboard(metaGuideClient.verifyToken)
+                  }
+                >
+                  Copy
+                </Button>
+              </div>
+            </div>
+
+            <div className={sectionClass}>
+              <div className={sectionTitleClass}>Steps</div>
+              <ol className="m-0 list-decimal pl-5 text-sm leading-relaxed text-brand-navy">
+                <li>
+                  Open{' '}
+                  <a
+                    href="https://developers.facebook.com/apps/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand-indigo underline"
+                  >
+                    Meta Developers
+                  </a>{' '}
+                  and select your app.
+                </li>
+                <li>Go to WhatsApp → Configuration.</li>
+                <li>Paste the Callback URL above into the Callback URL field.</li>
+                <li>Paste the Verify Token above into the Verify Token field.</li>
+                <li>Click Verify and Save.</li>
+                <li>
+                  Subscribe to <strong>messages</strong> and{' '}
+                  <strong>message_deliveries</strong> webhook fields.
+                </li>
+              </ol>
+            </div>
+
+            <div
+              className={`rounded-lg px-3 py-2 text-sm ${
+                metaGuideClient.metaWebhookStatus === 'active'
+                  ? 'bg-green-50 text-green-800'
+                  : 'bg-amber-50 text-amber-800'
+              }`}
+            >
+              Status:{' '}
+              <strong>
+                {metaGuideClient.metaWebhookStatus === 'active'
+                  ? 'Recent webhook received'
+                  : 'Waiting for first webhook'}
+              </strong>
+              {metaGuideClient.lastWebhookAt && (
+                <div>
+                  Last received:{' '}
+                  {new Date(metaGuideClient.lastWebhookAt).toLocaleString()}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Button variant="outline" onClick={() => setMetaGuideClient(null)}>
                 Close
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

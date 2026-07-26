@@ -2,6 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { getStoredUser, isPortalUser } from '../portal';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageLoading,
+  Select,
+  StatusBadge,
+  cx,
+  useToast,
+} from '@/components/ui';
 
 interface Client {
   id: string;
@@ -61,51 +72,6 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
   cancelled: 'Cancelled',
 };
 
-const STATUS_COLORS: Record<OrderStatus, { color: string; bg: string }> = {
-  pending: { color: '#92400e', bg: '#fef3c7' },
-  confirmed: { color: '#15803d', bg: '#f0fdf4' },
-  preparing: { color: '#c2410c', bg: '#fff7ed' },
-  out_for_delivery: { color: '#6d28d9', bg: '#f5f3ff' },
-  completed: { color: '#1d4ed8', bg: '#eff6ff' },
-  cancelled: { color: '#b91c1c', bg: '#fef2f2' },
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: 8,
-  borderRadius: 4,
-  border: '1px solid #d1d5db',
-  fontSize: 14,
-  width: '100%',
-};
-
-const buttonStyle = (color: string): React.CSSProperties => ({
-  padding: '6px 12px',
-  background: color,
-  color: 'white',
-  border: 'none',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 13,
-});
-
-const cardStyle: React.CSSProperties = {
-  marginTop: 16,
-  background: 'white',
-  padding: 16,
-  borderRadius: 8,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-};
-
-const badgeStyle = (color: string, bg: string): React.CSSProperties => ({
-  display: 'inline-block',
-  padding: '2px 8px',
-  borderRadius: 10,
-  fontSize: 12,
-  fontWeight: 600,
-  color,
-  background: bg,
-});
-
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, {
     weekday: 'short',
@@ -116,9 +82,9 @@ const formatTime = (iso: string) =>
   });
 
 export default function OrdersPage() {
+  const toast = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
-  const [message, setMessage] = useState<string | null>(null);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -131,11 +97,6 @@ export default function OrdersPage() {
   const headers = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
-  };
-
-  const showInfo = (text: string) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
   };
 
   const fetchClients = async () => {
@@ -188,10 +149,10 @@ export default function OrdersPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      showInfo(data.message || 'Failed to update order');
+      toast(data.message || 'Failed to update order', 'error');
       return;
     }
-    showInfo(`Order ${STATUS_LABELS[status].toLowerCase()}`);
+    toast(`Order ${STATUS_LABELS[status].toLowerCase()}`, 'success');
     fetchOrders(selectedId);
   };
 
@@ -214,81 +175,63 @@ export default function OrdersPage() {
   };
 
   const renderActions = (order: Order) => {
-    const buttons: { label: string; status: OrderStatus; color: string }[] = [];
+    const buttons: { label: string; status: OrderStatus }[] = [];
     if (order.status === 'pending') {
-      buttons.push({ label: 'Confirm', status: 'confirmed', color: '#16a34a' });
+      buttons.push({ label: 'Confirm', status: 'confirmed' });
     } else if (order.status === 'confirmed') {
-      buttons.push({ label: 'Preparing', status: 'preparing', color: '#c2410c' });
+      buttons.push({ label: 'Preparing', status: 'preparing' });
     } else if (order.status === 'preparing') {
       if (order.type === 'delivery') {
         buttons.push({
           label: 'Out for delivery',
           status: 'out_for_delivery',
-          color: '#7c3aed',
         });
       } else {
         buttons.push({
           label: 'Complete',
           status: 'completed',
-          color: '#2563eb',
         });
       }
     } else if (order.status === 'out_for_delivery') {
-      buttons.push({ label: 'Complete', status: 'completed', color: '#2563eb' });
+      buttons.push({ label: 'Complete', status: 'completed' });
     }
     if (
       order.status === 'pending' ||
       order.status === 'confirmed' ||
       order.status === 'preparing'
     ) {
-      buttons.push({ label: 'Cancel', status: 'cancelled', color: '#dc2626' });
+      buttons.push({ label: 'Cancel', status: 'cancelled' });
     }
     if (buttons.length === 0) return null;
     return (
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      <div className="flex flex-wrap gap-1.5">
         {buttons.map((b) => (
-          <button
+          <Button
             key={b.status}
+            size="sm"
+            variant={b.status === 'cancelled' ? 'danger' : 'primary'}
             onClick={() => handleAction(order, b.status)}
-            style={buttonStyle(b.color)}
           >
             {b.label}
-          </button>
+          </Button>
         ))}
       </div>
     );
   };
 
   return (
-    <div>
-      <h1>Orders</h1>
-      <p style={{ color: '#6b7280', fontSize: 14 }}>
+    <div className="flex flex-col gap-4">
+      <p className="m-0 text-sm text-muted">
         View and manage orders per client. Changing an order&apos;s status
         automatically messages the customer on WhatsApp.
       </p>
 
-      {message && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 12,
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: 6,
-            color: '#1e40af',
-          }}
-        >
-          {message}
-        </div>
-      )}
-
       {!portal && (
-        <div style={{ marginTop: 16, maxWidth: 320 }}>
-          <label style={{ fontSize: 13, fontWeight: 600 }}>Client</label>
-          <select
+        <div className="w-full max-w-xs">
+          <Select
+            label="Client"
             value={selectedId}
             onChange={(e) => setSelectedId(e.target.value)}
-            style={{ ...inputStyle, marginTop: 4 }}
           >
             <option value="">Select a client</option>
             {clients.map((c) => (
@@ -297,20 +240,13 @@ export default function OrdersPage() {
                 {c.ordersEnabled ? '' : ' (orders disabled)'}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       )}
 
       {selectedId && (
         <>
-          <div
-            style={{
-              marginTop: 16,
-              display: 'flex',
-              gap: 8,
-              flexWrap: 'wrap',
-            }}
-          >
+          <div className="flex flex-wrap gap-2">
             {(['all', ...STATUSES] as string[]).map((s) => {
               const active = statusFilter === s;
               const label =
@@ -319,16 +255,12 @@ export default function OrdersPage() {
                 <button
                   key={s}
                   onClick={() => setStatusFilter(s)}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 16,
-                    border: active ? '1px solid #2563eb' : '1px solid #d1d5db',
-                    background: active ? '#eff6ff' : 'white',
-                    color: active ? '#1d4ed8' : '#374151',
-                    cursor: 'pointer',
-                    fontSize: 13,
-                    fontWeight: active ? 600 : 400,
-                  }}
+                  className={cx(
+                    'rounded-full border px-3.5 py-1.5 text-[13px] transition-colors',
+                    active
+                      ? 'border-brand-indigo bg-indigo-50 font-semibold text-brand-indigo'
+                      : 'border-line bg-white text-brand-navy hover:bg-page',
+                  )}
                 >
                   {label}
                 </button>
@@ -336,89 +268,62 @@ export default function OrdersPage() {
             })}
           </div>
 
-          <div style={cardStyle}>
+          <Card>
             {loading ? (
-              <div style={{ color: '#6b7280' }}>Loading…</div>
+              <PageLoading />
             ) : orders.length === 0 ? (
-              <div style={{ color: '#6b7280' }}>No orders found</div>
+              <EmptyState title="No orders found" />
             ) : (
-              <div
-                style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-              >
+              <div className="flex flex-col gap-3">
                 {orders.map((order) => {
-                  const colors = STATUS_COLORS[order.status];
                   return (
                     <div
                       key={order.id}
-                      style={{
-                        border: '1px solid #e5e7eb',
-                        borderRadius: 8,
-                        padding: 12,
-                      }}
+                      className="rounded-lg border border-line p-3"
                     >
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          flexWrap: 'wrap',
-                          gap: 8,
-                        }}
-                      >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
-                          <strong>#{order.id.slice(0, 8)}</strong>{' '}
-                          <span style={badgeStyle(colors.color, colors.bg)}>
-                            {STATUS_LABELS[order.status]}
-                          </span>{' '}
-                          <span
-                            style={badgeStyle('#374151', '#f3f4f6')}
-                          >
-                            {order.type}
-                          </span>
-                          <div style={{ fontSize: 13, color: '#374151', marginTop: 4 }}>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <strong className="text-brand-navy">
+                              #{order.id.slice(0, 8)}
+                            </strong>
+                            <StatusBadge status={order.status} />
+                            <Badge tone="gray" className="capitalize">
+                              {order.type}
+                            </Badge>
+                          </div>
+                          <div className="mt-1 text-[13px] text-brand-navy">
                             {order.customer?.name || order.customerName || '—'}
                             {' • '}
                             {order.customer?.phoneNumber || order.phone || '—'}
                           </div>
                           {order.type === 'delivery' && order.address && (
-                            <div style={{ fontSize: 13, color: '#6b7280' }}>
+                            <div className="text-[13px] text-muted">
                               {order.address}
                             </div>
                           )}
-                          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                          <div className="mt-0.5 text-xs text-muted">
                             {formatTime(order.createdAt)}
                           </div>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 16, fontWeight: 700 }}>
+                        <div className="text-right">
+                          <div className="text-base font-bold text-brand-navy">
                             ${Number(order.total).toFixed(2)}
                           </div>
                         </div>
                       </div>
 
-                      <div
-                        style={{
-                          marginTop: 8,
-                          borderTop: '1px solid #f3f4f6',
-                          paddingTop: 8,
-                          fontSize: 13,
-                        }}
-                      >
+                      <div className="mt-2 border-t border-line pt-2 text-[13px]">
                         {order.items.map((item, i) => (
                           <div
                             key={i}
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              gap: 8,
-                              padding: '2px 0',
-                            }}
+                            className="flex justify-between gap-2 py-0.5"
                           >
                             <span>
                               {item.quantity}× {item.product?.name}
                               {item.selectedOptions &&
                                 item.selectedOptions.length > 0 && (
-                                  <span style={{ color: '#6b7280' }}>
+                                  <span className="text-muted">
                                     {' '}
                                     (
                                     {item.selectedOptions
@@ -434,24 +339,18 @@ export default function OrdersPage() {
                       </div>
 
                       {order.notes && (
-                        <div
-                          style={{
-                            marginTop: 8,
-                            fontSize: 13,
-                            color: '#374151',
-                          }}
-                        >
+                        <div className="mt-2 text-[13px] text-brand-navy">
                           <strong>Notes:</strong> {order.notes}
                         </div>
                       )}
 
-                      <div style={{ marginTop: 8 }}>{renderActions(order)}</div>
+                      <div className="mt-2">{renderActions(order)}</div>
                     </div>
                   );
                 })}
               </div>
             )}
-          </div>
+          </Card>
         </>
       )}
     </div>

@@ -1,6 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  Select,
+  Table,
+  TD,
+  TH,
+  THead,
+  TR,
+  Textarea,
+  useToast,
+} from '@/components/ui';
 import { isPortalUser } from '../portal';
 
 interface Client {
@@ -15,31 +29,13 @@ interface CannedResponse {
   content: string;
 }
 
-const inputStyle: React.CSSProperties = {
-  padding: 8,
-  borderRadius: 4,
-  border: '1px solid #d1d5db',
-  fontSize: 14,
-  width: '100%',
-};
-
-const buttonStyle = (color: string): React.CSSProperties => ({
-  padding: '6px 12px',
-  background: color,
-  color: 'white',
-  border: 'none',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 13,
-});
-
 export default function CannedResponsesPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [responses, setResponses] = useState<CannedResponse[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ shortcut: '', title: '', content: '' });
-  const [message, setMessage] = useState<string | null>(null);
+  const toast = useToast();
 
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
@@ -47,11 +43,6 @@ export default function CannedResponsesPage() {
   const headers = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
-  };
-
-  const showInfo = (text: string) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
   };
 
   const fetchClients = async () => {
@@ -101,10 +92,10 @@ export default function CannedResponsesPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      showInfo(data.message || 'Failed to save template');
+      toast(data.message || 'Failed to save template', 'error');
       return;
     }
-    showInfo(editingId ? 'Template updated' : 'Template created');
+    toast(editingId ? 'Template updated' : 'Template created', 'success');
     setEditingId(null);
     setForm({ shortcut: '', title: '', content: '' });
     fetchResponses(selectedId);
@@ -125,36 +116,32 @@ export default function CannedResponsesPage() {
   };
 
   return (
-    <div>
-      <h1>Canned Responses</h1>
-      <p style={{ color: '#6b7280', fontSize: 14 }}>
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted">
         Message templates per client. Agents use them in Chatwoot by typing{' '}
-        <code>/shortcut</code>. Supported variables:{' '}
-        <code>{'{{customer_name}}'}</code>, <code>{'{{business_name}}'}</code>,{' '}
-        <code>{'{{agent_name}}'}</code>.
+        <code className="rounded bg-page px-1 py-0.5 font-mono text-xs">
+          /shortcut
+        </code>
+        . Supported variables:{' '}
+        <code className="rounded bg-page px-1 py-0.5 font-mono text-xs">
+          {'{{customer_name}}'}
+        </code>
+        ,{' '}
+        <code className="rounded bg-page px-1 py-0.5 font-mono text-xs">
+          {'{{business_name}}'}
+        </code>
+        ,{' '}
+        <code className="rounded bg-page px-1 py-0.5 font-mono text-xs">
+          {'{{agent_name}}'}
+        </code>
+        .
       </p>
 
-      {message && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 12,
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: 6,
-            color: '#1e40af',
-          }}
-        >
-          {message}
-        </div>
-      )}
-
-      <div style={{ marginTop: 16, maxWidth: 320 }}>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Client</label>
-        <select
+      <Card className="max-w-sm">
+        <Select
+          label="Client"
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
-          style={{ ...inputStyle, marginTop: 4 }}
         >
           <option value="">Select a client</option>
           {clients.map((c) => (
@@ -162,132 +149,109 @@ export default function CannedResponsesPage() {
               {c.name}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Card>
 
       {selectedId && (
         <>
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              marginTop: 16,
-              background: 'white',
-              padding: 16,
-              borderRadius: 8,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
-          >
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                placeholder="Shortcut (e.g. greeting)"
-                value={form.shortcut}
-                onChange={(e) =>
-                  setForm({ ...form, shortcut: e.target.value })
-                }
+          <Card title={editingId ? 'Edit Template' : 'Add Template'}>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="sm:flex-1">
+                  <Input
+                    placeholder="Shortcut (e.g. greeting)"
+                    value={form.shortcut}
+                    onChange={(e) =>
+                      setForm({ ...form, shortcut: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div className="sm:flex-[2]">
+                  <Input
+                    placeholder="Title (e.g. Welcome greeting)"
+                    value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <Textarea
+                placeholder="Message content. Use {{customer_name}}, {{business_name}}, {{agent_name}} as variables."
+                value={form.content}
+                onChange={(e) => setForm({ ...form, content: e.target.value })}
                 required
-                style={{ ...inputStyle, flex: 1 }}
+                rows={4}
+                className="resize-y"
               />
-              <input
-                placeholder="Title (e.g. Welcome greeting)"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                required
-                style={{ ...inputStyle, flex: 2 }}
-              />
-            </div>
-            <textarea
-              placeholder="Message content. Use {{customer_name}}, {{business_name}}, {{agent_name}} as variables."
-              value={form.content}
-              onChange={(e) => setForm({ ...form, content: e.target.value })}
-              required
-              rows={4}
-              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-            />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="submit" style={buttonStyle('#16a34a')}>
-                {editingId ? 'Update Template' : 'Add Template'}
-              </button>
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingId(null);
-                    setForm({ shortcut: '', title: '', content: '' });
-                  }}
-                  style={buttonStyle('#6b7280')}
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
-
-          <div
-            style={{
-              marginTop: 16,
-              background: 'white',
-              padding: 16,
-              borderRadius: 8,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            }}
-          >
-            {responses.length === 0 ? (
-              <div style={{ color: '#6b7280' }}>No templates yet</div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr
-                    style={{ textAlign: 'left', color: '#6b7280', fontSize: 13 }}
+              <div className="flex gap-2">
+                <Button type="submit">
+                  {editingId ? 'Update Template' : 'Add Template'}
+                </Button>
+                {editingId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingId(null);
+                      setForm({ shortcut: '', title: '', content: '' });
+                    }}
                   >
-                    <th style={{ paddingBottom: 8 }}>Shortcut</th>
-                    <th style={{ paddingBottom: 8 }}>Title</th>
-                    <th style={{ paddingBottom: 8 }}>Content</th>
-                    <th style={{ paddingBottom: 8 }}>Actions</th>
-                  </tr>
-                </thead>
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </form>
+          </Card>
+
+          <Card title="Templates">
+            {responses.length === 0 ? (
+              <EmptyState
+                title="No templates yet"
+                hint="Add a template above so agents can use it in Chatwoot."
+              />
+            ) : (
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Shortcut</TH>
+                    <TH>Title</TH>
+                    <TH>Content</TH>
+                    <TH>Actions</TH>
+                  </TR>
+                </THead>
                 <tbody>
                   {responses.map((r) => (
-                    <tr key={r.id} style={{ borderTop: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '10px 0', fontFamily: 'monospace' }}>
-                        /{r.shortcut}
-                      </td>
-                      <td style={{ padding: '10px 0' }}>{r.title}</td>
-                      <td
-                        style={{
-                          padding: '10px 0',
-                          maxWidth: 400,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
+                    <TR key={r.id}>
+                      <TD className="font-mono">/{r.shortcut}</TD>
+                      <TD>{r.title}</TD>
+                      <TD className="max-w-[400px] overflow-hidden text-ellipsis whitespace-nowrap">
                         {r.content}
-                      </td>
-                      <td style={{ padding: '10px 0' }}>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button
+                      </TD>
+                      <TD>
+                        <div className="flex gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => handleEdit(r)}
-                            style={buttonStyle('#2563eb')}
                           >
                             Edit
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
                             onClick={() => handleDelete(r.id)}
-                            style={buttonStyle('#dc2626')}
                           >
                             Delete
-                          </button>
+                          </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TD>
+                    </TR>
                   ))}
                 </tbody>
-              </table>
+              </Table>
             )}
-          </div>
+          </Card>
         </>
       )}
     </div>

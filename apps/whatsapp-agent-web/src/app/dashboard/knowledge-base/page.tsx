@@ -2,6 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import { isPortalUser } from '../portal';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  Select,
+  Table,
+  TD,
+  TH,
+  THead,
+  TR,
+  Textarea,
+  statusTone,
+  useToast,
+} from '@/components/ui';
 
 interface Client {
   id: string;
@@ -16,24 +32,6 @@ interface Document {
   createdAt: string;
 }
 
-const inputStyle: React.CSSProperties = {
-  padding: 8,
-  borderRadius: 4,
-  border: '1px solid #d1d5db',
-  fontSize: 14,
-  width: '100%',
-};
-
-const buttonStyle = (color: string): React.CSSProperties => ({
-  padding: '6px 12px',
-  background: color,
-  color: 'white',
-  border: 'none',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 13,
-});
-
 export default function KnowledgeBasePage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
@@ -43,15 +41,10 @@ export default function KnowledgeBasePage() {
   const [crawlUrl, setCrawlUrl] = useState('');
   const [files, setFiles] = useState<FileList | null>(null);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const toast = useToast();
 
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
-
-  const showInfo = (text: string) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
-  };
 
   const fetchClients = async () => {
     if (!token) return;
@@ -101,12 +94,12 @@ export default function KnowledgeBasePage() {
         body: JSON.stringify({ title, content, contentType: 'text' }),
       });
       if (res.ok) {
-        showInfo('Document added');
+        toast('Document added', 'success');
         setTitle('');
         setContent('');
         await fetchDocuments(selectedId);
       } else {
-        showInfo('Failed to add document');
+        toast('Failed to add document', 'error');
       }
     } finally {
       setLoading(false);
@@ -128,13 +121,14 @@ export default function KnowledgeBasePage() {
       });
       const data = await res.json();
       if (res.ok) {
-        showInfo(
+        toast(
           `Crawled ${data.characters?.toLocaleString() || 0} characters into ${data.chunks || 0} chunks`,
+          'success',
         );
         setCrawlUrl('');
         await fetchDocuments(selectedId);
       } else {
-        showInfo(data.error || data.message || 'Failed to crawl website');
+        toast(data.error || data.message || 'Failed to crawl website', 'error');
       }
     } finally {
       setLoading(false);
@@ -156,11 +150,11 @@ export default function KnowledgeBasePage() {
         body: formData,
       });
       if (res.ok) {
-        showInfo('Files uploaded');
+        toast('Files uploaded', 'success');
         setFiles(null);
         await fetchDocuments(selectedId);
       } else {
-        showInfo('Failed to upload files');
+        toast('Failed to upload files', 'error');
       }
     } finally {
       setLoading(false);
@@ -177,42 +171,24 @@ export default function KnowledgeBasePage() {
       },
     );
     if (res.ok) {
-      showInfo('Document deleted');
+      toast('Document deleted', 'success');
       await fetchDocuments(selectedId);
     } else {
-      showInfo('Failed to delete document');
+      toast('Failed to delete document', 'error');
     }
   };
 
   return (
-    <div>
-      <h1>Knowledge Base</h1>
-      <p style={{ color: '#6b7280', fontSize: 14 }}>
+    <div className="flex flex-col gap-4">
+      <p className="m-0 text-sm text-muted">
         Upload text or files per client. The AI uses this content to answer
         WhatsApp messages.
       </p>
 
-      {message && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 12,
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: 6,
-            color: '#1e40af',
-          }}
-        >
-          {message}
-        </div>
-      )}
-
-      <div style={{ marginTop: 16 }}>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Client</label>
-        <select
+      <Card title="Client">
+        <Select
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
-          style={{ ...inputStyle, marginTop: 4 }}
         >
           <option value="">Select a client</option>
           {clients.map((c) => (
@@ -220,152 +196,131 @@ export default function KnowledgeBasePage() {
               {c.name}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Card>
 
       {selectedId && (
-        <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <form
-            onSubmit={handleTextSubmit}
-            style={{
-              background: 'white',
-              padding: 16,
-              borderRadius: 8,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            }}
-          >
-            <h3 style={{ marginTop: 0, fontSize: 16 }}>Add Text Entry</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input
-                placeholder="Title (e.g. Return Policy)"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                style={inputStyle}
-              />
-              <textarea
-                placeholder="Paste business content, FAQs, policies..."
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={6}
-                required
-                style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                style={buttonStyle('#16a34a')}
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <Card title="Add Text Entry">
+              <form
+                onSubmit={handleTextSubmit}
+                className="flex flex-col gap-3"
               >
-                {loading ? 'Saving...' : 'Add Text'}
-              </button>
-            </div>
-          </form>
+                <Input
+                  placeholder="Title (e.g. Return Policy)"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                />
+                <Textarea
+                  placeholder="Paste business content, FAQs, policies..."
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  rows={6}
+                  required
+                  className="resize-y"
+                />
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Saving...' : 'Add Text'}
+                </Button>
+              </form>
+            </Card>
 
-          <form
-            onSubmit={handleFileUpload}
-            style={{
-              background: 'white',
-              padding: 16,
-              borderRadius: 8,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            }}
-          >
-            <h3 style={{ marginTop: 0, fontSize: 16 }}>Upload Files</h3>
-            <p style={{ color: '#6b7280', fontSize: 13, margin: '0 0 8px' }}>
-              Supported: .txt, .pdf, .docx
-            </p>
-            <input
-              type="file"
-              multiple
-              accept=".txt,.pdf,.docx"
-              onChange={(e) => setFiles(e.target.files)}
-              style={{ marginBottom: 8 }}
-            />
-            <button
-              type="submit"
-              disabled={loading || !files || files.length === 0}
-              style={buttonStyle('#2563eb')}
-            >
-              {loading ? 'Uploading...' : 'Upload Files'}
-            </button>
-          </form>
-
-          <form
-            onSubmit={handleCrawl}
-            style={{
-              background: 'white',
-              padding: 16,
-              borderRadius: 8,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            }}
-          >
-            <h3 style={{ marginTop: 0, fontSize: 16 }}>Crawl Website</h3>
-            <p style={{ color: '#6b7280', fontSize: 13, margin: '0 0 8px' }}>
-              Extract content from a public website URL.
-            </p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                type="url"
-                placeholder="https://example.com/faq"
-                value={crawlUrl}
-                onChange={(e) => setCrawlUrl(e.target.value)}
-                required
-                style={inputStyle}
-              />
-              <button
-                type="submit"
-                disabled={loading || !crawlUrl.trim()}
-                style={buttonStyle('#7c3aed')}
+            <Card title="Upload Files">
+              <form
+                onSubmit={handleFileUpload}
+                className="flex flex-col gap-3"
               >
-                {loading ? 'Crawling...' : 'Crawl'}
-              </button>
-            </div>
-          </form>
-
-          <div
-            style={{
-              background: 'white',
-              padding: 16,
-              borderRadius: 8,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            }}
-          >
-            <h3 style={{ marginTop: 0, fontSize: 16 }}>Documents ({documents.length})</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {documents.length === 0 && (
-                <p style={{ color: '#6b7280', fontSize: 14 }}>
-                  No documents yet for this client.
+                <p className="m-0 text-xs text-muted">
+                  Supported: .txt, .pdf, .docx
                 </p>
-              )}
-              {documents.map((d) => (
-                <div
-                  key={d.id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: 10,
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 6,
-                  }}
+                <input
+                  type="file"
+                  multiple
+                  accept=".txt,.pdf,.docx"
+                  onChange={(e) => setFiles(e.target.files)}
+                  className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-brand-navy file:mr-3 file:rounded-md file:border-0 file:bg-page file:px-2.5 file:py-1.5 file:text-xs file:font-medium file:text-brand-navy"
+                />
+                <Button
+                  type="submit"
+                  variant="outline"
+                  disabled={loading || !files || files.length === 0}
                 >
-                  <div>
-                    <strong style={{ fontSize: 14 }}>{d.title}</strong>
-                    <div style={{ color: '#6b7280', fontSize: 12 }}>
-                      {d.contentType} • chunk {d.chunkIndex} •{' '}
-                      {new Date(d.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleDelete(d.id)}
-                    style={buttonStyle('#ef4444')}
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
-            </div>
+                  {loading ? 'Uploading...' : 'Upload Files'}
+                </Button>
+              </form>
+            </Card>
+
+            <Card title="Crawl Website">
+              <form
+                onSubmit={handleCrawl}
+                className="flex flex-col gap-3"
+              >
+                <p className="m-0 text-xs text-muted">
+                  Extract content from a public website URL.
+                </p>
+                <Input
+                  type="url"
+                  placeholder="https://example.com/faq"
+                  value={crawlUrl}
+                  onChange={(e) => setCrawlUrl(e.target.value)}
+                  required
+                />
+                <Button
+                  type="submit"
+                  variant="outline"
+                  disabled={loading || !crawlUrl.trim()}
+                >
+                  {loading ? 'Crawling...' : 'Crawl'}
+                </Button>
+              </form>
+            </Card>
           </div>
+
+          <Card title={`Documents (${documents.length})`}>
+            {documents.length === 0 ? (
+              <EmptyState
+                title="No documents yet"
+                hint="No documents yet for this client."
+              />
+            ) : (
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Title</TH>
+                    <TH>Type</TH>
+                    <TH>Chunk</TH>
+                    <TH>Added</TH>
+                    <TH />
+                  </TR>
+                </THead>
+                <tbody>
+                  {documents.map((d) => (
+                    <TR key={d.id}>
+                      <TD className="font-medium">{d.title}</TD>
+                      <TD>
+                        <Badge tone={statusTone(d.contentType)}>
+                          {d.contentType}
+                        </Badge>
+                      </TD>
+                      <TD>{d.chunkIndex}</TD>
+                      <TD>{new Date(d.createdAt).toLocaleDateString()}</TD>
+                      <TD className="text-right">
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleDelete(d.id)}
+                        >
+                          Delete
+                        </Button>
+                      </TD>
+                    </TR>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </Card>
         </div>
       )}
     </div>
