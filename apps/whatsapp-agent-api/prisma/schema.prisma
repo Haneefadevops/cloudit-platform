@@ -96,6 +96,7 @@ model Client {
   productCatalog  Product[]
   orders          Order[]
   topUpPurchases  TopUpPurchase[]
+  topUpRequests   TopUpRequest[]
 
   @@map("clients")
 }
@@ -368,4 +369,23 @@ model TopUpPurchase {
 
   @@index([clientId])
   @@map("top_up_purchases")
+}
+
+model TopUpRequest {
+  id            String   @id @default(uuid())
+  reference     String   @unique // TU-00042 — client uses it as the bank transfer narration
+  conversations Int
+  priceLkr      Float
+  status        String   @default("pending_payment") // pending_payment, slip_uploaded, approved, rejected, expired
+  slipData      Bytes? // slip image/PDF stored in the database (slips are small)
+  slipMimeType  String?
+  staffNote     String? // reject reason, shown to the client
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, status])
+  @@map("top_up_requests")
 }

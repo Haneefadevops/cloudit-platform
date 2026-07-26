@@ -47,6 +47,27 @@ interface UsageInfo {
   topUps: { id: string; credits: number; priceLkr: number; note?: string | null; createdAt: string }[];
 }
 
+interface TopUpRequest {
+  id: string;
+  reference: string;
+  conversations: number;
+  priceLkr: number;
+  status:
+    | 'pending_payment'
+    | 'slip_uploaded'
+    | 'approved'
+    | 'rejected'
+    | 'expired';
+  staffNote?: string | null;
+  createdAt: string;
+  slipMimeType?: string | null;
+}
+
+interface TopUpPackage {
+  conversations: number;
+  priceLkr: number;
+}
+
 interface ClientOption {
   id: string;
   name: string;
@@ -77,8 +98,25 @@ export default function AnalyticsPage() {
   const [customTo, setCustomTo] = useState('');
   const [appliedCustom, setAppliedCustom] = useState<{ from: string; to: string } | null>(null);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
+  const [packages, setPackages] = useState<TopUpPackage[]>([]);
+  const [bankDetails, setBankDetails] = useState('');
+  const [requests, setRequests] = useState<TopUpRequest[]>([]);
+  const [showPackages, setShowPackages] = useState(false);
+  const [confirmedRequest, setConfirmedRequest] = useState<{
+    reference: string;
+    conversations: number;
+    priceLkr: number;
+    bankDetails: string;
+  } | null>(null);
+  const [slipFiles, setSlipFiles] = useState<Record<string, File | null>>({});
+  const [message, setMessage] = useState<string | null>(null);
   const token =
     (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
+
+  const showInfo = (text: string) => {
+    setMessage(text);
+    setTimeout(() => setMessage(null), 4000);
+  };
 
   useEffect(() => {
     const user = getStoredUser();
@@ -94,6 +132,88 @@ export default function AnalyticsPage() {
       .then((list) => setClients(Array.isArray(list) ? list : []))
       .catch(() => setClients([]));
   }, []);
+
+  useEffect(() => {
+    fetch('/api/usage/packages', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setPackages(Array.isArray(data.packages) ? data.packages : []);
+        setBankDetails(data.bankDetails || '');
+      })
+      .catch(() => {});
+  }, []);
+
+  const fetchRequests = async (clientId: string) => {
+    try {
+      const res = await fetch(`/api/usage/${clientId}/topup-requests`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const list = res.ok ? await res.json() : [];
+      setRequests(Array.isArray(list) ? list : []);
+    } catch {
+      setRequests([]);
+    }
+  };
+
+  const requestTopUp = async (pkg: TopUpPackage) => {
+    if (!selectedClientId) return;
+    if (
+      !confirm(
+        `Request top-up of ${pkg.conversations} conversations for ${formatLkr(pkg.priceLkr)}?`,
+      )
+    )
+      return;
+    const res = await fetch(`/api/usage/${selectedClientId}/topup-requests`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ conversations: pkg.conversations }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showInfo(data.message || 'Failed to create top-up request');
+      return;
+    }
+    setShowPackages(false);
+    setConfirmedRequest({
+      reference: data.request.reference,
+      conversations: data.request.conversations,
+      priceLkr: data.request.priceLkr,
+      bankDetails: data.bankDetails || bankDetails,
+    });
+    fetchRequests(selectedClientId);
+  };
+
+  const uploadSlip = async (requestId: string) => {
+    const file = slipFiles[requestId];
+    if (!file) {
+      showInfo('Choose a slip image or PDF first');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(
+      `/api/usage/${selectedClientId}/topup-requests/${requestId}/slip`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      },
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      showInfo(data?.message || 'Failed to upload slip');
+      return;
+    }
+    showInfo('Slip uploaded');
+    setSlipFiles((prev) => ({ ...prev, [requestId]: null }));
+    fetchRequests(selectedClientId);
+  };
 
   useEffect(() => {
     setData(null);
@@ -115,6 +235,9 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     setUsage(null);
+    setRequests([]);
+    setShowPackages(false);
+    setConfirmedRequest(null);
     if (!selectedClientId) return;
     fetch(`/api/usage/${selectedClientId}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -122,6 +245,7 @@ export default function AnalyticsPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then(setUsage)
       .catch(() => setUsage(null));
+    fetchRequests(selectedClientId);
   }, [selectedClientId]);
 
   if (!data) {
@@ -182,9 +306,41 @@ export default function AnalyticsPage() {
     ? '#d97706'
     : '#16a34a';
 
+  const requestStatusStyle = (
+    status: TopUpRequest['status'],
+  ): { color: string; bg: string; label: string } => {
+    switch (status) {
+      case 'pending_payment':
+        return { color: '#92400e', bg: '#fef3c7', label: 'Pending payment' };
+      case 'slip_uploaded':
+        return { color: '#1d4ed8', bg: '#eff6ff', label: 'Slip uploaded' };
+      case 'approved':
+        return { color: '#15803d', bg: '#f0fdf4', label: 'Approved' };
+      case 'rejected':
+        return { color: '#b91c1c', bg: '#fef2f2', label: 'Rejected' };
+      case 'expired':
+        return { color: '#4b5563', bg: '#f3f4f6', label: 'Expired' };
+    }
+  };
+
   return (
     <div>
       <h1>Analytics</h1>
+
+      {message && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: 12,
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: 6,
+            color: '#1e40af',
+          }}
+        >
+          {message}
+        </div>
+      )}
 
       {!portal && (
         <div style={{ marginTop: 12, maxWidth: 320 }}>
@@ -326,6 +482,227 @@ export default function AnalyticsPage() {
             {usage.topUpRemaining > 0 &&
               ` • ${usage.topUpRemaining} top-up credits remaining`}
           </div>
+
+          {confirmedRequest && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: 16,
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: 6,
+              }}
+            >
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#15803d' }}>
+                Top-up request created
+              </div>
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 24,
+                  fontWeight: 700,
+                  fontFamily: 'monospace',
+                  letterSpacing: 1,
+                  color: '#111827',
+                }}
+              >
+                {confirmedRequest.reference}
+              </div>
+              <div style={{ fontSize: 13, color: '#374151', marginTop: 4 }}>
+                Use this code as the transfer narration •{' '}
+                {confirmedRequest.conversations} conversations •{' '}
+                {formatLkr(confirmedRequest.priceLkr)}
+              </div>
+              {confirmedRequest.bankDetails && (
+                <pre
+                  style={{
+                    marginTop: 8,
+                    padding: 12,
+                    background: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    whiteSpace: 'pre-wrap',
+                    fontFamily: 'inherit',
+                    color: '#374151',
+                  }}
+                >
+                  {confirmedRequest.bankDetails}
+                </pre>
+              )}
+            </div>
+          )}
+
+          <div style={{ marginTop: 12 }}>
+            <button
+              onClick={() => setShowPackages(!showPackages)}
+              style={{
+                padding: '8px 16px',
+                background:
+                  usage.remainingPct <= 0
+                    ? '#dc2626'
+                    : usage.remainingPct <= 0.2
+                    ? '#d97706'
+                    : '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              {showPackages ? 'Close package picker' : 'Request top-up'}
+            </button>
+          </div>
+
+          {showPackages && (
+            <div
+              style={{
+                marginTop: 12,
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+              }}
+            >
+              {packages.length === 0 ? (
+                <div style={{ fontSize: 13, color: '#6b7280' }}>
+                  Loading packages...
+                </div>
+              ) : (
+                packages.map((p) => (
+                  <button
+                    key={p.conversations}
+                    onClick={() => requestTopUp(p)}
+                    style={{
+                      padding: '10px 14px',
+                      background: 'white',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>
+                      {p.conversations}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6b7280' }}>
+                      conversations
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: '#2563eb',
+                        marginTop: 4,
+                      }}
+                    >
+                      {formatLkr(p.priceLkr)}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+
+          {requests.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                Top-up requests
+              </div>
+              {requests.map((r) => {
+                const st = requestStatusStyle(r.status);
+                return (
+                  <div
+                    key={r.id}
+                    style={{
+                      fontSize: 13,
+                      color: '#374151',
+                      padding: '8px 0',
+                      borderTop: '1px solid #f3f4f6',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                        {r.reference}
+                      </span>
+                      <span>
+                        {r.conversations} conversations •{' '}
+                        {formatLkr(r.priceLkr)}
+                      </span>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '2px 8px',
+                          borderRadius: 10,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: st.color,
+                          background: st.bg,
+                        }}
+                      >
+                        {st.label}
+                      </span>
+                      <span style={{ color: '#9ca3af', fontSize: 12 }}>
+                        {new Date(r.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {r.status === 'rejected' && r.staffNote && (
+                      <div
+                        style={{ marginTop: 4, fontSize: 12, color: '#b91c1c' }}
+                      >
+                        Reason: {r.staffNote}
+                      </div>
+                    )}
+                    {r.status === 'pending_payment' && (
+                      <div
+                        style={{
+                          marginTop: 6,
+                          display: 'flex',
+                          gap: 8,
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={(e) =>
+                            setSlipFiles((prev) => ({
+                              ...prev,
+                              [r.id]: e.target.files?.[0] || null,
+                            }))
+                          }
+                          style={{ fontSize: 12 }}
+                        />
+                        <button
+                          onClick={() => uploadSlip(r.id)}
+                          style={{
+                            padding: '6px 12px',
+                            background: '#2563eb',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            fontSize: 13,
+                          }}
+                        >
+                          Upload slip
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {usage.topUps && usage.topUps.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>

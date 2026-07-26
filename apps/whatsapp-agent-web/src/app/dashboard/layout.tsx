@@ -92,6 +92,7 @@ export default function DashboardLayout({
               { href: '/dashboard/orders', label: 'Orders' },
             ]
           : []),
+        { href: '/dashboard/topups', label: 'Top-ups' },
         { href: '/dashboard/analytics', label: 'Analytics' },
         { href: '/dashboard/playground', label: 'Playground' },
       ];

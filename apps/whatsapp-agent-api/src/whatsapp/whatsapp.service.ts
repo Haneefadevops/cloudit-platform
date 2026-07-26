@@ -13,6 +13,13 @@ import type { BookingActionResult } from '../bookings/booking-actions.service';
 import { OrderActionsService } from '../orders/order-actions.service';
 import type { OrderActionResult } from '../orders/order-actions.service';
 import { UsageService } from '../usage/usage.service';
+
+/** Max AI replies per conversation before handing off to the human team. */
+export const AI_REPLY_LIMIT = 50;
+
+/** Polite note sent when the reply cap is reached. */
+export const AI_REPLY_LIMIT_MESSAGE =
+  "I've noted everything so far; let me get our team to continue with you.";
 import { MediaService, IncomingMediaType } from './media.service';
 
 interface MetaMedia {
@@ -263,6 +270,35 @@ export class WhatsAppService {
       });
       this.logger.log(
         `Client ${client.id} AI allowance exhausted; conversation ${conversation.id} handed off`,
+      );
+      return;
+    }
+
+    // 5.6 Abuse guard: cap AI replies per conversation so worst-case token
+    // spend is bounded regardless of the per-conversation pricing.
+    const botReplyCount = await this.prisma.message.count({
+      where: { conversationId: conversation.id, senderType: 'bot' },
+    });
+    if (botReplyCount >= AI_REPLY_LIMIT) {
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderType: 'bot',
+          content: AI_REPLY_LIMIT_MESSAGE,
+        },
+      });
+      await this.senderService.sendMessage({
+        client,
+        to: from,
+        message: AI_REPLY_LIMIT_MESSAGE,
+      });
+      await this.conversationsService.handoffToHuman({
+        conversationId: conversation.id,
+        triggeredBy: 'system',
+        reason: `Conversation reached the ${AI_REPLY_LIMIT}-reply AI limit`,
+      });
+      this.logger.log(
+        `Conversation ${conversation.id} reached the ${AI_REPLY_LIMIT}-reply AI limit; handed off`,
       );
       return;
     }

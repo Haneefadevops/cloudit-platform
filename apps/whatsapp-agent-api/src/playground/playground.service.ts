@@ -5,6 +5,10 @@ import { KnowledgeBaseService } from '../knowledge-base/knowledge-base.service';
 import { BookingActionsService } from '../bookings/booking-actions.service';
 import { OrderActionsService } from '../orders/order-actions.service';
 import { UsageService } from '../usage/usage.service';
+import {
+  AI_REPLY_LIMIT,
+  AI_REPLY_LIMIT_MESSAGE,
+} from '../whatsapp/whatsapp.service';
 import { PlaygroundMessageDto } from './dto/playground-message.dto';
 
 const BOOKING_ACTION_TYPES = [
@@ -60,6 +64,26 @@ export class PlaygroundService {
         wallet,
         handoffRecommended: true,
         handoffReason: 'AI allowance exhausted',
+        action: null,
+        actionResult: null,
+        sources: [],
+        usage: null,
+      };
+    }
+
+    // Abuse guard (playground variant): the playground is stateless, so the
+    // cap counts assistant replies in the supplied history — staff can demo
+    // the 50-reply handoff by pasting a long history.
+    const historyBotReplies = (dto.history ?? []).filter(
+      (h) => h.role === 'assistant',
+    ).length;
+    if (historyBotReplies >= AI_REPLY_LIMIT) {
+      return {
+        reply: AI_REPLY_LIMIT_MESSAGE,
+        paused: false,
+        wallet,
+        handoffRecommended: true,
+        handoffReason: `Conversation reached the ${AI_REPLY_LIMIT}-reply AI limit`,
         action: null,
         actionResult: null,
         sources: [],

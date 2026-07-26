@@ -503,6 +503,79 @@ so staff can demo it).
    orders only.
 6. Portal (client login) sees NO token/cost figures anywhere.
 
+### Phase 7.5 — Top-up Packages & Request Flow
+
+Context: Phase 7 built the wallet (allowance + top-up credits) with
+staff-applied top-ups. This phase makes top-ups client-initiated: the client
+requests a package from their portal, pays by bank transfer with a slip, and
+staff approves. Payments stay manual (bank transfer) — PayHere self-service
+is a separate later phase and must be able to replace ONLY the payment leg
+without changing packages, prices, statuses, or portal UI.
+
+**Confirmed wallet rules (restated for clarity)**
+
+- Counting unit: 1 conversation (start to end, unlimited messages) = 1 credit.
+- Consumption order: monthly plan allowance FIRST (it expires), top-up
+  credits SECOND (they never expire).
+- Monthly allowance resets each period; top-up credits roll over until used.
+- NEW abuse guard: after 50 AI replies in a single conversation, the AI
+  stops and hands off to the human team with a polite note ("I've noted
+  everything so far; let me get our team to continue with you"). This caps
+  worst-case token spend per conversation (~50 replies) regardless of the
+  per-conversation pricing.
+
+**Packages (flat LKR 5 per conversation — do not add volume discounts)**
+
+| Package (conversations) | Price (LKR) |
+|---|---|
+| 300 | 1,500 |
+| 500 | 2,500 |
+| 700 | 3,500 |
+| 1,000 | 5,000 |
+| 1,500 | 7,500 |
+| 2,000 | 10,000 |
+
+**Request flow**
+
+1. Portal usage card gets a "Request top-up" button (always visible,
+   emphasized when the bar is yellow/red). Client picks one of the six
+   packages, sees the price, confirms.
+2. System creates a `TopUpRequest` (clientId, package conversations, price,
+   unique reference code like TU-00042, status) and shows the client:
+   company bank account details (staff-configurable, e.g. an env var or a
+   settings field — NOT hardcoded per client) + the reference code with
+   instructions to use it as the transfer narration.
+3. Status flow: `pending_payment` → `slip_uploaded` → `approved` |
+   `rejected` | `expired`.
+4. Slip upload in the portal (image or PDF, stored in the database — slips
+   are small; no external storage in this phase).
+5. Staff WhatsApp alerts (reuse the existing WhatsApp sender to a staff
+   alert number, e.g. STAFF_ALERT_WHATSAPP env or the admin phone):
+   - On request created: "Top-up request TU-00042: {client} — 500
+     conversations, LKR 2,500. Awaiting payment."
+   - On slip uploaded: "Top-up request TU-00042: slip uploaded — review in
+     dashboard."
+6. Staff dashboard (Clients page or a requests section): list requests with
+   slip viewer. Approve → credits added to topUpCredits, status approved,
+   client's portal balance updates immediately. Reject → requires a short
+   note shown to the client (e.g. "slip unreadable — please re-upload").
+7. Auto-expire: requests still in pending_payment after 48 hours become
+   expired (client can simply create a new one).
+8. Portal shows the client's own request history with statuses, so they
+   always know where their payment stands.
+
+**Acceptance test**
+
+1. Portal: request a 500-package → reference code + bank details shown;
+   staff WhatsApp alert received.
+2. Upload a slip → status slip_uploaded; second staff alert received.
+3. Staff approves → topUpCredits increases by 500; portal balance and
+   history update; AI resumes if it was paused.
+4. Staff rejects a second request with a note → client sees the note.
+5. A pending_payment request older than 48h shows as expired.
+6. In one conversation, after 50 AI replies the next customer message is
+   handed off to a human (verify via playground).
+
 ## Deferred: Travel module (do NOT build now)
 
 Discussed 2026-07-23 for a prospective travel-agent client (flight ticketing +
