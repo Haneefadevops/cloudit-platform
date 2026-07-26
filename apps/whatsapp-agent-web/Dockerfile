@@ -6,6 +6,8 @@ COPY package*.json ./
 COPY tsconfig.json ./
 COPY next.config.js ./
 COPY next-env.d.ts ./
+COPY tailwind.config.js ./
+COPY postcss.config.js ./
 COPY src ./src
 
 # These must be available at build time so Next.js can inline them for rewrites
