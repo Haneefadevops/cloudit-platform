@@ -32,6 +32,7 @@ ENV PORT=3011
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
+COPY public ./public
 
 EXPOSE 3011
 
