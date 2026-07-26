@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { isPortalUser } from '../portal';
+import { apiFetch } from '@/lib/api';
 import {
   Badge,
   Button,
@@ -48,7 +49,7 @@ export default function KnowledgeBasePage() {
 
   const fetchClients = async () => {
     if (!token) return;
-    const res = await fetch('/api/clients', {
+    const res = await apiFetch('/api/clients', {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
@@ -57,7 +58,7 @@ export default function KnowledgeBasePage() {
 
   const fetchDocuments = async (clientId: string) => {
     if (!clientId) return;
-    const res = await fetch(`/api/knowledge-base/${clientId}`, {
+    const res = await apiFetch(`/api/knowledge-base/${clientId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
@@ -85,7 +86,7 @@ export default function KnowledgeBasePage() {
     if (!selectedId || !title || !content) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/knowledge-base/${selectedId}`, {
+      const res = await apiFetch(`/api/knowledge-base/${selectedId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -111,7 +112,7 @@ export default function KnowledgeBasePage() {
     if (!selectedId || !crawlUrl.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/knowledge-base/${selectedId}/crawl`, {
+      const res = await apiFetch(`/api/knowledge-base/${selectedId}/crawl`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -144,7 +145,7 @@ export default function KnowledgeBasePage() {
       for (let i = 0; i < files.length; i++) {
         formData.append('files', files[i]);
       }
-      const res = await fetch(`/api/knowledge-base/${selectedId}/upload`, {
+      const res = await apiFetch(`/api/knowledge-base/${selectedId}/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -163,7 +164,7 @@ export default function KnowledgeBasePage() {
 
   const handleDelete = async (documentId: string) => {
     if (!confirm('Are you sure you want to delete this document?')) return;
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/knowledge-base/${selectedId}/${documentId}`,
       {
         method: 'DELETE',

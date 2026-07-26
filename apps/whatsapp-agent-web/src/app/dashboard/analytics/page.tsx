@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getStoredUser, isPortalUser } from '../portal';
+import { apiFetch } from '@/lib/api';
 import {
   Button,
   Card,
@@ -137,7 +138,7 @@ export default function AnalyticsPage() {
       if (user?.clientId) setSelectedClientId(user.clientId);
       return;
     }
-    fetch('/api/clients', {
+    apiFetch('/api/clients', {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
@@ -146,7 +147,7 @@ export default function AnalyticsPage() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/usage/packages', {
+    apiFetch('/api/usage/packages', {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : null))
@@ -160,7 +161,7 @@ export default function AnalyticsPage() {
 
   const fetchRequests = async (clientId: string) => {
     try {
-      const res = await fetch(`/api/usage/${clientId}/topup-requests`, {
+      const res = await apiFetch(`/api/usage/${clientId}/topup-requests`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const list = res.ok ? await res.json() : [];
@@ -178,7 +179,7 @@ export default function AnalyticsPage() {
       )
     )
       return;
-    const res = await fetch(`/api/usage/${selectedClientId}/topup-requests`, {
+    const res = await apiFetch(`/api/usage/${selectedClientId}/topup-requests`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -209,7 +210,7 @@ export default function AnalyticsPage() {
     }
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/usage/${selectedClientId}/topup-requests/${requestId}/slip`,
       {
         method: 'POST',
@@ -238,7 +239,7 @@ export default function AnalyticsPage() {
       params.set('range', range);
     }
     const qs = params.toString();
-    fetch(`/api/analytics/overview${qs ? `?${qs}` : ''}`, {
+    apiFetch(`/api/analytics/overview${qs ? `?${qs}` : ''}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
@@ -251,7 +252,7 @@ export default function AnalyticsPage() {
     setShowPackages(false);
     setConfirmedRequest(null);
     if (!selectedClientId) return;
-    fetch(`/api/usage/${selectedClientId}`, {
+    apiFetch(`/api/usage/${selectedClientId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : null))

@@ -17,6 +17,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { isPortalUser } from '../portal';
+import { apiFetch } from '@/lib/api';
 
 interface Client {
   id: string;
@@ -72,7 +73,7 @@ export default function CatalogPage() {
   };
 
   const fetchClients = async () => {
-    const res = await fetch('/api/clients', { headers });
+    const res = await apiFetch('/api/clients', { headers });
     const list = await res.json();
     const arr = Array.isArray(list) ? list : [];
     setClients(arr);
@@ -81,7 +82,7 @@ export default function CatalogPage() {
 
   const fetchProducts = async (clientId: string) => {
     if (!clientId) return;
-    const res = await fetch(`/api/orders/${clientId}/products`, { headers });
+    const res = await apiFetch(`/api/orders/${clientId}/products`, { headers });
     const list = await res.json();
     setProducts(Array.isArray(list) ? list : []);
   };
@@ -143,7 +144,7 @@ export default function CatalogPage() {
     const url = editingId
       ? `/api/orders/${selectedId}/products/${editingId}`
       : `/api/orders/${selectedId}/products`;
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: editingId ? 'PUT' : 'POST',
       headers,
       body: JSON.stringify(payload),
@@ -177,7 +178,7 @@ export default function CatalogPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this product?')) return;
-    await fetch(`/api/orders/${selectedId}/products/${id}`, {
+    await apiFetch(`/api/orders/${selectedId}/products/${id}`, {
       method: 'DELETE',
       headers,
     });

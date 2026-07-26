@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { getStoredUser, isPortalUser, StoredUser } from './portal';
 import { ToastProvider } from '@/components/ui';
+import { apiFetch } from '@/lib/api';
 
 interface PortalClient {
   id: string;
@@ -146,7 +147,7 @@ export default function DashboardLayout({
     const stored = getStoredUser();
     setUser(stored);
     if (isPortalUser(stored)) {
-      fetch('/api/clients/me', {
+      apiFetch('/api/clients/me', {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((res) => (res.ok ? res.json() : null))
@@ -163,7 +164,7 @@ export default function DashboardLayout({
         });
       return;
     }
-    fetch('/api/clients', {
+    apiFetch('/api/clients', {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())

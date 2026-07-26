@@ -18,6 +18,7 @@ import {
   useToast,
   type BadgeTone,
 } from '@/components/ui';
+import { apiFetch } from '@/lib/api';
 
 interface Client {
   id: string;
@@ -143,7 +144,7 @@ export default function BookingsPage() {
   };
 
   const fetchClients = async () => {
-    const res = await fetch('/api/clients', { headers });
+    const res = await apiFetch('/api/clients', { headers });
     const list = await res.json();
     const arr = Array.isArray(list) ? list : [];
     setClients(arr);
@@ -159,7 +160,7 @@ export default function BookingsPage() {
       if (fromDate) params.set('from', fromDate);
       if (toDate) params.set('to', toDate);
       const qs = params.toString();
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/bookings/${clientId}/bookings${qs ? `?${qs}` : ''}`,
         { headers },
       );
@@ -179,7 +180,7 @@ export default function BookingsPage() {
       params.set('from', start.toISOString());
       // End of Sunday (inclusive) — backend applies `to` as lte.
       params.set('to', addDays(start, 7).toISOString());
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/bookings/${clientId}/bookings?${params.toString()}`,
         { headers },
       );
@@ -230,7 +231,7 @@ export default function BookingsPage() {
 
   const updateStatus = async (booking: Booking, status: BookingStatus) => {
     if (!selectedId) return;
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/bookings/${selectedId}/bookings/${booking.id}`,
       {
         method: 'PUT',

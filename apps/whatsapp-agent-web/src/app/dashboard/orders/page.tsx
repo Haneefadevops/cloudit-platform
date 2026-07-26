@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getStoredUser, isPortalUser } from '../portal';
+import { apiFetch } from '@/lib/api';
 import {
   Badge,
   Button,
@@ -100,7 +101,7 @@ export default function OrdersPage() {
   };
 
   const fetchClients = async () => {
-    const res = await fetch('/api/clients', { headers });
+    const res = await apiFetch('/api/clients', { headers });
     const list = await res.json();
     const arr = Array.isArray(list) ? list : [];
     setClients(arr);
@@ -112,7 +113,7 @@ export default function OrdersPage() {
     setLoading(true);
     try {
       const qs = statusFilter !== 'all' ? `?status=${statusFilter}` : '';
-      const res = await fetch(`/api/orders/${clientId}/orders${qs}`, {
+      const res = await apiFetch(`/api/orders/${clientId}/orders${qs}`, {
         headers,
       });
       const list = await res.json();
@@ -142,7 +143,7 @@ export default function OrdersPage() {
 
   const updateStatus = async (order: Order, status: OrderStatus) => {
     if (!selectedId) return;
-    const res = await fetch(`/api/orders/${selectedId}/orders/${order.id}`, {
+    const res = await apiFetch(`/api/orders/${selectedId}/orders/${order.id}`, {
       method: 'PUT',
       headers,
       body: JSON.stringify({ status }),

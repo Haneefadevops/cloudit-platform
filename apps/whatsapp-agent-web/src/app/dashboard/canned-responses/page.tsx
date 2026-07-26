@@ -16,6 +16,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { isPortalUser } from '../portal';
+import { apiFetch } from '@/lib/api';
 
 interface Client {
   id: string;
@@ -46,7 +47,7 @@ export default function CannedResponsesPage() {
   };
 
   const fetchClients = async () => {
-    const res = await fetch('/api/clients', { headers });
+    const res = await apiFetch('/api/clients', { headers });
     const list = await res.json();
     const arr = Array.isArray(list) ? list : [];
     setClients(arr);
@@ -55,7 +56,7 @@ export default function CannedResponsesPage() {
 
   const fetchResponses = async (clientId: string) => {
     if (!clientId) return;
-    const res = await fetch(`/api/canned-responses/${clientId}`, { headers });
+    const res = await apiFetch(`/api/canned-responses/${clientId}`, { headers });
     const list = await res.json();
     setResponses(Array.isArray(list) ? list : []);
   };
@@ -85,7 +86,7 @@ export default function CannedResponsesPage() {
     const url = editingId
       ? `/api/canned-responses/${selectedId}/${editingId}`
       : `/api/canned-responses/${selectedId}`;
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: editingId ? 'PUT' : 'POST',
       headers,
       body: JSON.stringify(form),
@@ -108,7 +109,7 @@ export default function CannedResponsesPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this template?')) return;
-    await fetch(`/api/canned-responses/${selectedId}/${id}`, {
+    await apiFetch(`/api/canned-responses/${selectedId}/${id}`, {
       method: 'DELETE',
       headers,
     });

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { isPortalUser } from '../portal';
+import { apiFetch } from '@/lib/api';
 import {
   Badge,
   Button,
@@ -148,7 +149,7 @@ export default function ClientsPage() {
 
   const fetchClients = async () => {
     if (!token) return [];
-    const res = await fetch('/api/clients', {
+    const res = await apiFetch('/api/clients', {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
@@ -160,7 +161,7 @@ export default function ClientsPage() {
 
   const fetchUsage = async (clientId: string) => {
     try {
-      const res = await fetch(`/api/usage/${clientId}`, {
+      const res = await apiFetch(`/api/usage/${clientId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = res.ok ? await res.json() : null;
@@ -171,7 +172,7 @@ export default function ClientsPage() {
   };
 
   const handleTopUp = async (clientId: string) => {
-    const res = await fetch(`/api/usage/${clientId}/topups`, {
+    const res = await apiFetch(`/api/usage/${clientId}/topups`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -200,7 +201,7 @@ export default function ClientsPage() {
   };
 
   const fetchStatus = async (clientId: string) => {
-    const res = await fetch(`/api/clients/${clientId}/chatwoot-status`, {
+    const res = await apiFetch(`/api/clients/${clientId}/chatwoot-status`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
@@ -309,7 +310,7 @@ export default function ClientsPage() {
     const method = editing ? 'PUT' : 'POST';
 
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -324,7 +325,7 @@ export default function ClientsPage() {
       }
 
       if (!editing && form.autoSetup) {
-        const setupRes = await fetch(
+        const setupRes = await apiFetch(
           `/api/clients/${client.id}/chatwoot-setup`,
           {
             method: 'POST',
@@ -398,7 +399,7 @@ export default function ClientsPage() {
   };
 
   const fetchPortalUsers = async (clientId: string) => {
-    const res = await fetch(`/api/clients/${clientId}/portal-users`, {
+    const res = await apiFetch(`/api/clients/${clientId}/portal-users`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
@@ -411,7 +412,7 @@ export default function ClientsPage() {
       toast('Email and temporary password are required', 'error');
       return;
     }
-    const res = await fetch(`/api/clients/${editing.id}/portal-users`, {
+    const res = await apiFetch(`/api/clients/${editing.id}/portal-users`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -437,7 +438,7 @@ export default function ClientsPage() {
     if (!editing) return;
     const password = prompt(`New password for ${user.email}:`);
     if (!password) return;
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/clients/${editing.id}/portal-users/${user.id}`,
       {
         method: 'PUT',
@@ -460,7 +461,7 @@ export default function ClientsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this client?')) return;
-    const res = await fetch(`/api/clients/${id}`, {
+    const res = await apiFetch(`/api/clients/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -475,7 +476,7 @@ export default function ClientsPage() {
 
   const toggleStatus = async (client: Client) => {
     const newStatus = client.status === 'active' ? 'paused' : 'active';
-    const res = await fetch(`/api/clients/${client.id}`, {
+    const res = await apiFetch(`/api/clients/${client.id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -495,7 +496,7 @@ export default function ClientsPage() {
   const setupChatwoot = async (clientId: string) => {
     setLoading(`setup-${clientId}`);
     try {
-      const res = await fetch(`/api/clients/${clientId}/chatwoot-setup`, {
+      const res = await apiFetch(`/api/clients/${clientId}/chatwoot-setup`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });

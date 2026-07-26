@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { isPortalUser } from '../portal';
+import { apiFetch } from '@/lib/api';
 import {
   Badge,
   Button,
@@ -84,7 +85,7 @@ export default function PlaygroundPage() {
 
   const fetchClients = async () => {
     if (!token) return;
-    const res = await fetch('/api/clients', {
+    const res = await apiFetch('/api/clients', {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
@@ -139,7 +140,7 @@ export default function PlaygroundPage() {
     setResult(null);
 
     try {
-      const res = await fetch(`/api/playground/${selectedId}/message`, {
+      const res = await apiFetch(`/api/playground/${selectedId}/message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

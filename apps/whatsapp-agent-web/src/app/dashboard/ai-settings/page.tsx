@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { isPortalUser } from '../portal';
+import { apiFetch } from '@/lib/api';
 import {
   Button,
   Card,
@@ -64,7 +65,7 @@ function AiSettingsForm() {
 
   const fetchClients = async () => {
     if (!token) return;
-    const res = await fetch('/api/clients', {
+    const res = await apiFetch('/api/clients', {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
@@ -133,7 +134,7 @@ function AiSettingsForm() {
     };
 
     try {
-      const res = await fetch(`/api/clients/${selectedId}`, {
+      const res = await apiFetch(`/api/clients/${selectedId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

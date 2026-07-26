@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { isPortalUser } from '../portal';
+import { apiFetch } from '@/lib/api';
 import {
   Button,
   Card,
@@ -71,7 +72,7 @@ export default function TopupsPage() {
   const fetchRequests = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/usage/topup-requests', { headers });
+      const res = await apiFetch('/api/usage/topup-requests', { headers });
       const list = await res.json();
       setRequests(Array.isArray(list) ? list : []);
     } finally {
@@ -92,7 +93,7 @@ export default function TopupsPage() {
   }, []);
 
   const viewSlip = async (request: TopUpRequest) => {
-    const res = await fetch(`/api/usage/topup-requests/${request.id}/slip`, {
+    const res = await apiFetch(`/api/usage/topup-requests/${request.id}/slip`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) {
@@ -112,7 +113,7 @@ export default function TopupsPage() {
       )
     )
       return;
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/usage/topup-requests/${request.id}/approve`,
       { method: 'POST', headers },
     );
@@ -128,7 +129,7 @@ export default function TopupsPage() {
   const reject = async (request: TopUpRequest) => {
     const note = prompt(`Rejection note for ${request.reference} (required):`);
     if (!note || !note.trim()) return;
-    const res = await fetch(`/api/usage/topup-requests/${request.id}/reject`, {
+    const res = await apiFetch(`/api/usage/topup-requests/${request.id}/reject`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ note: note.trim() }),

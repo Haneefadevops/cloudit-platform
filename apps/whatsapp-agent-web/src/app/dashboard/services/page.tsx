@@ -18,6 +18,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { isPortalUser } from '../portal';
+import { apiFetch } from '@/lib/api';
 
 interface Client {
   id: string;
@@ -104,7 +105,7 @@ export default function ServicesPage() {
   };
 
   const fetchClients = async () => {
-    const res = await fetch('/api/clients', { headers });
+    const res = await apiFetch('/api/clients', { headers });
     const list = await res.json();
     const arr = Array.isArray(list) ? list : [];
     setClients(arr);
@@ -113,14 +114,14 @@ export default function ServicesPage() {
 
   const fetchServices = async (clientId: string) => {
     if (!clientId) return;
-    const res = await fetch(`/api/bookings/${clientId}/services`, { headers });
+    const res = await apiFetch(`/api/bookings/${clientId}/services`, { headers });
     const list = await res.json();
     setServices(Array.isArray(list) ? list : []);
   };
 
   const fetchStaff = async (clientId: string) => {
     if (!clientId) return;
-    const res = await fetch(`/api/bookings/${clientId}/staff`, { headers });
+    const res = await apiFetch(`/api/bookings/${clientId}/staff`, { headers });
     const list = await res.json();
     setStaff(Array.isArray(list) ? list : []);
   };
@@ -176,7 +177,7 @@ export default function ServicesPage() {
     const url = editingServiceId
       ? `/api/bookings/${selectedId}/services/${editingServiceId}`
       : `/api/bookings/${selectedId}/services`;
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: editingServiceId ? 'PUT' : 'POST',
       headers,
       body: JSON.stringify(payload),
@@ -215,7 +216,7 @@ export default function ServicesPage() {
 
   const handleServiceDelete = async (id: string) => {
     if (!confirm('Delete this service?')) return;
-    await fetch(`/api/bookings/${selectedId}/services/${id}`, {
+    await apiFetch(`/api/bookings/${selectedId}/services/${id}`, {
       method: 'DELETE',
       headers,
     });
@@ -223,7 +224,7 @@ export default function ServicesPage() {
   };
 
   const toggleServiceActive = async (s: Service) => {
-    await fetch(`/api/bookings/${selectedId}/services/${s.id}`, {
+    await apiFetch(`/api/bookings/${selectedId}/services/${s.id}`, {
       method: 'PUT',
       headers,
       body: JSON.stringify({ active: !s.active }),
@@ -263,7 +264,7 @@ export default function ServicesPage() {
     const url = editingStaffId
       ? `/api/bookings/${selectedId}/staff/${editingStaffId}`
       : `/api/bookings/${selectedId}/staff`;
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: editingStaffId ? 'PUT' : 'POST',
       headers,
       body: JSON.stringify(payload),
@@ -299,7 +300,7 @@ export default function ServicesPage() {
 
   const handleStaffDelete = async (id: string) => {
     if (!confirm('Delete this staff member?')) return;
-    await fetch(`/api/bookings/${selectedId}/staff/${id}`, {
+    await apiFetch(`/api/bookings/${selectedId}/staff/${id}`, {
       method: 'DELETE',
       headers,
     });
@@ -307,7 +308,7 @@ export default function ServicesPage() {
   };
 
   const toggleStaffActive = async (s: Staff) => {
-    await fetch(`/api/bookings/${selectedId}/staff/${s.id}`, {
+    await apiFetch(`/api/bookings/${selectedId}/staff/${s.id}`, {
       method: 'PUT',
       headers,
       body: JSON.stringify({ active: !s.active }),
