@@ -55,9 +55,11 @@ export class WhatsAppController {
     @Headers('x-hub-signature-256') signature: string,
     @RawBody() rawBody: Buffer,
   ): Promise<{ status: string }> {
+    // Reject forged webhooks before any processing. Thrown outside the
+    // try/catch below so the 401 reaches Meta instead of a swallowed 200.
+    this.whatsappService.verifySignature(rawBody, signature);
+
     try {
-      // Optional: verify Meta signature for security
-      // this.whatsappService.verifySignature(rawBody, signature);
       await this.whatsappService.handleIncomingWebhook(payload);
 
       // Track the most recent webhook timestamp per phone number ID for status indicators

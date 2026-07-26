@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService } from '../ai/ai.service';
 import { ConversationsService } from '../conversations/conversations.service';
@@ -78,6 +79,41 @@ export class WhatsAppService {
     private readonly usageService: UsageService,
     private readonly mediaService: MediaService,
   ) {}
+
+  /**
+   * Verifies Meta's `x-hub-signature-256` header against the raw request
+   * body using the app secret (HMAC-SHA256, timing-safe compare).
+   *
+   * Throws 401 when the signature is missing or invalid. When
+   * META_APP_SECRET is not configured the check is skipped with a loud
+   * warning — this keeps the webhook alive during rollout, but the secret
+   * MUST be set in production or anyone can POST fabricated messages.
+   */
+  verifySignature(rawBody: Buffer | undefined, signature: string | undefined): void {
+    const appSecret = this.configService.get<string>('META_APP_SECRET');
+    if (!appSecret) {
+      this.logger.warn(
+        'META_APP_SECRET is not set — skipping webhook signature verification. Set it to secure the webhook.',
+      );
+      return;
+    }
+
+    if (!signature || !rawBody) {
+      throw new UnauthorizedException('Missing webhook signature');
+    }
+
+    const expected =
+      'sha256=' + createHmac('sha256', appSecret).update(rawBody).digest('hex');
+
+    const received = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expected);
+    if (
+      received.length !== expectedBuffer.length ||
+      !timingSafeEqual(received, expectedBuffer)
+    ) {
+      throw new UnauthorizedException('Invalid webhook signature');
+    }
+  }
 
   async handleIncomingWebhook(payload: unknown): Promise<void> {
     const entries = (payload as { entry?: MetaEntry[] }).entry || [];

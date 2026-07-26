@@ -3,6 +3,8 @@ import {
   AI_REPLY_LIMIT,
   AI_REPLY_LIMIT_MESSAGE,
 } from './whatsapp.service';
+import { UnauthorizedException } from '@nestjs/common';
+import { createHmac } from 'crypto';
 
 const CLIENT = {
   id: 'client-1',
@@ -140,5 +142,67 @@ describe('WhatsAppService 50-reply abuse cap', () => {
       expect.objectContaining({ message: 'AI reply' }),
     );
     expect(conversationsService.handoffToHuman).not.toHaveBeenCalled();
+  });
+});
+
+describe('WhatsAppService.verifySignature', () => {
+  const APP_SECRET = 'test-app-secret';
+
+  function serviceWithSecret(secret?: string) {
+    const config = { get: (k: string) => (k === 'META_APP_SECRET' ? secret : undefined) };
+    return new WhatsAppService(
+      config as never,
+      {} as never, // prisma
+      {} as never, // ai
+      {} as never, // conversations
+      {} as never, // customers
+      {} as never, // clients
+      {} as never, // sender
+      {} as never, // chatwoot
+      {} as never, // knowledgeBase
+      {} as never, // bookingActions
+      {} as never, // orderActions
+      {} as never, // usage
+      {} as never, // media
+    );
+  }
+
+  function sign(body: string, secret: string) {
+    return 'sha256=' + createHmac('sha256', secret).update(body).digest('hex');
+  }
+
+  const rawBody = Buffer.from('{"entry":[]}');
+
+  it('accepts a valid x-hub-signature-256', () => {
+    const service = serviceWithSecret(APP_SECRET);
+    expect(() =>
+      service.verifySignature(rawBody, sign(rawBody.toString(), APP_SECRET)),
+    ).not.toThrow();
+  });
+
+  it('rejects an invalid signature with 401', () => {
+    const service = serviceWithSecret(APP_SECRET);
+    expect(() =>
+      service.verifySignature(rawBody, sign(rawBody.toString(), 'wrong-secret')),
+    ).toThrow(UnauthorizedException);
+  });
+
+  it('rejects a missing signature with 401', () => {
+    const service = serviceWithSecret(APP_SECRET);
+    expect(() => service.verifySignature(rawBody, undefined)).toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it('rejects a malformed (non-hex) signature with 401', () => {
+    const service = serviceWithSecret(APP_SECRET);
+    expect(() => service.verifySignature(rawBody, 'sha256=not-hex')).toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it('skips verification with a warning when META_APP_SECRET is not set', () => {
+    const service = serviceWithSecret(undefined);
+    expect(() => service.verifySignature(rawBody, undefined)).not.toThrow();
   });
 });
