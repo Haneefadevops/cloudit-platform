@@ -30,7 +30,7 @@ function setup(options: {
     handoffLog: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     message: { create: jest.fn().mockResolvedValue({}) },
   };
-  const sender = { sendMessage: jest.fn().mockResolvedValue(undefined) };
+  const sender = { sendWithTemplateFallback: jest.fn().mockResolvedValue(undefined) };
   const controller = new ChatwootController(
     {} as never,
     sender as never,
@@ -54,8 +54,8 @@ describe('ChatwootController resolve / CSAT guard', () => {
       where: { id: 'conv-1', status: { not: 'resolved' } },
       data: expect.objectContaining({ status: 'resolved' }),
     });
-    expect(sender.sendMessage).toHaveBeenCalledTimes(1);
-    expect(sender.sendMessage).toHaveBeenCalledWith(
+    expect(sender.sendWithTemplateFallback).toHaveBeenCalledTimes(1);
+    expect(sender.sendWithTemplateFallback).toHaveBeenCalledWith(
       expect.objectContaining({
         to: '+94771234567',
         message: 'Rate us 1-5',
@@ -72,7 +72,7 @@ describe('ChatwootController resolve / CSAT guard', () => {
 
     await controller.handleWebhook(RESOLVE_EVENT);
 
-    expect(sender.sendMessage).not.toHaveBeenCalled();
+    expect(sender.sendWithTemplateFallback).not.toHaveBeenCalled();
     expect(prisma.conversation.update).not.toHaveBeenCalled();
   });
 
@@ -84,7 +84,7 @@ describe('ChatwootController resolve / CSAT guard', () => {
     await controller.handleWebhook(RESOLVE_EVENT);
 
     expect(prisma.conversation.updateMany).not.toHaveBeenCalled();
-    expect(sender.sendMessage).not.toHaveBeenCalled();
+    expect(sender.sendWithTemplateFallback).not.toHaveBeenCalled();
   });
 
   it('does not resend CSAT when a rating request is already pending', async () => {
@@ -96,7 +96,7 @@ describe('ChatwootController resolve / CSAT guard', () => {
 
     // Resolve bookkeeping still happens, but no second CSAT request.
     expect(prisma.conversation.updateMany).toHaveBeenCalled();
-    expect(sender.sendMessage).not.toHaveBeenCalled();
+    expect(sender.sendWithTemplateFallback).not.toHaveBeenCalled();
   });
 
   it('does not send CSAT when the client has it disabled', async () => {
@@ -109,6 +109,6 @@ describe('ChatwootController resolve / CSAT guard', () => {
 
     await controller.handleWebhook(RESOLVE_EVENT);
 
-    expect(sender.sendMessage).not.toHaveBeenCalled();
+    expect(sender.sendWithTemplateFallback).not.toHaveBeenCalled();
   });
 });

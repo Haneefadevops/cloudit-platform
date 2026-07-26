@@ -54,7 +54,7 @@ function setup(options: {
         Promise.all(promises),
       ),
   };
-  const sender = { sendMessage: jest.fn().mockResolvedValue(undefined) };
+  const sender = { sendWithTemplateFallback: jest.fn().mockResolvedValue(undefined) };
   const config = {
     get: (key: string) =>
       key === 'STAFF_ALERT_WHATSAPP'
@@ -135,13 +135,13 @@ describe('TopUpRequestsService packages & reference codes', () => {
     const { sender, service } = setup({ staffAlertNumber: '+94770000001' });
     await service.createRequest('client-1', 500);
 
-    expect(sender.sendMessage).toHaveBeenCalledWith(
+    expect(sender.sendWithTemplateFallback).toHaveBeenCalledWith(
       expect.objectContaining({
         to: '+94770000001',
         message: expect.stringContaining('500 conversations, LKR 2,500'),
       }),
     );
-    const message = sender.sendMessage.mock.calls[0][0].message as string;
+    const message = sender.sendWithTemplateFallback.mock.calls[0][0].message as string;
     expect(message).toContain('Test Clinic');
     expect(message).toMatch(/TU-\d{5}/);
   });
@@ -149,7 +149,7 @@ describe('TopUpRequestsService packages & reference codes', () => {
   it('skips the staff alert when no alert number is configured', async () => {
     const { sender, service } = setup({});
     await service.createRequest('client-1', 300);
-    expect(sender.sendMessage).not.toHaveBeenCalled();
+    expect(sender.sendWithTemplateFallback).not.toHaveBeenCalled();
   });
 
   it('returns configured bank details', async () => {
@@ -180,7 +180,7 @@ describe('TopUpRequestsService slip upload', () => {
         }),
       }),
     );
-    expect(sender.sendMessage).toHaveBeenCalledWith(
+    expect(sender.sendWithTemplateFallback).toHaveBeenCalledWith(
       expect.objectContaining({ message: expect.stringContaining('slip uploaded') }),
     );
     expect((result as any).slipData).toBeUndefined(); // never returned

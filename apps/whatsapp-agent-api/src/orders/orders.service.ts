@@ -174,10 +174,14 @@ export class OrdersService {
     }
 
     try {
-      await this.senderService.sendMessage({
+      await this.senderService.sendWithTemplateFallback({
         client: order.client,
         to: order.customer.phoneNumber,
         message,
+        template: {
+          kind: 'order_update',
+          parameters: [order.id.slice(0, 8), message],
+        },
       });
     } catch (error) {
       this.logger.error(

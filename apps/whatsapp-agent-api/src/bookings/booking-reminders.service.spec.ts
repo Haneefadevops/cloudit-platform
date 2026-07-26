@@ -38,7 +38,7 @@ function setup(overrides: {
     },
   };
   const sender = {
-    sendMessage: overrides.sendFails
+    sendWithTemplateFallback: overrides.sendFails
       ? jest.fn().mockRejectedValue(new Error('Meta API down'))
       : jest.fn().mockResolvedValue(undefined),
   };
@@ -82,13 +82,13 @@ describe('BookingRemindersService', () => {
     const { service, prisma, sender } = setup({});
     const sent = await service.sendDueReminders(NOW);
 
-    expect(sender.sendMessage).toHaveBeenCalledWith(
+    expect(sender.sendWithTemplateFallback).toHaveBeenCalledWith(
       expect.objectContaining({
         to: '+94771234567',
         message: expect.stringContaining('Consultation'),
       }),
     );
-    const message = sender.sendMessage.mock.calls[0][0].message as string;
+    const message = sender.sendWithTemplateFallback.mock.calls[0][0].message as string;
     expect(message).toContain('Dr. Perera');
     expect(message).toContain('Test Clinic');
     expect(prisma.booking.update).toHaveBeenCalledWith({

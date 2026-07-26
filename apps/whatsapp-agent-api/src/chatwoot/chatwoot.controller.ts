@@ -194,13 +194,21 @@ export class ChatwootController {
         conversation.client.csatMessage ||
         'Thank you for chatting with us! How would you rate your experience? Please reply with a number from 1 (poor) to 5 (excellent).';
       try {
-        await this.senderService.sendMessage({
+        await this.senderService.sendWithTemplateFallback({
           client: {
             metaAccessToken: conversation.client.metaAccessToken,
             whatsappPhoneNumberId: conversation.client.whatsappPhoneNumberId,
           },
           to: conversation.customer.phoneNumber,
           message: csatMessage,
+          template: {
+            kind: 'general_followup',
+            parameters: [
+              conversation.customer.name || 'there',
+              conversation.client.name,
+              csatMessage,
+            ],
+          },
         });
         await this.prisma.message.create({
           data: {

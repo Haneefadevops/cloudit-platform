@@ -126,10 +126,24 @@ export class BookingsService {
     }
 
     try {
-      await this.senderService.sendMessage({
+      await this.senderService.sendWithTemplateFallback({
         client,
         to: booking.customer.phoneNumber,
         message,
+        template:
+          booking.status === 'confirmed'
+            ? {
+                kind: 'booking_confirmed',
+                parameters: [`${booking.service.name}${withStaff}`, when],
+              }
+            : {
+                kind: 'general_followup',
+                parameters: [
+                  booking.customer.name || 'there',
+                  client.name,
+                  `your ${booking.service.name}${withStaff} booking on ${when} has been cancelled. Message us anytime to rebook.`,
+                ],
+              },
       });
     } catch (error) {
       this.logger.error(

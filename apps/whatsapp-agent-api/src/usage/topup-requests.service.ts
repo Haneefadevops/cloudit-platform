@@ -260,7 +260,15 @@ export class TopUpRequestsService {
     const to = this.configService.get<string>('STAFF_ALERT_WHATSAPP');
     if (!to) return;
     try {
-      await this.senderService.sendMessage({ client, to, message });
+      await this.senderService.sendWithTemplateFallback({
+        client,
+        to,
+        message,
+        template: {
+          kind: 'general_followup',
+          parameters: ['team', 'TheReplyte', message],
+        },
+      });
     } catch (error) {
       this.logger.error(
         `Failed to send staff top-up alert: ${(error as Error).message}`,

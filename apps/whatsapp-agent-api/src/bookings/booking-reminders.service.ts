@@ -117,10 +117,18 @@ export class BookingRemindersService implements OnModuleInit, OnModuleDestroy {
         `Reply R to reschedule or C to cancel.`;
 
       try {
-        await this.senderService.sendMessage({
+        await this.senderService.sendWithTemplateFallback({
           client: booking.client,
           to: booking.customer.phoneNumber,
           message,
+          template: {
+            kind: 'booking_reminder',
+            parameters: [
+              booking.service.name,
+              booking.staff?.name || booking.client.name,
+              when,
+            ],
+          },
         });
         await this.prisma.booking.update({
           where: { id: booking.id },

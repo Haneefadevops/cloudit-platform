@@ -24,7 +24,7 @@ function setup(bookingOverrides: Record<string, unknown> = {}) {
       findMany: jest.fn().mockResolvedValue([booking]),
     },
   };
-  const sender = { sendMessage: jest.fn().mockResolvedValue(undefined) };
+  const sender = { sendWithTemplateFallback: jest.fn().mockResolvedValue(undefined) };
   const service = new BookingsService(prisma as never, sender as never);
   return { prisma, sender, service };
 }
@@ -47,7 +47,7 @@ describe('BookingsService.updateBookingStatus', () => {
         data: { status: 'confirmed' },
       }),
     );
-    expect(sender.sendMessage).toHaveBeenCalledWith(
+    expect(sender.sendWithTemplateFallback).toHaveBeenCalledWith(
       expect.objectContaining({
         to: '+94771234567',
         message: expect.stringContaining('is confirmed'),
@@ -68,7 +68,7 @@ describe('BookingsService.updateBookingStatus', () => {
     });
     await service.updateBookingStatus('client-1', 'bk-1', 'confirmed');
 
-    const message = sender.sendMessage.mock.calls[0][0].message as string;
+    const message = sender.sendWithTemplateFallback.mock.calls[0][0].message as string;
     expect(message).toContain('Hi Nimal');
     expect(message).toContain('Consultation');
     expect(message).toContain('Test Clinic');
@@ -79,7 +79,7 @@ describe('BookingsService.updateBookingStatus', () => {
     const { service, sender } = setup({ status: 'cancelled' });
     await service.updateBookingStatus('client-1', 'bk-1', 'cancelled');
 
-    const message = sender.sendMessage.mock.calls[0][0].message as string;
+    const message = sender.sendWithTemplateFallback.mock.calls[0][0].message as string;
     expect(message).toContain('cancelled');
   });
 
@@ -87,12 +87,12 @@ describe('BookingsService.updateBookingStatus', () => {
     const { service, sender } = setup({ status: 'completed' });
     await service.updateBookingStatus('client-1', 'bk-1', 'completed');
 
-    expect(sender.sendMessage).not.toHaveBeenCalled();
+    expect(sender.sendWithTemplateFallback).not.toHaveBeenCalled();
   });
 
   it('does not fail the status update when notification fails', async () => {
     const { service, sender } = setup();
-    sender.sendMessage.mockRejectedValue(new Error('Meta API down'));
+    sender.sendWithTemplateFallback.mockRejectedValue(new Error('Meta API down'));
     const booking = await service.updateBookingStatus(
       'client-1',
       'bk-1',
