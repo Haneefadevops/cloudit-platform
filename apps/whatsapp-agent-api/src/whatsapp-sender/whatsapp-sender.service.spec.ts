@@ -101,6 +101,38 @@ describe('WhatsAppSenderService', () => {
     });
   });
 
+  describe('sendTypingIndicator', () => {
+    it('posts a read status with a text typing indicator for the message id', async () => {
+      fetchMock.mockResolvedValue(okResponse());
+      const service = serviceWithConfig();
+
+      await service.sendTypingIndicator({
+        client: CLIENT,
+        messageId: 'wamid.abc',
+      });
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://graph.facebook.com/v18.0/pn-1/messages');
+      expect(init.headers.Authorization).toBe('Bearer token');
+      const body = JSON.parse(init.body);
+      expect(body).toEqual({
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: 'wamid.abc',
+        typing_indicator: { type: 'text' },
+      });
+    });
+
+    it('swallows Meta errors so the reply flow is never blocked', async () => {
+      fetchMock.mockResolvedValue(metaErrorResponse(131026, 400));
+      const service = serviceWithConfig();
+
+      await expect(
+        service.sendTypingIndicator({ client: CLIENT, messageId: 'wamid.abc' }),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   describe('resolveTemplateName', () => {
     it('defaults to the Meta template name for the kind', () => {
       const service = serviceWithConfig();

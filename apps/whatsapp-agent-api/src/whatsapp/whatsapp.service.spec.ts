@@ -52,7 +52,10 @@ function setup(botReplyCount: number) {
   const clientsService = {
     findByPhoneNumberId: jest.fn().mockResolvedValue(CLIENT),
   };
-  const senderService = { sendMessage: jest.fn().mockResolvedValue(undefined) };
+  const senderService = {
+    sendMessage: jest.fn().mockResolvedValue(undefined),
+    sendTypingIndicator: jest.fn().mockResolvedValue(undefined),
+  };
   const knowledgeBaseService = { search: jest.fn().mockResolvedValue([]) };
   const usageService = {
     getUsage: jest.fn().mockResolvedValue({ balance: 100 }),

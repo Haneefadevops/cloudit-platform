@@ -131,6 +131,7 @@ export class WhatsAppService {
             await this.handleIncomingMessage({
               phoneNumberId,
               from: message.from,
+              messageId: message.id,
               messageBody: message.text.body,
               contactName,
             });
@@ -142,6 +143,7 @@ export class WhatsAppService {
             await this.handleIncomingMessage({
               phoneNumberId,
               from: message.from,
+              messageId: message.id,
               messageBody: '',
               contactName,
               media,
@@ -180,6 +182,7 @@ export class WhatsAppService {
   private async handleIncomingMessage(input: {
     phoneNumberId: string;
     from: string;
+    messageId: string;
     messageBody: string;
     contactName?: string;
     media?: IncomingMedia;
@@ -394,6 +397,15 @@ export class WhatsAppService {
       });
       return;
     }
+
+    // 6.5 Show the "typing…" indicator on the customer's phone while the AI
+    // prepares its reply (lasts up to 25s or until the reply is sent; also
+    // marks the incoming message as read). Fire-and-forget inside the
+    // sender — a failure here never blocks the reply.
+    await this.senderService.sendTypingIndicator({
+      client,
+      messageId: input.messageId,
+    });
 
     // 7. Get conversation history for context
     const recentMessages = await this.prisma.message.findMany({

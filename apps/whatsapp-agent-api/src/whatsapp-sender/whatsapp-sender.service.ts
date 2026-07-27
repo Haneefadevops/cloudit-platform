@@ -52,7 +52,7 @@ export class WhatsAppSenderService {
   }): Promise<void> {
     const { client, to, message } = input;
 
-    await this.post(client, to, {
+    await this.post(client, {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
       to,
@@ -61,6 +61,35 @@ export class WhatsAppSenderService {
     });
 
     this.logger.log(`WhatsApp message sent to ${to}`);
+  }
+
+  /**
+   * Shows the "typing…" indicator on the customer's phone while the AI
+   * prepares its reply. Meta ties it to the incoming message id; the
+   * indicator lasts up to 25 seconds or until our reply is sent. It also
+   * marks the customer's message as read (blue ticks).
+   *
+   * Fire-and-forget: a failure (e.g. unsupported API version or expired
+   * message id) is logged and swallowed so it never breaks the reply flow.
+   */
+  async sendTypingIndicator(input: {
+    client: SenderClient;
+    messageId: string;
+  }): Promise<void> {
+    const { client, messageId } = input;
+
+    try {
+      await this.post(client, {
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
+        typing_indicator: { type: 'text' },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Typing indicator failed (non-fatal): ${(error as Error).message}`,
+      );
+    }
   }
 
   /**
@@ -78,7 +107,7 @@ export class WhatsAppSenderService {
     const { client, to, templateName, parameters = [], languageCode = 'en' } =
       input;
 
-    await this.post(client, to, {
+    await this.post(client, {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
       to,
@@ -147,7 +176,6 @@ export class WhatsAppSenderService {
 
   private async post(
     client: SenderClient,
-    to: string,
     body: Record<string, unknown>,
   ): Promise<void> {
     const baseUrl = this.configService.get<string>(
