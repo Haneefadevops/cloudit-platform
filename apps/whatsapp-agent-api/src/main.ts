@@ -27,7 +27,7 @@ function buildCorsOrigin(raw?: string): CorsOptions['origin'] {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const configService = app.get(ConfigService);
 
   app.setGlobalPrefix('api');
