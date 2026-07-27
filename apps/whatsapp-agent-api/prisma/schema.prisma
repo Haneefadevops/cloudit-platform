@@ -389,3 +389,26 @@ model TopUpRequest {
   @@index([clientId, status])
   @@map("top_up_requests")
 }
+
+model StaffAlertContact {
+  id         String   @id @default(uuid())
+  name       String
+  phone      String   @unique // e.g. 9477XXXXXXX — WhatsApp-format mobile
+  active     Boolean  @default(true)
+  mode       String   @default("scheduled") // always (every alert, any time), scheduled (on-duty rotation)
+  daysOfWeek Json     @default("[]") // ["mon","tue",...] — scheduled mode only
+  startTime  String? // "09:00" — scheduled mode only; supports overnight windows (18:00–08:00)
+  endTime    String? // evaluated in ALERT_TIMEZONE (default Asia/Colombo)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("staff_alert_contacts")
+}
+
+model StaffAlertRotation {
+  id            String   @id @default("singleton")
+  lastContactId String? // last scheduled contact that received an alert (round-robin state)
+  updatedAt     DateTime @updatedAt
+
+  @@map("staff_alert_rotation")
+}

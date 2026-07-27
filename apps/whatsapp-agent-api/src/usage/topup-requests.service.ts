@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { WhatsAppSenderService } from '../whatsapp-sender/whatsapp-sender.service';
+import { StaffAlertsService } from '../staff-alerts/staff-alerts.service';
 
 /** Flat LKR 5 per conversation — no volume discounts (settled in the plan). */
 export const TOPUP_PACKAGES = [
@@ -54,7 +54,7 @@ export class TopUpRequestsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly senderService: WhatsAppSenderService,
+    private readonly staffAlertsService: StaffAlertsService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -252,23 +252,16 @@ export class TopUpRequestsService {
     return request;
   }
 
-  /** Staff WhatsApp alert via the client's own sender credentials. */
+  /**
+   * Staff WhatsApp alert via the client's own sender credentials. Routing
+   * (who is on duty, rotation, env fallback) lives in StaffAlertsService.
+   */
   private async alertStaff(
     client: { metaAccessToken: string; whatsappPhoneNumberId: string },
     message: string,
   ) {
-    const to = this.configService.get<string>('STAFF_ALERT_WHATSAPP');
-    if (!to) return;
     try {
-      await this.senderService.sendWithTemplateFallback({
-        client,
-        to,
-        message,
-        template: {
-          kind: 'general_followup',
-          parameters: ['team', 'TheReplyte', message],
-        },
-      });
+      await this.staffAlertsService.sendAlert(client, message);
     } catch (error) {
       this.logger.error(
         `Failed to send staff top-up alert: ${(error as Error).message}`,

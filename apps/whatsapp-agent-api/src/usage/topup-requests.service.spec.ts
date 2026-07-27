@@ -54,7 +54,7 @@ function setup(options: {
         Promise.all(promises),
       ),
   };
-  const sender = { sendWithTemplateFallback: jest.fn().mockResolvedValue(undefined) };
+  const staffAlerts = { sendAlert: jest.fn().mockResolvedValue(undefined) };
   const config = {
     get: (key: string) =>
       key === 'STAFF_ALERT_WHATSAPP'
@@ -65,10 +65,10 @@ function setup(options: {
   };
   const service = new TopUpRequestsService(
     prisma as never,
-    sender as never,
+    staffAlerts as never,
     config as never,
   );
-  return { prisma, sender, service };
+  return { prisma, staffAlerts, service };
 }
 
 describe('TopUpRequestsService packages & reference codes', () => {
@@ -132,24 +132,25 @@ describe('TopUpRequestsService packages & reference codes', () => {
   });
 
   it('sends a staff WhatsApp alert on request created', async () => {
-    const { sender, service } = setup({ staffAlertNumber: '+94770000001' });
+    const { staffAlerts, service } = setup({ staffAlertNumber: '+94770000001' });
     await service.createRequest('client-1', 500);
 
-    expect(sender.sendWithTemplateFallback).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: '+94770000001',
-        message: expect.stringContaining('500 conversations, LKR 2,500'),
-      }),
+    expect(staffAlerts.sendAlert).toHaveBeenCalledWith(
+      CLIENT,
+      expect.stringContaining('500 conversations, LKR 2,500'),
     );
-    const message = sender.sendWithTemplateFallback.mock.calls[0][0].message as string;
+    const message = staffAlerts.sendAlert.mock.calls[0][1] as string;
     expect(message).toContain('Test Clinic');
     expect(message).toMatch(/TU-\d{5}/);
   });
 
-  it('skips the staff alert when no alert number is configured', async () => {
-    const { sender, service } = setup({});
+  it('always delegates to StaffAlertsService — routing (env fallback, on-duty rotation) lives there', async () => {
+    const { staffAlerts, service } = setup({});
     await service.createRequest('client-1', 300);
-    expect(sender.sendWithTemplateFallback).not.toHaveBeenCalled();
+    expect(staffAlerts.sendAlert).toHaveBeenCalledWith(
+      CLIENT,
+      expect.stringContaining('TU-'),
+    );
   });
 
   it('returns configured bank details', async () => {
@@ -166,7 +167,7 @@ describe('TopUpRequestsService slip upload', () => {
   };
 
   it('marks the request slip_uploaded and alerts staff', async () => {
-    const { prisma, sender, service } = setup({
+    const { prisma, staffAlerts, service } = setup({
       staffAlertNumber: '+94770000001',
       request: { id: 'req-1', clientId: 'client-1', status: 'pending_payment' },
     });
@@ -180,8 +181,9 @@ describe('TopUpRequestsService slip upload', () => {
         }),
       }),
     );
-    expect(sender.sendWithTemplateFallback).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('slip uploaded') }),
+    expect(staffAlerts.sendAlert).toHaveBeenCalledWith(
+      expect.objectContaining({ metaAccessToken: 'token' }),
+      expect.stringContaining('slip uploaded'),
     );
     expect((result as any).slipData).toBeUndefined(); // never returned
   });
