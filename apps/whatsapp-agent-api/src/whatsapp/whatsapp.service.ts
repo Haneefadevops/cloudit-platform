@@ -290,22 +290,26 @@ export class WhatsAppService {
       const pausedMessage =
         client.aiPausedMessage ||
         'Thanks for your message! Our team will reply to you shortly.';
+      const handedOff = await this.conversationsService.handoffToHuman({
+        conversationId: conversation.id,
+        triggeredBy: 'system',
+        reason: 'AI allowance exhausted',
+      });
+      const pausedContent = this.withTicketRef(
+        pausedMessage,
+        handedOff.ticketRef,
+      );
       await this.prisma.message.create({
         data: {
           conversationId: conversation.id,
           senderType: 'bot',
-          content: pausedMessage,
+          content: pausedContent,
         },
       });
       await this.senderService.sendMessage({
         client,
         to: from,
-        message: pausedMessage,
-      });
-      await this.conversationsService.handoffToHuman({
-        conversationId: conversation.id,
-        triggeredBy: 'system',
-        reason: 'AI allowance exhausted',
+        message: pausedContent,
       });
       this.logger.log(
         `Client ${client.id} AI allowance exhausted; conversation ${conversation.id} handed off`,
@@ -319,22 +323,26 @@ export class WhatsAppService {
       where: { conversationId: conversation.id, senderType: 'bot' },
     });
     if (botReplyCount >= AI_REPLY_LIMIT) {
+      const handedOff = await this.conversationsService.handoffToHuman({
+        conversationId: conversation.id,
+        triggeredBy: 'system',
+        reason: `Conversation reached the ${AI_REPLY_LIMIT}-reply AI limit`,
+      });
+      const limitContent = this.withTicketRef(
+        AI_REPLY_LIMIT_MESSAGE,
+        handedOff.ticketRef,
+      );
       await this.prisma.message.create({
         data: {
           conversationId: conversation.id,
           senderType: 'bot',
-          content: AI_REPLY_LIMIT_MESSAGE,
+          content: limitContent,
         },
       });
       await this.senderService.sendMessage({
         client,
         to: from,
-        message: AI_REPLY_LIMIT_MESSAGE,
-      });
-      await this.conversationsService.handoffToHuman({
-        conversationId: conversation.id,
-        triggeredBy: 'system',
-        reason: `Conversation reached the ${AI_REPLY_LIMIT}-reply AI limit`,
+        message: limitContent,
       });
       this.logger.log(
         `Conversation ${conversation.id} reached the ${AI_REPLY_LIMIT}-reply AI limit; handed off`,
@@ -378,7 +386,7 @@ export class WhatsAppService {
         ? 'Customer requested human agent outside operating hours'
         : `Customer requested human agent or used trigger keyword: "${messageBody}"`;
 
-      await this.conversationsService.handoffToHuman({
+      const handedOff = await this.conversationsService.handoffToHuman({
         conversationId: conversation.id,
         triggeredBy: outsideHours ? 'system' : 'customer',
         reason,
@@ -393,7 +401,7 @@ export class WhatsAppService {
       await this.senderService.sendMessage({
         client,
         to: from,
-        message: handoffMessage,
+        message: this.withTicketRef(handoffMessage, handedOff.ticketRef),
       });
       return;
     }
@@ -559,6 +567,7 @@ export class WhatsAppService {
 
     // 10.5 Action side effects: notify staff in Chatwoot, and hand the
     // conversation to a human when a booking needs staff confirmation.
+    let handoffTicketRef: string | null = null;
     if (actionResult?.staffNotification) {
       await this.forwardToChatwoot(
         client,
@@ -568,30 +577,37 @@ export class WhatsAppService {
       );
     }
     if ((actionResult as BookingActionResult | null)?.requiresApproval) {
-      await this.conversationsService.handoffToHuman({
+      const handedOff = await this.conversationsService.handoffToHuman({
         conversationId: conversation.id,
         triggeredBy: 'bot',
         reason:
           actionResult?.staffNotification ||
           'Booking pending staff confirmation',
       });
+      handoffTicketRef = handedOff.ticketRef;
     }
 
     // 11. Handle AI-triggered handoff
     if (handoff) {
-      await this.conversationsService.handoffToHuman({
+      const handedOff = await this.conversationsService.handoffToHuman({
         conversationId: conversation.id,
         triggeredBy: 'bot',
         reason: handoffReason || 'AI requested human handoff',
       });
+      handoffTicketRef = handoffTicketRef ?? handedOff.ticketRef;
     }
 
-    // 12. Send AI reply to customer
+    // 12. Send AI reply to customer (with the ticket ref when handed off)
     await this.senderService.sendMessage({
       client,
       to: from,
-      message: reply,
+      message: this.withTicketRef(reply, handoffTicketRef),
     });
+  }
+
+  /** Appends the ticket reference to a customer-facing handoff message. */
+  private withTicketRef(message: string, ref?: string | null): string {
+    return ref ? `${message}\n\nYour ticket reference is ${ref}.` : message;
   }
 
   private isBookingAction(action: { type: string }): boolean {

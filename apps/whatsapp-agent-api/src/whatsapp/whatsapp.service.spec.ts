@@ -146,6 +146,22 @@ describe('WhatsAppService 50-reply abuse cap', () => {
     );
     expect(conversationsService.handoffToHuman).not.toHaveBeenCalled();
   });
+
+  it('appends the ticket reference to the handoff message', async () => {
+    const { conversationsService, senderService, service } =
+      setup(AI_REPLY_LIMIT);
+    conversationsService.handoffToHuman.mockResolvedValue({
+      ticketRef: 'TK-00042',
+    });
+
+    await service.handleIncomingWebhook(webhookPayload());
+
+    expect(senderService.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: `${AI_REPLY_LIMIT_MESSAGE}\n\nYour ticket reference is TK-00042.`,
+      }),
+    );
+  });
 });
 
 describe('WhatsAppService.verifySignature', () => {

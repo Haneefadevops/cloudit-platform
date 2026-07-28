@@ -287,6 +287,20 @@ Dashboard → **AI Settings** (select the client):
       business is, what it does, how to talk, what to never invent, when to
       hand off. (Use the CloudIT/Nova prompt in `docs` as the reference
       style: identity → role → HOW TO TALK rules → what to do.)
+      Always include the standard "handoff offer" block so the AI opens a
+      support ticket instead of improvising on problems it can't fix:
+
+      ```
+      If a customer reports a problem you cannot resolve directly (damaged
+      item, wrong order, billing dispute, complaint), do not try to fix it
+      yourself. Offer to connect them with our team, e.g. "Shall I get our
+      team to look into this for you?" — and if they agree, hand off to a
+      human.
+      ```
+
+      When a handoff happens, the customer automatically receives a ticket
+      reference (TK-XXXXX) on WhatsApp, and the resolved ticket is stored
+      under Dashboard → **Support** (Support History).
 - [ ] **3.2 Temperature** — 0.3–0.5 for most businesses (consistent, not
       creative).
 - [ ] **3.3 Messages** — welcome message, fallback message, outside-hours

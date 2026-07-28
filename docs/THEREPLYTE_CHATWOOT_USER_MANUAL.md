@@ -190,11 +190,16 @@ When a chat needs a human, it appears in the inbox automatically:
 ### 5. Answering a chat
 
 1. Open the conversation — you'll see the full history with the AI and a
-   short summary of what happened so far.
+   short summary of what happened so far. The handoff note includes a
+   **ticket reference (TK-XXXXX)** — quote it when talking about the case
+   with your team; the customer received the same reference on WhatsApp.
 2. Type your reply and send — it goes straight to the customer's WhatsApp.
 3. Quick replies: type `/` to pick a saved template (e.g. `/greeting`).
 4. When the customer is sorted, click **Resolve**. The customer then gets
    a short 1–5 rating request — this measures your service quality.
+   Resolving also files the ticket under **Support History** in TheReplyte
+   dashboard (full transcript, resolution time, and the rating), so always
+   resolve — never leave finished chats open.
 
 ### 6. Labels you'll see
 

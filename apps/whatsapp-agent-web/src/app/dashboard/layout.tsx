@@ -91,6 +91,14 @@ function NavIcon({ href }: { href: string }) {
           <path d="M6 12h.01M18 12h.01" />
         </svg>
       );
+    case '/dashboard/support-history':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="4" />
+          <path d="m4.93 4.93 4.24 4.24M14.83 14.83l4.24 4.24M14.83 9.17l4.24-4.24M4.93 19.07l4.24-4.24" />
+        </svg>
+      );
     case '/dashboard/analytics':
       return (
         <svg {...common}>
@@ -130,6 +138,7 @@ const titles: Record<string, string> = {
   '/dashboard/catalog': 'Catalog',
   '/dashboard/orders': 'Orders',
   '/dashboard/topups': 'Top-ups',
+  '/dashboard/support-history': 'Support History',
   '/dashboard/analytics': 'Analytics',
   '/dashboard/playground': 'Playground',
   '/dashboard/settings': 'Settings',
@@ -200,6 +209,7 @@ export default function DashboardLayout({
           ? [{ href: '/dashboard/bookings', label: 'Bookings' }]
           : []),
         ...(showOrders ? [{ href: '/dashboard/orders', label: 'Orders' }] : []),
+        { href: '/dashboard/support-history', label: 'Support' },
         { href: '/dashboard/analytics', label: 'Analytics' },
         { href: '/dashboard/settings', label: 'Settings' },
       ]
@@ -221,6 +231,7 @@ export default function DashboardLayout({
             ]
           : []),
         { href: '/dashboard/topups', label: 'Top-ups' },
+        { href: '/dashboard/support-history', label: 'Support' },
         { href: '/dashboard/analytics', label: 'Analytics' },
         { href: '/dashboard/playground', label: 'Playground' },
         { href: '/dashboard/settings', label: 'Settings' },

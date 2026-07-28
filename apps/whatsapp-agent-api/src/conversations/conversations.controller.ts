@@ -4,6 +4,7 @@ import {
   Post,
   Put,
   Body,
+  NotFoundException,
   Param,
   Query,
   UseGuards,
@@ -12,6 +13,7 @@ import { ConversationsService } from './conversations.service';
 import { WhatsAppSenderService } from '../whatsapp-sender/whatsapp-sender.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { ScopedClientId } from '../common/decorators/scoped-client-id.decorator';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -30,6 +32,32 @@ export class ConversationsController {
       return this.conversationsService.findAllForAgent(user.userId, status);
     }
     return this.conversationsService.findAll(status);
+  }
+
+  /**
+   * Support tickets (handed-off conversations) for a client. Staff can query
+   * any client; portal users are always scoped to their own.
+   */
+  @Get('client/:clientId/tickets')
+  findTickets(
+    @ScopedClientId() clientId: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.conversationsService.findTickets(clientId, { status, search });
+  }
+
+  @Get('client/:clientId/tickets/:id')
+  async findTicketTranscript(
+    @ScopedClientId() clientId: string,
+    @Param('id') id: string,
+  ) {
+    const ticket = await this.conversationsService.findTicketTranscript(
+      clientId,
+      id,
+    );
+    if (!ticket) throw new NotFoundException('Ticket not found');
+    return ticket;
   }
 
   @Get(':id')

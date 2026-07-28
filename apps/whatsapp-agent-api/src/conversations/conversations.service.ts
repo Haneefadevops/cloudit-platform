@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChatwootService } from '../chatwoot/chatwoot.service';
 import { AiService } from '../ai/ai.service';
@@ -45,12 +46,20 @@ export class ConversationsService {
   }) {
     const { conversationId, triggeredBy, reason, assignedToId } = input;
 
+    // A conversation handed off twice keeps its first ticket ref
+    const existing = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { ticketRef: true },
+    });
+    const ticketRef = existing?.ticketRef ?? (await this.generateTicketRef());
+
     const conversation = await this.prisma.conversation.update({
       where: { id: conversationId },
       data: {
         status: 'human',
         handoffReason: reason,
         assignedToId,
+        ticketRef,
       },
     });
 
@@ -82,9 +91,22 @@ export class ConversationsService {
     await this.pushHandoffToChatwoot(conversationId, triggeredBy, reason);
 
     // Optional n8n alert for urgent handoffs
-    await this.notifyUrgentHandoff(conversationId, reason, triggeredBy);
+    await this.notifyUrgentHandoff(conversationId, reason, triggeredBy, ticketRef);
 
     return conversation;
+  }
+
+  /** TK-XXXXX, unique — retries on collision (same pattern as top-up refs). */
+  private async generateTicketRef(): Promise<string> {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const ref = `TK-${String(randomInt(0, 100000)).padStart(5, '0')}`;
+      const existing = await this.prisma.conversation.findUnique({
+        where: { ticketRef: ref },
+        select: { id: true },
+      });
+      if (!existing) return ref;
+    }
+    throw new Error('Could not generate a unique ticket reference');
   }
 
   private async pushHandoffToChatwoot(
@@ -137,7 +159,7 @@ export class ConversationsService {
 
         // Add the handoff context as the final message so the agent sees why it was escalated
         history.push({
-          content: `AI handoff triggered. ${reason}`,
+          content: `AI handoff triggered. ${reason}\nTicket: ${conversation.ticketRef}`,
           senderType: 'agent',
         });
 
@@ -233,6 +255,7 @@ export class ConversationsService {
     conversationId: string,
     reason: string,
     triggeredBy: string,
+    ticketRef?: string | null,
   ) {
     const webhookUrl = this.configService.get<string>('N8N_WEBHOOK_URL', '');
     if (!webhookUrl) return;
@@ -249,6 +272,7 @@ export class ConversationsService {
           conversationId,
           reason,
           triggeredBy,
+          ticketRef: ticketRef ?? null,
           timestamp: new Date().toISOString(),
         }),
       });
@@ -303,6 +327,73 @@ export class ConversationsService {
         _count: { select: { messages: true } },
       },
       orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  /**
+   * Support tickets for a client: every conversation that was handed off at
+   * least once (older ones may predate ticket refs). `open` = with a human,
+   * `resolved` = closed. Search matches ticket ref, customer name, or phone.
+   */
+  async findTickets(
+    clientId: string,
+    filter: { status?: string; search?: string },
+  ) {
+    const { status, search } = filter;
+    return this.prisma.conversation.findMany({
+      where: {
+        clientId,
+        handoffLogs: { some: {} },
+        ...(status === 'open'
+          ? { status: 'human' }
+          : status === 'resolved'
+            ? { status: 'resolved' }
+            : {}),
+        ...(search
+          ? {
+              OR: [
+                { ticketRef: { contains: search, mode: 'insensitive' as const } },
+                {
+                  customer: {
+                    name: { contains: search, mode: 'insensitive' as const },
+                  },
+                },
+                { customer: { phoneNumber: { contains: search } } },
+              ],
+            }
+          : {}),
+      },
+      include: {
+        customer: { select: { name: true, phoneNumber: true } },
+        assignedTo: { select: { id: true, name: true } },
+        handoffLogs: { orderBy: { createdAt: 'desc' as const }, take: 1 },
+        _count: { select: { messages: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  /**
+   * Full ticket transcript, scoped to the client — returns null when the
+   * conversation does not exist or belongs to another client.
+   */
+  async findTicketTranscript(clientId: string, id: string) {
+    return this.prisma.conversation.findFirst({
+      where: { id, clientId },
+      include: {
+        customer: { select: { name: true, phoneNumber: true } },
+        assignedTo: { select: { id: true, name: true } },
+        handoffLogs: { orderBy: { createdAt: 'desc' as const } },
+        messages: {
+          orderBy: { createdAt: 'asc' as const },
+          select: {
+            id: true,
+            senderType: true,
+            content: true,
+            createdAt: true,
+          },
+        },
+      },
     });
   }
 
