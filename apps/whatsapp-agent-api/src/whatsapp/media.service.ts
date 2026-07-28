@@ -108,21 +108,25 @@ export class MediaService {
     return data.text?.trim() || null;
   }
 
-  /** Describes an image (and extracts visible text) via Kimi vision. */
+  /** Describes an image (and extracts visible text) via a vision chat model. */
   private async describeImage(
     media: DownloadedMedia,
     caption?: string,
   ): Promise<string | null> {
-    const apiKey = this.configService.get<string>('KIMI_API_KEY');
+    // VISION_* overrides let an environment use a different provider for
+    // images (e.g. OpenAI) while chat stays on Kimi; defaults keep the
+    // original Kimi vision behaviour.
+    const apiKey =
+      this.configService.get<string>('VISION_API_KEY') ||
+      this.configService.get<string>('KIMI_API_KEY');
     if (!apiKey) return null;
-    const apiUrl = this.configService.get<string>(
-      'KIMI_API_URL',
-      'https://api.moonshot.ai/v1/chat/completions',
-    );
-    const model = this.configService.get<string>(
-      'KIMI_VISION_MODEL',
-      'kimi-latest',
-    );
+    const apiUrl =
+      this.configService.get<string>('VISION_API_URL') ||
+      this.configService.get<string>('KIMI_API_URL') ||
+      'https://api.moonshot.ai/v1/chat/completions';
+    const model =
+      this.configService.get<string>('VISION_MODEL') ||
+      this.configService.get<string>('KIMI_VISION_MODEL', 'kimi-latest');
 
     const base64 = media.buffer.toString('base64');
     const response = await fetch(apiUrl, {
@@ -156,7 +160,7 @@ export class MediaService {
     });
     if (!response.ok) {
       throw new Error(
-        `Kimi vision API error: ${response.status} ${await response.text()}`,
+        `Vision API error: ${response.status} ${await response.text()}`,
       );
     }
     const data = await response.json();
