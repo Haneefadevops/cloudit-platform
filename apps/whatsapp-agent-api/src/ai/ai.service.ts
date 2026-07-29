@@ -106,12 +106,7 @@ export class AiService {
     ];
 
     try {
-      const apiKey = this.configService.get<string>('KIMI_API_KEY');
-      const apiUrl = this.configService.get<string>(
-        'KIMI_API_URL',
-        'https://api.moonshot.cn/v1/chat/completions',
-      );
-      const model = this.configService.get<string>('KIMI_MODEL', 'kimi-latest');
+      const { apiKey, apiUrl, model } = this.resolveChatProvider();
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -130,7 +125,7 @@ export class AiService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Kimi API error: ${response.status} ${errorText}`);
+        throw new Error(`Chat API error: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
@@ -245,6 +240,28 @@ ${conversationText}`;
     }
   }
 
+  /**
+   * Chat-completion provider. AI_* overrides let an environment switch the
+   * whole AI to another OpenAI-compatible provider (e.g. OpenAI for better
+   * Singlish/Thanglish reliability); defaults keep Kimi.
+   */
+  private resolveChatProvider() {
+    return {
+      apiKey:
+        this.configService.get<string>('AI_API_KEY') ||
+        this.configService.get<string>('KIMI_API_KEY'),
+      apiUrl:
+        this.configService.get<string>('AI_API_URL') ||
+        this.configService.get<string>(
+          'KIMI_API_URL',
+          'https://api.moonshot.cn/v1/chat/completions',
+        ),
+      model:
+        this.configService.get<string>('AI_MODEL') ||
+        this.configService.get<string>('KIMI_MODEL', 'kimi-latest'),
+    };
+  }
+
   private async callKimiChat(
     messages: { role: 'system' | 'user'; content: string }[],
     options: {
@@ -253,12 +270,7 @@ ${conversationText}`;
       responseFormat?: 'json_object' | 'text';
     } = {},
   ): Promise<{ content: string; metadata: any }> {
-    const apiKey = this.configService.get<string>('KIMI_API_KEY');
-    const apiUrl = this.configService.get<string>(
-      'KIMI_API_URL',
-      'https://api.moonshot.cn/v1/chat/completions',
-    );
-    const model = this.configService.get<string>('KIMI_MODEL', 'kimi-latest');
+    const { apiKey, apiUrl, model } = this.resolveChatProvider();
 
     const body: any = {
       model,
@@ -287,7 +299,7 @@ ${conversationText}`;
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Kimi API error: ${response.status} ${errorText}`);
+      throw new Error(`Chat API error: ${response.status} ${errorText}`);
     }
 
     const data = await response.json();
