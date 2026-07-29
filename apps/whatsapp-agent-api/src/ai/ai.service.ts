@@ -106,11 +106,15 @@ export class AiService {
     ];
 
     try {
-      const response = await this.chatCompletionWithFailover((model) => ({
-        model,
+      const response = await this.chatCompletionWithFailover((provider) => ({
+        model: provider.model,
         messages,
-        temperature: client.aiTemperature ?? 0.7,
-        max_tokens: client.maxTokens ?? 1024,
+        // Only send temperature when the client explicitly set it: some
+        // models (Kimi thinking models, OpenAI GPT-5.x) reject other values.
+        ...(client.aiTemperature != null
+          ? { temperature: client.aiTemperature }
+          : {}),
+        ...this.tokenLimitParam(provider.apiUrl, client.maxTokens ?? 1024),
         response_format: { type: 'json_object' },
       }));
 
@@ -292,22 +296,40 @@ ${conversationText}`;
   /**
    * Calls the primary provider; on any failure retries once on the fallback
    * provider (when configured). The body is rebuilt per provider so each
-   * gets its own model name.
+   * gets its own model name and provider-specific parameters.
    */
   private async chatCompletionWithFailover(
-    buildBody: (model: string) => Record<string, unknown>,
+    buildBody: (provider: {
+      apiKey?: string;
+      apiUrl: string;
+      model: string;
+    }) => Record<string, unknown>,
   ): Promise<Response> {
     const primary = this.resolveChatProvider();
     try {
-      return await this.postChatCompletion(primary, buildBody(primary.model));
+      return await this.postChatCompletion(primary, buildBody(primary));
     } catch (primaryError) {
       const fallback = this.resolveFallbackProvider();
       if (!fallback) throw primaryError;
       this.logger.warn(
         `Primary AI provider failed (${(primaryError as Error).message}); retrying on fallback provider`,
       );
-      return this.postChatCompletion(fallback, buildBody(fallback.model));
+      return this.postChatCompletion(fallback, buildBody(fallback));
     }
+  }
+
+  /**
+   * Output-token limit parameter. Newer OpenAI models (GPT-5.x) reject
+   * max_tokens and require max_completion_tokens; OpenAI-compatible
+   * providers like Moonshot still use max_tokens.
+   */
+  private tokenLimitParam(
+    apiUrl: string,
+    limit: number,
+  ): Record<string, number> {
+    return apiUrl.includes('api.openai.com')
+      ? { max_completion_tokens: limit }
+      : { max_tokens: limit };
   }
 
   private async callKimiChat(
@@ -318,11 +340,11 @@ ${conversationText}`;
       responseFormat?: 'json_object' | 'text';
     } = {},
   ): Promise<{ content: string; metadata: any }> {
-    const buildBody = (model: string) => {
+    const buildBody = (provider: { apiUrl: string; model: string }) => {
       const body: Record<string, unknown> = {
-        model,
+        model: provider.model,
         messages,
-        max_tokens: options.maxTokens ?? 1024,
+        ...this.tokenLimitParam(provider.apiUrl, options.maxTokens ?? 1024),
       };
       // Only send temperature when explicitly requested: thinking models
       // (e.g. the production KIMI_MODEL) reject any value but 1 — omitting
@@ -437,7 +459,7 @@ SINGLISH / THANGLISH STYLE GUIDE (how locals actually text):
 7. Never make up prices, stock levels, or policies
 8. For orders, ask: product, quantity, address, phone
 9. For complaints or refund requests, immediately set handoff to true
-10. Keep messages WhatsApp-short. Acknowledge what the customer said first, then ask (e.g. "11am is taken — I have 2pm or 4pm instead. Which works?")
+10. Keep every reply under 80 words, WhatsApp-style: short paragraphs, never essays. If the full answer is long, summarize it in a sentence or two and ask if the customer wants more details. Acknowledge what the customer said first, then ask (e.g. "11am is taken — I have 2pm or 4pm instead. Which works?")
 11. Ask at most ONE question per message — never bundle two asks
 12. Answer a direct question directly before asking anything else
 13. Never expose internal workflow: no "requires staff confirmation", "I'll check availability before confirming", action names, or JSON/tooling talk — backstage stays backstage

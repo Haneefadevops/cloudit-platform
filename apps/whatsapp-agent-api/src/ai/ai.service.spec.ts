@@ -222,6 +222,59 @@ describe('AiService provider failover', () => {
       'https://api.openai.com/v1/chat/completions',
     );
   });
+
+  it('sends max_completion_tokens (not max_tokens) to api.openai.com', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(chatResponse('{"reply":"hi"}'));
+    const ai = makeAiServiceWithEnv(OPENAI_ENV, fetchMock);
+
+    await ai.generateReply({
+      client: { ...BASE_CLIENT, maxTokens: 250 },
+      customer: {},
+      message: 'hi',
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.max_completion_tokens).toBe(250);
+    expect('max_tokens' in body).toBe(false);
+  });
+
+  it('sends max_tokens to non-OpenAI providers', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(chatResponse('{"reply":"hi"}'));
+    const ai = makeAiServiceWithEnv({ KIMI_API_KEY: 'kimi-key' }, fetchMock);
+
+    await ai.generateReply({
+      client: { ...BASE_CLIENT, maxTokens: 250 },
+      customer: {},
+      message: 'hi',
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.max_tokens).toBe(250);
+    expect('max_completion_tokens' in body).toBe(false);
+  });
+
+  it('omits temperature unless the client set it explicitly', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(chatResponse('{"reply":"hi"}'));
+    const ai = makeAiServiceWithEnv({ KIMI_API_KEY: 'kimi-key' }, fetchMock);
+
+    await ai.generateReply({ client: BASE_CLIENT, customer: {}, message: 'hi' });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect('temperature' in body).toBe(false);
+
+    await ai.generateReply({
+      client: { ...BASE_CLIENT, aiTemperature: 0.3 },
+      customer: {},
+      message: 'hi',
+    });
+    const body2 = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(body2.temperature).toBe(0.3);
+  });
 });
 
 describe('AiService.summarizeConversation', () => {
