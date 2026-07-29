@@ -99,6 +99,14 @@ function NavIcon({ href }: { href: string }) {
           <path d="m4.93 4.93 4.24 4.24M14.83 14.83l4.24 4.24M14.83 9.17l4.24-4.24M4.93 19.07l4.24-4.24" />
         </svg>
       );
+    case '/dashboard/ai-models':
+      return (
+        <svg {...common}>
+          <rect width="16" height="16" x="4" y="4" rx="2" />
+          <rect width="6" height="6" x="9" y="9" rx="1" />
+          <path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2" />
+        </svg>
+      );
     case '/dashboard/analytics':
       return (
         <svg {...common}>
@@ -139,6 +147,7 @@ const titles: Record<string, string> = {
   '/dashboard/orders': 'Orders',
   '/dashboard/topups': 'Top-ups',
   '/dashboard/support-history': 'Support History',
+  '/dashboard/ai-models': 'AI Models',
   '/dashboard/analytics': 'Analytics',
   '/dashboard/playground': 'Playground',
   '/dashboard/settings': 'Settings',
@@ -232,6 +241,7 @@ export default function DashboardLayout({
           : []),
         { href: '/dashboard/topups', label: 'Top-ups' },
         { href: '/dashboard/support-history', label: 'Support' },
+        { href: '/dashboard/ai-models', label: 'AI Models' },
         { href: '/dashboard/analytics', label: 'Analytics' },
         { href: '/dashboard/playground', label: 'Playground' },
         { href: '/dashboard/settings', label: 'Settings' },

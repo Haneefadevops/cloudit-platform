@@ -415,3 +415,15 @@ model StaffAlertRotation {
 
   @@map("staff_alert_rotation")
 }
+
+model AiFailoverEvent {
+  id        String   @id @default(uuid())
+  source    String // reply, summary, labels
+  fromModel String // primary model that failed
+  toModel   String // fallback model that served the request
+  error     String // truncated failure reason
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("ai_failover_events")
+}

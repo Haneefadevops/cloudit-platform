@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
 
 interface GenerateReplyInput {
   client: {
@@ -8,6 +9,7 @@ interface GenerateReplyInput {
     products?: any[];
     systemPrompt?: string;
     aiTemperature?: number | null;
+    aiModel?: string | null;
     maxTokens?: number | null;
     fallbackMessage?: string;
     language?: string | null;
@@ -83,7 +85,10 @@ const ORDER_ACTION_TYPES = [
 export class AiService {
   private readonly logger = new Logger(AiService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async generateReply(input: GenerateReplyInput): Promise<GenerateReplyOutput> {
     const { client, customer, message, history, knowledgeContext } = input;
@@ -106,17 +111,23 @@ export class AiService {
     ];
 
     try {
-      const response = await this.chatCompletionWithFailover((provider) => ({
-        model: provider.model,
-        messages,
-        // Only send temperature when the client explicitly set it: some
-        // models (Kimi thinking models, OpenAI GPT-5.x) reject other values.
-        ...(client.aiTemperature != null
-          ? { temperature: client.aiTemperature }
-          : {}),
-        ...this.tokenLimitParam(provider.apiUrl, client.maxTokens ?? 1024),
-        response_format: { type: 'json_object' },
-      }));
+      const { response, failover } = await this.chatCompletionWithFailover(
+        'reply',
+        (provider, isFallback) => ({
+          // A client's aiModel overrides the PRIMARY provider's model only —
+          // the failover path always uses the fallback's configured model.
+          model:
+            !isFallback && client.aiModel ? client.aiModel : provider.model,
+          messages,
+          // Only send temperature when the client explicitly set it: some
+          // models (Kimi thinking models, OpenAI GPT-5.x) reject other values.
+          ...(client.aiTemperature != null
+            ? { temperature: client.aiTemperature }
+            : {}),
+          ...this.tokenLimitParam(provider.apiUrl, client.maxTokens ?? 1024),
+          response_format: { type: 'json_object' },
+        }),
+      );
 
       const data = await response.json();
       const rawContent = data.choices?.[0]?.message?.content || '{}';
@@ -151,6 +162,7 @@ export class AiService {
           model: data.model,
           usage: data.usage,
           finishReason: data.choices?.[0]?.finish_reason,
+          ...(failover ? { failover } : {}),
         },
       };
     } catch (error) {
@@ -210,7 +222,7 @@ ${conversationText}`;
     try {
       const result = await this.callKimiChat(
         [{ role: 'system', content: systemPrompt }],
-        { maxTokens: 256, responseFormat: 'json_object' },
+        { maxTokens: 256, responseFormat: 'json_object', source: 'labels' },
       );
       const parsed = JSON.parse(result.content || '{}');
       const rawLabels = Array.isArray(parsed.labels) ? parsed.labels : [];
@@ -296,25 +308,65 @@ ${conversationText}`;
   /**
    * Calls the primary provider; on any failure retries once on the fallback
    * provider (when configured). The body is rebuilt per provider so each
-   * gets its own model name and provider-specific parameters.
+   * gets its own model name and provider-specific parameters. Failovers are
+   * recorded (best-effort) and reported in the return value.
    */
   private async chatCompletionWithFailover(
-    buildBody: (provider: {
-      apiKey?: string;
-      apiUrl: string;
-      model: string;
-    }) => Record<string, unknown>,
-  ): Promise<Response> {
+    source: string,
+    buildBody: (
+      provider: { apiKey?: string; apiUrl: string; model: string },
+      isFallback: boolean,
+    ) => Record<string, unknown>,
+  ): Promise<{
+    response: Response;
+    failover: { fromModel: string; toModel: string; reason: string } | null;
+  }> {
     const primary = this.resolveChatProvider();
     try {
-      return await this.postChatCompletion(primary, buildBody(primary));
+      const response = await this.postChatCompletion(
+        primary,
+        buildBody(primary, false),
+      );
+      return { response, failover: null };
     } catch (primaryError) {
       const fallback = this.resolveFallbackProvider();
       if (!fallback) throw primaryError;
+      const reason = (primaryError as Error).message;
       this.logger.warn(
-        `Primary AI provider failed (${(primaryError as Error).message}); retrying on fallback provider`,
+        `Primary AI provider failed (${reason}); retrying on fallback provider`,
       );
-      return this.postChatCompletion(fallback, buildBody(fallback));
+      const response = await this.postChatCompletion(
+        fallback,
+        buildBody(fallback, true),
+      );
+      const failover = {
+        fromModel: primary.model,
+        toModel: fallback.model,
+        reason,
+      };
+      await this.recordFailoverEvent(source, failover);
+      return { response, failover };
+    }
+  }
+
+  /** Best-effort failover event log — never breaks the AI call path. */
+  private async recordFailoverEvent(
+    source: string,
+    failover: { fromModel: string; toModel: string; reason: string },
+  ): Promise<void> {
+    try {
+      await this.prisma.aiFailoverEvent.create({
+        data: {
+          source,
+          fromModel: failover.fromModel,
+          toModel: failover.toModel,
+          error: failover.reason.slice(0, 300),
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Could not record failover event: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -338,6 +390,7 @@ ${conversationText}`;
       temperature?: number;
       maxTokens?: number;
       responseFormat?: 'json_object' | 'text';
+      source?: string;
     } = {},
   ): Promise<{ content: string; metadata: any }> {
     const buildBody = (provider: { apiUrl: string; model: string }) => {
@@ -359,7 +412,10 @@ ${conversationText}`;
       return body;
     };
 
-    const response = await this.chatCompletionWithFailover(buildBody);
+    const { response, failover } = await this.chatCompletionWithFailover(
+      options.source ?? 'summary',
+      buildBody,
+    );
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || '';
@@ -369,6 +425,7 @@ ${conversationText}`;
         model: data.model,
         usage: data.usage,
         finishReason: data.choices?.[0]?.finish_reason,
+        ...(failover ? { failover } : {}),
       },
     };
   }

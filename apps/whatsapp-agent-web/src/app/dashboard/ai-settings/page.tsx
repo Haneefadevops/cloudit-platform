@@ -209,10 +209,15 @@ function AiSettingsForm() {
           <Card title="Model & Generation">
             <div className="flex flex-col gap-3">
               <Input
-                placeholder="AI model (e.g. kimi-latest)"
+                placeholder="Model override (empty = server default)"
                 value={form.aiModel}
                 onChange={(e) => setForm({ ...form, aiModel: e.target.value })}
               />
+              <p className="text-xs text-muted">
+                Overrides the primary AI provider's model for this client only
+                (e.g. gpt-5.6-luna). Leave empty to use the server default —
+                see Dashboard → AI Models for what is active.
+              </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <span className="mb-1 block text-xs text-muted">

@@ -3,13 +3,15 @@ import { AiService } from './ai.service';
 function makeAiService(fetchImpl: jest.Mock) {
   (global as any).fetch = fetchImpl;
   const config = { get: (_key: string, def?: unknown) => def };
-  return new AiService(config as never);
+  const prisma = { aiFailoverEvent: { create: jest.fn() } };
+  return new AiService(config as never, prisma as never);
 }
 
 function makeAiServiceWithEnv(env: Record<string, string>, fetchImpl: jest.Mock) {
   (global as any).fetch = fetchImpl;
   const config = { get: (key: string, def?: unknown) => env[key] ?? def };
-  return new AiService(config as never);
+  const prisma = { aiFailoverEvent: { create: jest.fn() } };
+  return new AiService(config as never, prisma as never);
 }
 
 function chatResponse(content: string) {
@@ -221,6 +223,61 @@ describe('AiService provider failover', () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       'https://api.openai.com/v1/chat/completions',
     );
+  });
+
+  it('records a failover event and flags metadata when failing over', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => 'openai down',
+      })
+      .mockResolvedValueOnce(chatResponse('{"reply":"from kimi"}'));
+    const config = { get: (key: string, def?: unknown) => OPENAI_ENV[key] ?? def };
+    const prisma = { aiFailoverEvent: { create: jest.fn() } };
+    (global as any).fetch = fetchMock;
+    const ai = new AiService(config as never, prisma as never);
+
+    const result = await ai.generateReply({
+      client: BASE_CLIENT,
+      customer: {},
+      message: 'hi',
+    });
+
+    expect(prisma.aiFailoverEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        source: 'reply',
+        fromModel: 'gpt-4o-mini',
+        toModel: 'kimi-latest',
+      }),
+    });
+    expect(result.metadata.failover).toEqual(
+      expect.objectContaining({ fromModel: 'gpt-4o-mini', toModel: 'kimi-latest' }),
+    );
+  });
+
+  it('uses the client aiModel override for the primary provider only', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => 'bad model',
+      })
+      .mockResolvedValueOnce(chatResponse('{"reply":"fallback"}'));
+    const ai = makeAiServiceWithEnv(OPENAI_ENV, fetchMock);
+
+    await ai.generateReply({
+      client: { ...BASE_CLIENT, aiModel: 'gpt-5.6-terra' },
+      customer: {},
+      message: 'hi',
+    });
+
+    const primaryBody = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(primaryBody.model).toBe('gpt-5.6-terra'); // override on primary
+    const fallbackBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(fallbackBody.model).toBe('kimi-latest'); // never on fallback
   });
 
   it('sends max_completion_tokens (not max_tokens) to api.openai.com', async () => {

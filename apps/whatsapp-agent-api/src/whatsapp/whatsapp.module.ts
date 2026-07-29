@@ -12,6 +12,7 @@ import { KnowledgeBaseModule } from '../knowledge-base/knowledge-base.module';
 import { BookingsModule } from '../bookings/bookings.module';
 import { OrdersModule } from '../orders/orders.module';
 import { UsageModule } from '../usage/usage.module';
+import { StaffAlertsModule } from '../staff-alerts/staff-alerts.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { UsageModule } from '../usage/usage.module';
     BookingsModule,
     OrdersModule,
     UsageModule,
+    StaffAlertsModule,
   ],
   controllers: [WhatsAppController],
   providers: [WhatsAppService, MediaService],

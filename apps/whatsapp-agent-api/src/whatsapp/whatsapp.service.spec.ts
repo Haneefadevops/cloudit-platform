@@ -75,6 +75,7 @@ function setup(botReplyCount: number) {
     {} as never, // orderActions
     usageService as never,
     {} as never, // media
+    {} as never, // staffAlerts
   );
 
   return {
@@ -183,6 +184,7 @@ describe('WhatsAppService.verifySignature', () => {
       {} as never, // orderActions
       {} as never, // usage
       {} as never, // media
+      {} as never, // staffAlerts
     );
   }
 

@@ -14,6 +14,7 @@ import type { BookingActionResult } from '../bookings/booking-actions.service';
 import { OrderActionsService } from '../orders/order-actions.service';
 import type { OrderActionResult } from '../orders/order-actions.service';
 import { UsageService } from '../usage/usage.service';
+import { StaffAlertsService } from '../staff-alerts/staff-alerts.service';
 
 /** Max AI replies per conversation before handing off to the human team. */
 export const AI_REPLY_LIMIT = 50;
@@ -78,6 +79,7 @@ export class WhatsAppService {
     private readonly orderActionsService: OrderActionsService,
     private readonly usageService: UsageService,
     private readonly mediaService: MediaService,
+    private readonly staffAlertsService: StaffAlertsService,
   ) {}
 
   /**
@@ -478,6 +480,7 @@ export class WhatsAppService {
         products: Array.isArray(client.products) ? client.products : undefined,
         systemPrompt: client.systemPrompt || undefined,
         aiTemperature: client.aiTemperature,
+        aiModel: client.aiModel,
         maxTokens: client.maxTokens,
         fallbackMessage: client.fallbackMessage || undefined,
         language: client.language,
@@ -510,6 +513,10 @@ export class WhatsAppService {
       knowledgeContext,
     };
     const aiResult = await this.aiService.generateReply(aiInput);
+
+    // 9.1 If the reply was served via provider failover, alert staff
+    // (rate-limited so an outage doesn't spam one alert per message).
+    await this.maybeAlertFailover(client, aiResult.metadata);
 
     // 9.5 Execute an action if the AI requested one, then let the AI phrase
     // its reply from the authoritative backend result. At most one action
@@ -608,6 +615,36 @@ export class WhatsAppService {
   /** Appends the ticket reference to a customer-facing handoff message. */
   private withTicketRef(message: string, ref?: string | null): string {
     return ref ? `${message}\n\nYour ticket reference is ${ref}.` : message;
+  }
+
+  /** Last failover staff-alert time (rate limit: one alert per 30 min). */
+  private lastFailoverAlertAt = 0;
+
+  /**
+   * Alerts staff on WhatsApp when an AI reply was served via provider
+   * failover. Rate-limited so a provider outage triggers one alert per
+   * 30 minutes, not one per customer message.
+   */
+  private async maybeAlertFailover(
+    client: { metaAccessToken: string; whatsappPhoneNumberId: string },
+    metadata: any,
+  ): Promise<void> {
+    const failover = metadata?.failover;
+    if (!failover) return;
+    const now = Date.now();
+    if (now - this.lastFailoverAlertAt < 30 * 60 * 1000) return;
+    this.lastFailoverAlertAt = now;
+
+    try {
+      await this.staffAlertsService.sendAlert(
+        client,
+        `AI provider failover: ${failover.fromModel} failed — replies are being served by the fallback model (${failover.toModel}). Error: ${String(failover.reason).slice(0, 150)}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failover staff alert failed: ${(error as Error).message}`,
+      );
+    }
   }
 
   private isBookingAction(action: { type: string }): boolean {
