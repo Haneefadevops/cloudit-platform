@@ -106,27 +106,13 @@ export class AiService {
     ];
 
     try {
-      const { apiKey, apiUrl, model } = this.resolveChatProvider();
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: client.aiTemperature ?? 0.7,
-          max_tokens: client.maxTokens ?? 1024,
-          response_format: { type: 'json_object' },
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Chat API error: ${response.status} ${errorText}`);
-      }
+      const response = await this.chatCompletionWithFailover((model) => ({
+        model,
+        messages,
+        temperature: client.aiTemperature ?? 0.7,
+        max_tokens: client.maxTokens ?? 1024,
+        response_format: { type: 'json_object' },
+      }));
 
       const data = await response.json();
       const rawContent = data.choices?.[0]?.message?.content || '{}';
@@ -262,6 +248,68 @@ ${conversationText}`;
     };
   }
 
+  /**
+   * Automatic failover target: when AI_* points at a different provider AND
+   * KIMI_* is also configured, a failed primary request is retried once on
+   * Kimi so the bot keeps answering through a provider outage.
+   */
+  private resolveFallbackProvider():
+    | { apiKey: string; apiUrl: string; model: string }
+    | null {
+    const primaryKey = this.configService.get<string>('AI_API_KEY');
+    const kimiKey = this.configService.get<string>('KIMI_API_KEY');
+    if (!primaryKey || !kimiKey) return null;
+    return {
+      apiKey: kimiKey,
+      apiUrl: this.configService.get<string>(
+        'KIMI_API_URL',
+        'https://api.moonshot.cn/v1/chat/completions',
+      ),
+      model: this.configService.get<string>('KIMI_MODEL', 'kimi-latest'),
+    };
+  }
+
+  /** POSTs a chat-completion request; throws on HTTP or network failure. */
+  private async postChatCompletion(
+    provider: { apiKey?: string; apiUrl: string; model: string },
+    body: Record<string, unknown>,
+  ): Promise<Response> {
+    const response = await fetch(provider.apiUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Chat API error: ${response.status} ${errorText}`);
+    }
+    return response;
+  }
+
+  /**
+   * Calls the primary provider; on any failure retries once on the fallback
+   * provider (when configured). The body is rebuilt per provider so each
+   * gets its own model name.
+   */
+  private async chatCompletionWithFailover(
+    buildBody: (model: string) => Record<string, unknown>,
+  ): Promise<Response> {
+    const primary = this.resolveChatProvider();
+    try {
+      return await this.postChatCompletion(primary, buildBody(primary.model));
+    } catch (primaryError) {
+      const fallback = this.resolveFallbackProvider();
+      if (!fallback) throw primaryError;
+      this.logger.warn(
+        `Primary AI provider failed (${(primaryError as Error).message}); retrying on fallback provider`,
+      );
+      return this.postChatCompletion(fallback, buildBody(fallback.model));
+    }
+  }
+
   private async callKimiChat(
     messages: { role: 'system' | 'user'; content: string }[],
     options: {
@@ -270,37 +318,26 @@ ${conversationText}`;
       responseFormat?: 'json_object' | 'text';
     } = {},
   ): Promise<{ content: string; metadata: any }> {
-    const { apiKey, apiUrl, model } = this.resolveChatProvider();
-
-    const body: any = {
-      model,
-      messages,
-      max_tokens: options.maxTokens ?? 1024,
+    const buildBody = (model: string) => {
+      const body: Record<string, unknown> = {
+        model,
+        messages,
+        max_tokens: options.maxTokens ?? 1024,
+      };
+      // Only send temperature when explicitly requested: thinking models
+      // (e.g. the production KIMI_MODEL) reject any value but 1 — omitting
+      // the field always falls back to a valid server default. This was the
+      // real cause of "Summary could not be generated" in production.
+      if (options.temperature !== undefined) {
+        body.temperature = options.temperature;
+      }
+      if (options.responseFormat === 'json_object') {
+        body.response_format = { type: 'json_object' };
+      }
+      return body;
     };
-    // Only send temperature when explicitly requested: thinking models
-    // (e.g. the production KIMI_MODEL) reject any value but 1 — omitting
-    // the field always falls back to a valid server default. This was the
-    // real cause of "Summary could not be generated" in production.
-    if (options.temperature !== undefined) {
-      body.temperature = options.temperature;
-    }
-    if (options.responseFormat === 'json_object') {
-      body.response_format = { type: 'json_object' };
-    }
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Chat API error: ${response.status} ${errorText}`);
-    }
+    const response = await this.chatCompletionWithFailover(buildBody);
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || '';
@@ -376,16 +413,24 @@ BUSINESS LANGUAGE: ${languageDisplay}
 
 RULES:
 1. Be friendly and professional
-2. Detect the language of the customer's message and reply in that language. If the language is ambiguous, fall back to the business language above (${languageDisplay})
-3. Answer ONLY from the KNOWLEDGE BASE and BUSINESS INFO above
-4. If the answer is not in the knowledge base, reply with the FALLBACK MESSAGE exactly and set handoff to true
-5. Never make up prices, stock levels, or policies
-6. For orders, ask: product, quantity, address, phone
-7. For complaints or refund requests, immediately set handoff to true
-8. Keep messages WhatsApp-short. Acknowledge what the customer said first, then ask (e.g. "11am is taken — I have 2pm or 4pm instead. Which works?")
-9. Ask at most ONE question per message — never bundle two asks
-10. Answer a direct question directly before asking anything else
-11. Never expose internal workflow: no "requires staff confirmation", "I'll check availability before confirming", action names, or JSON/tooling talk — backstage stays backstage
+2. LANGUAGE — match the customer's LATEST message only; earlier messages may be in a different language, never follow them:
+   - English → reply in English
+   - Sinhala script → reply in Sinhala script
+   - Tamil script → reply in Tamil script
+   - Singlish (Sinhala written in English letters) → reply in Singlish
+   - Thanglish (Tamil written in English letters) → reply in Thanglish
+   If the latest message is truly ambiguous, fall back to the business language above (${languageDisplay})
+3. NEVER mix two languages in one reply — pick exactly one language and write the entire message in it. Mixing Singlish and Thanglish (or Sinhala and Tamil words) in a single message is strictly forbidden
+4. When replying in Singlish or Thanglish, use only simple everyday spoken words that any person would know — no literary, formal, or rare words
+5. Answer ONLY from the KNOWLEDGE BASE and BUSINESS INFO above
+6. If the answer is not in the knowledge base, reply with the FALLBACK MESSAGE exactly and set handoff to true
+7. Never make up prices, stock levels, or policies
+8. For orders, ask: product, quantity, address, phone
+9. For complaints or refund requests, immediately set handoff to true
+10. Keep messages WhatsApp-short. Acknowledge what the customer said first, then ask (e.g. "11am is taken — I have 2pm or 4pm instead. Which works?")
+11. Ask at most ONE question per message — never bundle two asks
+12. Answer a direct question directly before asking anything else
+13. Never expose internal workflow: no "requires staff confirmation", "I'll check availability before confirming", action names, or JSON/tooling talk — backstage stays backstage
 
 CUSTOMER CONTEXT:
 - Name: ${customer.name || 'New customer'}

@@ -6,6 +6,12 @@ function makeAiService(fetchImpl: jest.Mock) {
   return new AiService(config as never);
 }
 
+function makeAiServiceWithEnv(env: Record<string, string>, fetchImpl: jest.Mock) {
+  (global as any).fetch = fetchImpl;
+  const config = { get: (key: string, def?: unknown) => env[key] ?? def };
+  return new AiService(config as never);
+}
+
 function chatResponse(content: string) {
   return {
     ok: true,
@@ -74,6 +80,20 @@ describe('AiService prompt context', () => {
     expect(prompt).not.toContain('"action"'); // no actions without modules
   });
 
+  it('instructs strict single-language replies matched to the latest message', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(chatResponse('{"reply":"hi"}'));
+    const ai = makeAiService(fetchMock);
+
+    await ai.generateReply({ client: BASE_CLIENT, customer: {}, message: 'hi' });
+
+    const prompt = systemPromptOf(fetchMock);
+    expect(prompt).toContain("match the customer's LATEST message only");
+    expect(prompt).toContain('Singlish');
+    expect(prompt).toContain('Thanglish');
+    expect(prompt).toContain('NEVER mix two languages in one reply');
+    expect(prompt).toContain('simple everyday spoken words');
+  });
+
   it('instructs offering 2-3 nearest alternatives on the action-result turn', async () => {
     const fetchMock = jest.fn().mockResolvedValue(chatResponse('{"reply":"hi"}'));
     const ai = makeAiService(fetchMock);
@@ -104,6 +124,103 @@ describe('AiService prompt context', () => {
 
     // Invalid tz must not crash the whole prompt.
     expect(fetchMock).toHaveBeenCalled();
+  });
+});
+
+describe('AiService provider failover', () => {
+  beforeEach(() => jest.restoreAllMocks());
+
+  const OPENAI_ENV = {
+    AI_API_KEY: 'sk-openai',
+    AI_API_URL: 'https://api.openai.com/v1/chat/completions',
+    AI_MODEL: 'gpt-4o-mini',
+    KIMI_API_KEY: 'kimi-key',
+  };
+
+  it('retries on Kimi when the primary (AI_*) provider fails', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => 'openai down',
+      })
+      .mockResolvedValueOnce(chatResponse('{"reply":"from kimi"}'));
+    const ai = makeAiServiceWithEnv(OPENAI_ENV, fetchMock);
+
+    const result = await ai.generateReply({
+      client: BASE_CLIENT,
+      customer: {},
+      message: 'hi',
+    });
+
+    expect(result.reply).toBe('from kimi');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://api.openai.com/v1/chat/completions',
+    );
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://api.moonshot.cn/v1/chat/completions',
+    );
+    const fallbackBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(fallbackBody.model).toBe('kimi-latest');
+    expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe(
+      'Bearer kimi-key',
+    );
+  });
+
+  it('fails over on network errors too, not just HTTP errors', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('socket hang up'))
+      .mockResolvedValueOnce(chatResponse('{"reply":"recovered"}'));
+    const ai = makeAiServiceWithEnv(OPENAI_ENV, fetchMock);
+
+    const result = await ai.generateReply({
+      client: BASE_CLIENT,
+      customer: {},
+      message: 'hi',
+    });
+
+    expect(result.reply).toBe('recovered');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry when no fallback is configured', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => 'kimi down',
+    });
+    const ai = makeAiServiceWithEnv({ KIMI_API_KEY: 'kimi-key' }, fetchMock);
+
+    const result = await ai.generateReply({
+      client: BASE_CLIENT,
+      customer: {},
+      message: 'hi',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.reply).toBeTruthy(); // graceful fallback message, no crash
+  });
+
+  it('uses the primary provider only when it succeeds', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(chatResponse('{"reply":"from openai"}'));
+    const ai = makeAiServiceWithEnv(OPENAI_ENV, fetchMock);
+
+    const result = await ai.generateReply({
+      client: BASE_CLIENT,
+      customer: {},
+      message: 'hi',
+    });
+
+    expect(result.reply).toBe('from openai');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://api.openai.com/v1/chat/completions',
+    );
   });
 });
 
