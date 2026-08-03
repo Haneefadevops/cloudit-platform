@@ -73,7 +73,7 @@ const leaveTypeLabels: Record<string, string> = {
 }
 
 export default function LeavePage() {
-  const { organizationId, userId, isLoaded, isSignedIn, isAdmin, isHrAdmin, isOwner, isDeptManager, isBranchManager, userRole } = useAuth()
+  const { organizationId, userId, isLoaded, isSignedIn, isHrAdmin, isOwner, isDeptManager, isBranchManager, userRole } = useAuth()
   const { can } = usePermissions(['leave.approve', 'leave.adjust_balance'])
   const [requests, setRequests] = useState<LeaveRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -208,8 +208,9 @@ export default function LeavePage() {
   const canApproveSelected = (() => {
     if (!selected) return false
     const s = selected.status
+    const isFullLeaveAdmin = ['owner', 'super_admin', 'admin'].includes(userRole || '')
+    if (isFullLeaveAdmin) return ['pending', 'awaiting_level1', 'awaiting_level2', 'awaiting_level3'].includes(s)
     if (!can('leave.approve')) return false
-    if (isOwner || isAdmin) return ['pending', 'awaiting_level1', 'awaiting_level2', 'awaiting_level3'].includes(s)
     if (isHrAdmin) return s === 'awaiting_level2'
     if (isDeptManager || isBranchManager) return s === 'awaiting_level1'
     return false
