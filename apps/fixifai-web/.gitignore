@@ -1,0 +1,13 @@
+# dependencies
+node_modules/
+
+# build output
+.next/
+out/
+
+# pilot signup data (runtime)
+data/
+
+# local env / misc
+*.local
+.env*

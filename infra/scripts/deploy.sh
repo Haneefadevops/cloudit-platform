@@ -226,7 +226,7 @@ log "Ensuring application databases exist..."
 log "Running pre-deployment checks and migrations..."
 "$PROJECT_ROOT/infra/scripts/predeploy.sh"
 
-frontend_services=(platform-web hospitality-web orbitone-web touchorbit-web touchorbit-admin-web touchorbit-employee-web)
+frontend_services=(platform-web hospitality-web orbitone-web touchorbit-web touchorbit-admin-web touchorbit-employee-web fixifai-web)
 
 docker compose -f infra/traefik/docker-compose.yml up -d
 wait_for_service traefik

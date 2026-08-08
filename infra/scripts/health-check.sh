@@ -23,6 +23,7 @@ endpoints=(
   "https://to-admin.${DOMAIN}"
   "https://to-employee.${DOMAIN}"
   "https://to-kiosk.${DOMAIN}"
+  "https://fixifai.${DOMAIN}"
   "https://api.thereplyte.com/api/health"
   "https://app.thereplyte.com"
   "https://inbox.thereplyte.com"

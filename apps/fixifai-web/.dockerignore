@@ -1,0 +1,7 @@
+node_modules
+.next
+out
+*.tsbuildinfo
+
+# runtime pilot-signup leads — never baked into the image (named volume at /app/data)
+data
