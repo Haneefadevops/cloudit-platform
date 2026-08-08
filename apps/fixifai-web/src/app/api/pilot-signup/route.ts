@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import path from 'path';
+import nodemailer from 'nodemailer';
 
 const TRADES = [
   'AC & Refrigeration',
@@ -97,6 +98,40 @@ function validate(body: Record<string, unknown>): {
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'signups.json');
 
+// Email notification for each new pilot signup. No-ops quietly when SMTP is
+// not configured — a mail failure must never lose a lead.
+async function notifySignup(record: SignupFields & { submittedAt: string }) {
+  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, NOTIFY_TO } = process.env;
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+    console.warn('SMTP not configured — signup notification skipped');
+    return;
+  }
+  const port = Number(SMTP_PORT || 587);
+  const transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port,
+    secure: port === 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+  });
+  const lines = [
+    `Company: ${record.company}`,
+    `Name: ${record.name}`,
+    `Phone: ${record.phone}`,
+    `Email: ${record.email}`,
+    `Trade: ${record.trade}`,
+    `Team size: ${record.teamSize}`,
+    `Current method: ${record.currentMethod}`,
+    `Business type: ${record.businessType}`,
+    `Submitted: ${record.submittedAt}`,
+  ];
+  await transporter.sendMail({
+    from: `FixifAI Pilot <${SMTP_USER}>`,
+    to: NOTIFY_TO || 'fixifai@cloudit.lk',
+    subject: `New FixifAI pilot signup — ${record.company}`,
+    text: `A new pilot signup was submitted on fixifai.cloudit.lk:\n\n${lines.join('\n')}\n`,
+  });
+}
+
 async function storeSignup(record: SignupFields & { submittedAt: string }) {
   await mkdir(DATA_DIR, { recursive: true });
   let existing: unknown[] = [];
@@ -132,6 +167,13 @@ export async function POST(request: Request) {
       { ok: false, error: 'Could not save your signup. Please try again.' },
       { status: 500 },
     );
+  }
+
+  try {
+    await notifySignup({ ...data, submittedAt: new Date().toISOString() });
+  } catch (err) {
+    // Email is best-effort — the lead is already stored, never fail the request
+    console.error('Failed to send signup notification', err);
   }
 
   return NextResponse.json({ ok: true });

@@ -11,3 +11,4 @@ data/
 # local env / misc
 *.local
 .env*
+!.env.example

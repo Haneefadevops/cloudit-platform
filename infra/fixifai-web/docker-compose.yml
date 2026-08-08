@@ -11,6 +11,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    env_file:
+      - path: ../../apps/fixifai-web/.env
+        required: false
     environment:
       - NODE_ENV=production
       - PORT=3013
