@@ -111,33 +111,65 @@ export class AiService {
     ];
 
     try {
-      const { response, failover } = await this.chatCompletionWithFailover(
-        'reply',
-        (provider, isFallback) => ({
-          // A client's aiModel overrides the PRIMARY provider's model only —
-          // the failover path always uses the fallback's configured model.
-          model:
-            !isFallback && client.aiModel ? client.aiModel : provider.model,
-          messages,
-          // Only send temperature when the client explicitly set it: some
-          // models (Kimi thinking models, OpenAI GPT-5.x) reject other values.
-          ...(client.aiTemperature != null
-            ? { temperature: client.aiTemperature }
-            : {}),
-          ...this.tokenLimitParam(provider.apiUrl, client.maxTokens ?? 1024),
-          response_format: { type: 'json_object' },
-        }),
-      );
+      // Reasoning models (GPT-5.x, Kimi thinking) share the token budget
+      // between invisible reasoning and the visible reply — the old 1024
+      // default was seen truncating the JSON mid-stream in production.
+      // Default raised; on finish_reason 'length' retry once with double.
+      let tokenBudget = client.maxTokens ?? 2048;
+      let data: any;
+      let failover: any;
 
-      const data = await response.json();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const result = await this.chatCompletionWithFailover(
+          'reply',
+          (provider, isFallback) => ({
+            // A client's aiModel overrides the PRIMARY provider's model only —
+            // the failover path always uses the fallback's configured model.
+            model:
+              !isFallback && client.aiModel ? client.aiModel : provider.model,
+            messages,
+            // Only send temperature when the client explicitly set it: some
+            // models (Kimi thinking models, OpenAI GPT-5.x) reject other values.
+            ...(client.aiTemperature != null
+              ? { temperature: client.aiTemperature }
+              : {}),
+            ...this.tokenLimitParam(provider.apiUrl, tokenBudget),
+            response_format: { type: 'json_object' },
+          }),
+        );
+        data = await result.response.json();
+        failover = result.failover;
+
+        if (data.choices?.[0]?.finish_reason !== 'length') break;
+        tokenBudget *= 2;
+        this.logger.warn(
+          `AI reply truncated (finish_reason=length) — retrying with ${tokenBudget} tokens`,
+        );
+      }
+
+      const metadata = {
+        model: data.model,
+        usage: data.usage,
+        finishReason: data.choices?.[0]?.finish_reason,
+        ...(failover ? { failover } : {}),
+      };
+
       const rawContent = data.choices?.[0]?.message?.content || '{}';
+      const parsed = this.parseReplyJson(rawContent);
 
-      let parsed: any;
-      try {
-        parsed = JSON.parse(rawContent);
-      } catch {
-        // Fallback if model doesn't return valid JSON
-        parsed = { reply: rawContent, handoff: false };
+      if (!parsed) {
+        // Raw model output must never reach the customer
+        this.logger.error(
+          `AI returned unparseable output: ${rawContent.slice(0, 300)}`,
+        );
+        return {
+          reply:
+            client.fallbackMessage ||
+            'Sorry, something went wrong on our side — our team will follow up with you shortly.',
+          handoff: true,
+          handoffReason: 'AI response parse error',
+          metadata,
+        };
       }
 
       const actionType =
@@ -158,12 +190,7 @@ export class AiService {
         handoff: parsed.handoff === true,
         handoffReason: parsed.handoffReason,
         action,
-        metadata: {
-          model: data.model,
-          usage: data.usage,
-          finishReason: data.choices?.[0]?.finish_reason,
-          ...(failover ? { failover } : {}),
-        },
+        metadata,
       };
     } catch (error) {
       this.logger.error('AI generation failed', error);
@@ -368,6 +395,31 @@ ${conversationText}`;
         `Could not record failover event: ${(error as Error).message}`,
       );
     }
+  }
+
+  /**
+   * Parse the model's JSON reply. When the JSON is truncated or malformed
+   * (e.g. the token limit cut it off mid-object), salvage the complete
+   * "reply" string if one is present. Returns null when nothing usable can
+   * be recovered — the caller must then use a generic fallback, because raw
+   * model output must never be shown to the customer. A salvaged reply never
+   * carries an action: partial JSON cannot be trusted.
+   */
+  private parseReplyJson(raw: string): any | null {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      // fall through to salvage
+    }
+    const match = raw.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (match) {
+      try {
+        return { reply: JSON.parse(`"${match[1]}"`), handoff: false };
+      } catch {
+        // fall through
+      }
+    }
+    return null;
   }
 
   /**

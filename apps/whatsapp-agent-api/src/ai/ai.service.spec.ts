@@ -383,3 +383,91 @@ describe('AiService.summarizeConversation', () => {
     expect(summary).toBe('Summary could not be generated.');
   });
 });
+
+describe('AiService reply parsing robustness', () => {
+  beforeEach(() => jest.restoreAllMocks());
+
+  function truncatedResponse(content: string) {
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content }, finish_reason: 'length' }],
+        model: 'kimi-latest',
+        usage: {},
+      }),
+    };
+  }
+
+  it('salvages the reply from truncated JSON without leaking raw output', async () => {
+    // Token limit cut the JSON inside the action object — reply is complete
+    const truncated =
+      '{"reply":"Let me check if 3:00 PM is available for you.","handoff":false,"handoffReason":"","action":{"type":"check_availability","service":"DevOps","date":"2029-12-';
+    const fetchMock = jest.fn().mockResolvedValue(chatResponse(truncated));
+    const ai = makeAiService(fetchMock);
+
+    const result = await ai.generateReply({
+      client: { ...BASE_CLIENT, bookingsEnabled: true, services: [] },
+      customer: {},
+      message: '3 pm yes',
+    });
+
+    expect(result.reply).toBe(
+      'Let me check if 3:00 PM is available for you.',
+    );
+    expect(result.reply).not.toContain('{');
+    expect(result.handoff).toBe(false);
+    // partial JSON cannot be trusted — no action may leak through
+    expect(result.action).toBeUndefined();
+  });
+
+  it('never sends raw model output when it is unparseable — falls back + hands off', async () => {
+    const garbage = '{"reply": "oops, cut mid-string...';
+    const fetchMock = jest.fn().mockResolvedValue(chatResponse(garbage));
+    const ai = makeAiService(fetchMock);
+
+    const result = await ai.generateReply({
+      client: { ...BASE_CLIENT, fallbackMessage: 'Custom fallback text' },
+      customer: {},
+      message: 'hello',
+    });
+
+    expect(result.reply).toBe('Custom fallback text');
+    expect(result.reply).not.toContain('"reply"');
+    expect(result.handoff).toBe(true);
+    expect(result.handoffReason).toBe('AI response parse error');
+  });
+
+  it('retries once with a doubled token budget when finish_reason is length', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(truncatedResponse('{"reply":"cut off'))
+      .mockResolvedValue(chatResponse('{"reply":"All good!"}'));
+    const ai = makeAiService(fetchMock);
+
+    const result = await ai.generateReply({
+      client: BASE_CLIENT,
+      customer: {},
+      message: 'hi',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const body1 = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    const body2 = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    const limit1 = body1.max_tokens ?? body1.max_completion_tokens;
+    const limit2 = body2.max_tokens ?? body2.max_completion_tokens;
+    expect(limit1).toBe(2048); // raised default
+    expect(limit2).toBe(4096); // doubled on retry
+    expect(result.reply).toBe('All good!');
+  });
+
+  it('does not retry when the reply finishes normally', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(chatResponse('{"reply":"All good!"}'));
+    const ai = makeAiService(fetchMock);
+
+    await ai.generateReply({ client: BASE_CLIENT, customer: {}, message: 'hi' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
