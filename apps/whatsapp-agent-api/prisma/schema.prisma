@@ -104,8 +104,40 @@ model Client {
   customerCategories CustomerCategory[]
   workflowSessions WorkflowSession[]
   socialComments   SocialComment[]
+  apiKeys          ApiKey[]
+  transactionalMessages TransactionalMessage[]
 
   @@map("clients")
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  name       String
+  prefix     String
+  keyHash    String    @unique
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  clientId   String
+  client     Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+
+  @@map("api_keys")
+}
+
+model TransactionalMessage {
+  id           String   @id @default(uuid())
+  to           String
+  templateName String
+  languageCode String   @default("en")
+  status       String
+  error        String?
+  clientId     String
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  apiKeyId     String?
+  createdAt    DateTime @default(now())
+
+  @@index([clientId, createdAt])
+  @@map("transactional_messages")
 }
 
 model SocialComment {
