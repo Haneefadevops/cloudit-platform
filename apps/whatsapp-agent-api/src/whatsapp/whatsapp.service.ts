@@ -636,7 +636,7 @@ export class WhatsAppService {
           customer: {
             id: customer.id,
             name: customer.name,
-            phoneNumber: customer.phoneNumber || from,
+            phoneNumber: customer.phoneNumber || from || null,
           },
           action: aiResult.action,
         });
@@ -646,7 +646,7 @@ export class WhatsAppService {
           customer: {
             id: customer.id,
             name: customer.name,
-            phoneNumber: customer.phoneNumber || from,
+            phoneNumber: customer.phoneNumber || from || null,
           },
           conversationId: conversation.id,
           action: aiResult.action,

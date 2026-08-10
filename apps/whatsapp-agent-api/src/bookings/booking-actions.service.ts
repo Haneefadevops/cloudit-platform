@@ -17,7 +17,7 @@ export interface BookingActionContext {
   customer: {
     id: string;
     name?: string | null;
-    phoneNumber: string;
+    phoneNumber: string | null;
   };
   action: BookingAction;
 }

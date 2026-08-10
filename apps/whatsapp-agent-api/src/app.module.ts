@@ -22,6 +22,7 @@ import { UsersModule } from './users/users.module';
 import { StaffAlertsModule } from './staff-alerts/staff-alerts.module';
 import { WorkflowsModule } from './workflows/workflows.module';
 import { CategoriesModule } from './categories/categories.module';
+import { SocialCommentsModule } from './social-comments/social-comments.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { CategoriesModule } from './categories/categories.module';
     StaffAlertsModule,
     WorkflowsModule,
     CategoriesModule,
+    SocialCommentsModule,
   ],
 })
 export class AppModule {}

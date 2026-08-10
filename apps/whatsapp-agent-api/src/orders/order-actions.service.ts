@@ -19,7 +19,7 @@ export interface OrderActionContext {
   customer: {
     id: string;
     name?: string | null;
-    phoneNumber: string;
+    phoneNumber: string | null;
   };
   /** Conversation the draft order is keyed on (null in the playground). */
   conversationId?: string | null;

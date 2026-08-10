@@ -12,6 +12,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { WhatsAppService } from './whatsapp.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SocialCommentsService } from '../social-comments/social-comments.service';
 
 @Controller('webhooks/whatsapp')
 export class WhatsAppController {
@@ -21,6 +22,7 @@ export class WhatsAppController {
     private readonly configService: ConfigService,
     private readonly whatsappService: WhatsAppService,
     private readonly prisma: PrismaService,
+    private readonly socialCommentsService: SocialCommentsService,
   ) {}
 
   @Get()
@@ -58,6 +60,11 @@ export class WhatsAppController {
     // Reject forged webhooks before any processing. Thrown outside the
     // try/catch below so the 401 reaches Meta instead of a swallowed 200.
     this.whatsappService.verifySignature(rawBody, signature);
+
+    if (payload?.object === 'page' || payload?.object === 'instagram') {
+      await this.socialCommentsService.ingest(payload);
+      return { status: 'ok' };
+    }
 
     try {
       await this.whatsappService.handleIncomingWebhook(payload);

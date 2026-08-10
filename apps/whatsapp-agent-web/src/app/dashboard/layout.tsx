@@ -68,6 +68,13 @@ function NavIcon({ href }: { href: string }) {
           <path d="M5 21v-2a7 7 0 0 1 14 0v2" />
         </svg>
       );
+    case '/dashboard/social-comments':
+      return (
+        <svg {...common}>
+          <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          <path d="M8 10h8M8 13h5" />
+        </svg>
+      );
     case '/dashboard/services':
       return (
         <svg {...common}>
@@ -157,6 +164,7 @@ const titles: Record<string, string> = {
   '/dashboard/canned-responses': 'Canned Responses',
   '/dashboard/workflows': 'Workflows',
   '/dashboard/customers': 'Customers',
+  '/dashboard/social-comments': 'Comments',
   '/dashboard/services': 'Services',
   '/dashboard/bookings': 'Bookings',
   '/dashboard/catalog': 'Catalog',
@@ -245,6 +253,7 @@ export default function DashboardLayout({
         { href: '/dashboard/canned-responses', label: 'Canned Responses' },
         { href: '/dashboard/workflows', label: 'Workflows' },
         { href: '/dashboard/customers', label: 'Customers' },
+        { href: '/dashboard/social-comments', label: 'Comments' },
         ...(showServices
           ? [
               { href: '/dashboard/services', label: 'Services' },

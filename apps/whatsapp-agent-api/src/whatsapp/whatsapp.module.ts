@@ -14,6 +14,7 @@ import { OrdersModule } from '../orders/orders.module';
 import { UsageModule } from '../usage/usage.module';
 import { StaffAlertsModule } from '../staff-alerts/staff-alerts.module';
 import { WorkflowsModule } from '../workflows/workflows.module';
+import { SocialCommentsModule } from '../social-comments/social-comments.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { WorkflowsModule } from '../workflows/workflows.module';
     UsageModule,
     StaffAlertsModule,
     WorkflowsModule,
+    SocialCommentsModule,
   ],
   controllers: [WhatsAppController],
   providers: [WhatsAppService, MediaService],

@@ -32,6 +32,9 @@ model Client {
   chatwootInboxId       Int?
   chatwootApiKey        String?
   chatwootAdminUserId   Int?
+  facebookPageId        String?
+  facebookPageAccessToken String?
+  instagramAccountId    String?
 
   // AI settings (editable in AI Settings page)
   systemPrompt          String?  @default("You are a helpful AI assistant.")
@@ -100,8 +103,30 @@ model Client {
   workflows      Workflow[]
   customerCategories CustomerCategory[]
   workflowSessions WorkflowSession[]
+  socialComments   SocialComment[]
 
   @@map("clients")
+}
+
+model SocialComment {
+  id          String    @id @default(uuid())
+  channel     String
+  externalId  String
+  postId      String?
+  authorName  String?
+  authorId    String?
+  text        String
+  status      String    @default("pending")
+  aiDraft     String?
+  replyText   String?
+  repliedAt   DateTime?
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([clientId, externalId])
+  @@map("social_comments")
 }
 
 model Customer {

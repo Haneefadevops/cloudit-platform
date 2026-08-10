@@ -296,6 +296,73 @@ ${conversationText}`;
   }
 
   /**
+   * Drafts a PUBLIC reply to a Facebook/Instagram comment. Public replies
+   * carry more risk than DMs (a hallucination is visible to everyone), so
+   * the prompt is deliberately restrictive: no prices, no policies, no
+   * promises — answer general questions from business info only and move
+   * specifics to DM. Returns null on any failure; the comment then waits
+   * in the queue without a draft.
+   */
+  async generateCommentReply(input: {
+    client: {
+      name: string;
+      systemPrompt?: string | null;
+      businessProfile?: any;
+      language?: string | null;
+      aiModel?: string | null;
+    };
+    commentText: string;
+    authorName?: string | null;
+  }): Promise<string | null> {
+    const profile = input.client.businessProfile || {};
+    const businessLanguage = input.client.language || 'en';
+    const languageDisplay =
+      businessLanguage === 'en' ? 'English' : businessLanguage;
+
+    const systemPrompt = `${input.client.systemPrompt || 'You are a helpful AI assistant.'}
+
+BUSINESS INFO:
+- Name: ${input.client.name}
+- Address: ${profile.address || 'Not provided'}
+- Hours: ${profile.hours || 'Not provided'}
+- Contact: ${profile.phone || 'Not provided'}
+
+You are drafting a PUBLIC reply to a comment on the business's Facebook/Instagram post.
+
+RULES:
+1. Match the comment's language exactly (English / Sinhala script / Tamil script / Singlish / Thanglish). If ambiguous, use ${languageDisplay}
+2. Keep it under 40 words, warm and human — this is a public comment thread, not a chat
+3. NEVER state prices, discounts, policies, availability, or commitments — those move to DM
+4. For specific questions (price, booking, stock, custom requests), answer generally and invite to DM: e.g. "We've sent you the details in DM" style phrasing is forbidden — instead invite: "Message us and we'll sort it out for you"
+5. For praise/thanks: short warm thanks, optionally invite them back
+6. For complaints: apologize briefly, invite to DM to resolve — never argue publicly
+7. Never expose that this is AI-generated; never use hashtags unless the business does
+
+Reply ONLY with a JSON object: {"reply": "the public comment reply"}`;
+
+    try {
+      const result = await this.callKimiChat(
+        [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: `Comment by ${input.authorName || 'a customer'}: ${input.commentText}`,
+          },
+        ],
+        { maxTokens: 256, responseFormat: 'json_object', source: 'comment-reply' },
+      );
+      const parsed = JSON.parse(result.content || '{}');
+      const reply = typeof parsed.reply === 'string' ? parsed.reply.trim() : '';
+      return reply || null;
+    } catch (error) {
+      this.logger.error(
+        `Comment reply draft failed: ${(error as Error).message}`,
+      );
+      return null;
+    }
+  }
+
+  /**
    * Chat-completion provider. AI_* overrides let an environment switch the
    * whole AI to another OpenAI-compatible provider (e.g. OpenAI for better
    * Singlish/Thanglish reliability); defaults keep Kimi.
