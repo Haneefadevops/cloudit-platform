@@ -54,6 +54,20 @@ function NavIcon({ href }: { href: string }) {
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
       );
+    case '/dashboard/workflows':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8 12h8M12 8v8" />
+        </svg>
+      );
+    case '/dashboard/customers':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="8" r="3" />
+          <path d="M5 21v-2a7 7 0 0 1 14 0v2" />
+        </svg>
+      );
     case '/dashboard/services':
       return (
         <svg {...common}>
@@ -141,6 +155,8 @@ const titles: Record<string, string> = {
   '/dashboard/ai-settings': 'AI Settings',
   '/dashboard/knowledge-base': 'Knowledge Base',
   '/dashboard/canned-responses': 'Canned Responses',
+  '/dashboard/workflows': 'Workflows',
+  '/dashboard/customers': 'Customers',
   '/dashboard/services': 'Services',
   '/dashboard/bookings': 'Bookings',
   '/dashboard/catalog': 'Catalog',
@@ -227,6 +243,8 @@ export default function DashboardLayout({
         { href: '/dashboard/ai-settings', label: 'AI Settings' },
         { href: '/dashboard/knowledge-base', label: 'Knowledge Base' },
         { href: '/dashboard/canned-responses', label: 'Canned Responses' },
+        { href: '/dashboard/workflows', label: 'Workflows' },
+        { href: '/dashboard/customers', label: 'Customers' },
         ...(showServices
           ? [
               { href: '/dashboard/services', label: 'Services' },

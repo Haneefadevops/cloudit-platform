@@ -1,6 +1,7 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService } from '../ai/ai.service';
 import { ConversationsService } from '../conversations/conversations.service';
@@ -15,6 +16,7 @@ import { OrderActionsService } from '../orders/order-actions.service';
 import type { OrderActionResult } from '../orders/order-actions.service';
 import { UsageService } from '../usage/usage.service';
 import { StaffAlertsService } from '../staff-alerts/staff-alerts.service';
+import { WorkflowRuntimeService } from '../workflows/workflow-runtime.service';
 
 /** Max AI replies per conversation before handing off to the human team. */
 export const AI_REPLY_LIMIT = 50;
@@ -40,6 +42,7 @@ interface MetaMessage {
   audio?: MetaMedia;
   voice?: MetaMedia;
   document?: MetaMedia;
+  referral?: Record<string, unknown>;
   timestamp: string;
 }
 
@@ -80,6 +83,7 @@ export class WhatsAppService {
     private readonly usageService: UsageService,
     private readonly mediaService: MediaService,
     private readonly staffAlertsService: StaffAlertsService,
+    private readonly workflowRuntime: WorkflowRuntimeService,
   ) {}
 
   /**
@@ -136,6 +140,7 @@ export class WhatsAppService {
               messageId: message.id,
               messageBody: message.text.body,
               contactName,
+              referral: message.referral,
             });
             continue;
           }
@@ -149,6 +154,7 @@ export class WhatsAppService {
               messageBody: '',
               contactName,
               media,
+              referral: message.referral,
             });
           }
         }
@@ -188,6 +194,7 @@ export class WhatsAppService {
     messageBody: string;
     contactName?: string;
     media?: IncomingMedia;
+    referral?: Record<string, unknown>;
   }): Promise<void> {
     const { phoneNumberId, from, contactName } = input;
     let { messageBody } = input;
@@ -222,6 +229,7 @@ export class WhatsAppService {
       clientId: client.id,
       phoneNumber: from,
       name: contactName,
+      ...(input.referral ? { leadSource: 'ctwa_ad' } : {}),
     });
 
     // 2.5 If the customer is replying to a CSAT rating request, capture it
@@ -247,6 +255,9 @@ export class WhatsAppService {
       conversation = await this.conversationsService.create({
         clientId: client.id,
         customerId: customer.id,
+        ...(input.referral
+          ? { referral: input.referral as unknown as Prisma.InputJsonValue }
+          : {}),
       });
 
       if (previousConversations === 0 && client.welcomeMessage) {
@@ -472,6 +483,30 @@ export class WhatsAppService {
         )
       : null;
 
+    // 8.6 AI workflows: load the client's playbooks and resume any session
+    // already running on this conversation. Zero overhead (and zero prompt
+    // change) for clients without workflows.
+    let activeWorkflows: Awaited<
+      ReturnType<WorkflowRuntimeService['findActiveWorkflows']>
+    > = [];
+    let workflowSession: Awaited<
+      ReturnType<WorkflowRuntimeService['findActiveSession']>
+    > = null;
+    try {
+      activeWorkflows = await this.workflowRuntime.findActiveWorkflows(
+        client.id,
+      );
+      if (activeWorkflows.length) {
+        workflowSession = await this.workflowRuntime.findActiveSession(
+          conversation.id,
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Workflow load failed: ${(error as Error).message}`,
+      );
+    }
+
     // 9. Call Kimi AI
     const aiInput = {
       client: {
@@ -503,6 +538,30 @@ export class WhatsAppService {
               currentDraft: orderContext.currentDraft,
             }
           : {}),
+        ...(activeWorkflows.length && !workflowSession
+          ? {
+              workflows: activeWorkflows.map((w) => ({
+                name: w.name,
+                trigger: w.trigger,
+              })),
+            }
+          : {}),
+        ...(workflowSession
+          ? {
+              activeWorkflow: {
+                name: workflowSession.workflow.name,
+                instructions: workflowSession.workflow.instructions,
+                collectFields: Array.isArray(
+                  workflowSession.workflow.collectFields,
+                )
+                  ? (workflowSession.workflow.collectFields as string[])
+                  : undefined,
+                collectedData:
+                  (workflowSession.collectedData as Record<string, unknown>) ||
+                  undefined,
+              },
+            }
+          : {}),
       },
       customer: {
         name: customer.name,
@@ -525,6 +584,9 @@ export class WhatsAppService {
     let handoff = aiResult.handoff;
     let handoffReason = aiResult.handoffReason;
     let actionResult: (BookingActionResult | OrderActionResult) | null = null;
+    let workflowMatch = aiResult.workflowMatch;
+    let workflowStatus = aiResult.workflowStatus;
+    let collectedData = aiResult.collectedData;
 
     if (aiResult.action) {
       if (client.bookingsEnabled && this.isBookingAction(aiResult.action)) {
@@ -550,11 +612,65 @@ export class WhatsAppService {
         reply = followUp.reply;
         handoff = followUp.handoff;
         handoffReason = followUp.handoffReason;
+        workflowMatch = followUp.workflowMatch;
+        workflowStatus = followUp.workflowStatus;
+        collectedData = followUp.collectedData;
         if (followUp.action) {
           this.logger.warn(
             `Ignoring follow-up action "${followUp.action.type}" — only one action per message is executed`,
           );
         }
+      }
+    }
+
+    // 9.6 Workflow bookkeeping: open a session when the AI matched a
+    // playbook, carry collected data forward, close the session when the AI
+    // reports completion — handing off when the workflow's end action says so.
+    if (activeWorkflows.length) {
+      try {
+        if (!workflowSession && workflowMatch) {
+          const matched = activeWorkflows.find(
+            (w) => w.name.toLowerCase() === workflowMatch.toLowerCase(),
+          );
+          if (matched) {
+            workflowSession = await this.workflowRuntime.startSession({
+              clientId: client.id,
+              conversationId: conversation.id,
+              workflowId: matched.id,
+              customerId: customer.id,
+            });
+          }
+        } else if (workflowSession) {
+          if (collectedData) {
+            await this.workflowRuntime.updateProgress(
+              workflowSession.id,
+              collectedData,
+            );
+          }
+          if (
+            workflowStatus === 'completed' ||
+            workflowStatus === 'abandoned'
+          ) {
+            await this.workflowRuntime.completeSession(
+              workflowSession.id,
+              workflowStatus,
+            );
+            if (
+              workflowStatus === 'completed' &&
+              workflowSession.workflow.endAction === 'handoff' &&
+              !handoff
+            ) {
+              handoff = true;
+              handoffReason = `Workflow "${workflowSession.workflow.name}" completed — collected: ${JSON.stringify(
+                collectedData || workflowSession.collectedData || {},
+              )}`;
+            }
+          }
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Workflow bookkeeping failed: ${(error as Error).message}`,
+        );
       }
     }
 

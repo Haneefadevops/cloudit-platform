@@ -13,6 +13,7 @@ import { BookingsModule } from '../bookings/bookings.module';
 import { OrdersModule } from '../orders/orders.module';
 import { UsageModule } from '../usage/usage.module';
 import { StaffAlertsModule } from '../staff-alerts/staff-alerts.module';
+import { WorkflowsModule } from '../workflows/workflows.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { StaffAlertsModule } from '../staff-alerts/staff-alerts.module';
     OrdersModule,
     UsageModule,
     StaffAlertsModule,
+    WorkflowsModule,
   ],
   controllers: [WhatsAppController],
   providers: [WhatsAppService, MediaService],

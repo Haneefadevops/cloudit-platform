@@ -40,6 +40,14 @@ interface GenerateReplyInput {
     }>;
     fulfilment?: string;
     currentDraft?: string;
+    // AI workflows (only present when the client has active workflows)
+    workflows?: Array<{ name: string; trigger: string }>;
+    activeWorkflow?: {
+      name: string;
+      instructions: string;
+      collectFields?: string[];
+      collectedData?: Record<string, unknown>;
+    };
   };
   customer: {
     name?: string | null;
@@ -62,6 +70,12 @@ interface GenerateReplyOutput {
   handoff: boolean;
   handoffReason?: string;
   action?: AiAction;
+  /** Workflow the AI matched this message to (exact workflow name). */
+  workflowMatch?: string;
+  /** Lifecycle update for the active workflow session. */
+  workflowStatus?: string;
+  /** Data collected so far while a workflow session is active. */
+  collectedData?: Record<string, unknown>;
   metadata?: any;
 }
 
@@ -190,6 +204,18 @@ export class AiService {
         handoff: parsed.handoff === true,
         handoffReason: parsed.handoffReason,
         action,
+        workflowMatch:
+          typeof parsed.workflowMatch === 'string'
+            ? parsed.workflowMatch
+            : undefined,
+        workflowStatus:
+          typeof parsed.workflowStatus === 'string'
+            ? parsed.workflowStatus
+            : undefined,
+        collectedData:
+          parsed.collectedData && typeof parsed.collectedData === 'object'
+            ? parsed.collectedData
+            : undefined,
         metadata,
       };
     } catch (error) {
@@ -526,6 +552,8 @@ ${conversationText}`;
         ? this.buildOrderSection(client)
         : '';
 
+    const workflowSection = this.buildWorkflowSection(client);
+
     const productsSection = client.ordersEnabled
       ? ''
       : `PRODUCTS:\n${productList || 'No products listed'}\n\n`;
@@ -538,7 +566,7 @@ ${this.currentDateTimeSection(client.timezone)}BUSINESS INFO:
 - Hours: ${profile.hours || 'Not provided'}
 - Contact: ${profile.phone || 'Not provided'}
 
-${productsSection}${actionResultBlock}${bookingSection}${orderSection}${knowledgeSection}
+${productsSection}${actionResultBlock}${bookingSection}${orderSection}${workflowSection}${knowledgeSection}
 
 BUSINESS LANGUAGE: ${languageDisplay}
 
@@ -580,8 +608,61 @@ IMPORTANT: Reply ONLY with a JSON object in this exact format:
 {
   "reply": "your friendly response here",
   "handoff": false,
-  "handoffReason": "reason if handing off"${client.bookingsEnabled || client.ordersEnabled ? ',\n  "action": { "type": "...", "...": "optional — see ACTIONS above" }' : ''}
+  "handoffReason": "reason if handing off"${client.bookingsEnabled || client.ordersEnabled ? ',\n  "action": { "type": "...", "...": "optional — see ACTIONS above" }' : ''}${!client.activeWorkflow && client.workflows?.length ? ',\n  "workflowMatch": "exact workflow name — include ONLY when the latest message clearly starts one"': ''}${client.activeWorkflow ? ',\n  "workflowStatus": "active | completed | abandoned",\n  "collectedData": { "...": "everything collected so far — include in EVERY reply while the workflow is active" }' : ''}
 }
+`;
+  }
+
+  /**
+   * Workflow instructions for the AI. Two modes:
+   * - No session running: a detection list (name + when-to-start) — the AI
+   *   names a workflow via "workflowMatch" when the latest message clearly
+   *   starts one, and the backend opens the session.
+   * - Session running: the full playbook (steps, data to collect, data
+   *   collected so far) — the AI follows it and reports progress via
+   *   "workflowStatus"/"collectedData".
+   */
+  private buildWorkflowSection(
+    client: GenerateReplyInput['client'],
+  ): string {
+    const active = client.activeWorkflow;
+
+    if (active) {
+      const fields = Array.isArray(active.collectFields)
+        ? active.collectFields
+        : [];
+      const collected =
+        active.collectedData && Object.keys(active.collectedData).length
+          ? JSON.stringify(active.collectedData)
+          : 'none yet';
+
+      return `ACTIVE WORKFLOW — "${active.name}" (this conversation is following this workflow):
+STEPS TO FOLLOW (from the business):
+${active.instructions}
+${fields.length ? `DATA TO COLLECT: ${fields.join(', ')}\n` : ''}DATA COLLECTED SO FAR: ${collected}
+
+Workflow rules:
+- Guide the conversation through the steps naturally — never interrogate; ask at most ONE question per message (rule 11 still applies)
+- Carry forward everything collected: include "collectedData" in EVERY reply while this workflow is active
+- When every step is done and the required data is collected, set "workflowStatus": "completed" — then keep helping the customer normally
+- If the customer clearly abandons this topic, set "workflowStatus": "abandoned"
+- Otherwise set "workflowStatus": "active"
+
+`;
+    }
+
+    const list = Array.isArray(client.workflows) ? client.workflows : [];
+    if (!list.length) return '';
+
+    const lines = list
+      .map((w) => `- "${w.name}": start when — ${w.trigger}`)
+      .join('\n');
+
+    return `WORKFLOWS (guided conversation playbooks for this business):
+${lines}
+
+If the customer's LATEST message clearly starts one of these workflows, include "workflowMatch": "<exact workflow name>" in your JSON reply and begin following it naturally. Match only when the intent is clear — when in doubt, omit the field.
+
 `;
   }
 

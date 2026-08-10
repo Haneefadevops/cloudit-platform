@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChatwootService } from '../chatwoot/chatwoot.service';
@@ -28,11 +29,16 @@ export class ConversationsService {
     });
   }
 
-  async create(data: { clientId: string; customerId: string }) {
+  async create(data: {
+    clientId: string;
+    customerId: string;
+    referral?: Prisma.InputJsonValue;
+  }) {
     return this.prisma.conversation.create({
       data: {
         clientId: data.clientId,
         customerId: data.customerId,
+        ...(data.referral ? { referral: data.referral } : {}),
         status: 'bot',
       },
     });
