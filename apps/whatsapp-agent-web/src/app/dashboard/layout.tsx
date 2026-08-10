@@ -75,6 +75,13 @@ function NavIcon({ href }: { href: string }) {
           <path d="M8 10h8M8 13h5" />
         </svg>
       );
+    case '/dashboard/api-keys':
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="15" r="3" />
+          <path d="m10.5 12.5 8-8M15 7h3v3M17 5l2 2" />
+        </svg>
+      );
     case '/dashboard/services':
       return (
         <svg {...common}>
@@ -165,6 +172,7 @@ const titles: Record<string, string> = {
   '/dashboard/workflows': 'Workflows',
   '/dashboard/customers': 'Customers',
   '/dashboard/social-comments': 'Comments',
+  '/dashboard/api-keys': 'API Keys',
   '/dashboard/services': 'Services',
   '/dashboard/bookings': 'Bookings',
   '/dashboard/catalog': 'Catalog',
@@ -254,6 +262,7 @@ export default function DashboardLayout({
         { href: '/dashboard/workflows', label: 'Workflows' },
         { href: '/dashboard/customers', label: 'Customers' },
         { href: '/dashboard/social-comments', label: 'Comments' },
+        { href: '/dashboard/api-keys', label: 'API Keys' },
         ...(showServices
           ? [
               { href: '/dashboard/services', label: 'Services' },
