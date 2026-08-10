@@ -188,21 +188,32 @@ export class WhatsAppService {
   }
 
   private async handleIncomingMessage(input: {
-    phoneNumberId: string;
-    from: string;
-    messageId: string;
+    phoneNumberId?: string;
+    from?: string;
+    messageId?: string;
     messageBody: string;
     contactName?: string;
     media?: IncomingMedia;
     referral?: Record<string, unknown>;
+    // Non-WhatsApp channels bridged through Chatwoot:
+    channel?: string; // default 'whatsapp'; 'messenger' | 'instagram'
+    clientId?: string; // pre-resolved client for channel messages
+    channelSourceId?: string; // Meta PSID/IGSID
+    chatwootConversationId?: number; // native Chatwoot conversation
   }): Promise<void> {
-    const { phoneNumberId, from, contactName } = input;
+    const { from, contactName } = input;
+    const channel = input.channel || 'whatsapp';
     let { messageBody } = input;
 
-    // 1. Find the client by WhatsApp phone number ID
-    const client = await this.clientsService.findByPhoneNumberId(phoneNumberId);
+    // 1. Find the client — by WhatsApp phone number ID for the Meta webhook,
+    // or directly by id for channel messages routed from Chatwoot.
+    const client = input.clientId
+      ? await this.clientsService.findOne(input.clientId)
+      : await this.clientsService.findByPhoneNumberId(
+          input.phoneNumberId as string,
+        );
     if (!client) {
-      this.logger.warn(`No client found for phone number ID: ${phoneNumberId}`);
+      this.logger.warn(`No client found for incoming message (${channel})`);
       return;
     }
 
@@ -224,22 +235,28 @@ export class WhatsAppService {
       return;
     }
 
-    // 2. Find or create customer
+    // 2. Find or create customer (phone-based on WhatsApp, source-ID based
+    // on Messenger/Instagram)
     const customer = await this.customersService.findOrCreate({
       clientId: client.id,
-      phoneNumber: from,
+      phoneNumber: channel === 'whatsapp' ? from : undefined,
       name: contactName,
+      channel,
+      channelSourceId: input.channelSourceId,
       ...(input.referral ? { leadSource: 'ctwa_ad' } : {}),
     });
 
     // 2.5 If the customer is replying to a CSAT rating request, capture it
-    const csatHandled = await this.handleCsatResponse(
-      client,
-      customer,
-      messageBody,
-      from,
-    );
-    if (csatHandled) return;
+    // (WhatsApp only — CSAT requests are only sent to WhatsApp customers)
+    if (channel === 'whatsapp' && from) {
+      const csatHandled = await this.handleCsatResponse(
+        client,
+        customer,
+        messageBody,
+        from,
+      );
+      if (csatHandled) return;
+    }
 
     // 3. Find or create conversation
     let conversation = await this.conversationsService.findActiveByCustomer(
@@ -255,10 +272,20 @@ export class WhatsAppService {
       conversation = await this.conversationsService.create({
         clientId: client.id,
         customerId: customer.id,
+        channel,
         ...(input.referral
           ? { referral: input.referral as unknown as Prisma.InputJsonValue }
           : {}),
       });
+
+      // Channel messages arrive from an existing Chatwoot conversation —
+      // link it so agent replies and bot replies route back through it.
+      if (input.chatwootConversationId) {
+        conversation = await this.prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { chatwootConversationId: input.chatwootConversationId },
+        });
+      }
 
       if (previousConversations === 0 && client.welcomeMessage) {
         await this.prisma.message.create({
@@ -268,9 +295,11 @@ export class WhatsAppService {
             content: client.welcomeMessage,
           },
         });
-        await this.senderService.sendMessage({
+        await this.sendToCustomer({
           client,
+          channel,
           to: from,
+          chatwootConversationId: conversation.chatwootConversationId,
           message: client.welcomeMessage,
         });
       }
@@ -285,12 +314,16 @@ export class WhatsAppService {
       },
     });
 
-    // 5. If conversation is handled by human, forward to Chatwoot
+    // 5. If conversation is handled by human, forward to Chatwoot.
+    // Messenger/Instagram messages already live in Chatwoot natively — the
+    // agent sees them without any forwarding.
     if (conversation.status === 'human') {
-      this.logger.log(
-        `Conversation ${conversation.id} is with human agent. Forwarding to Chatwoot.`,
-      );
-      await this.forwardToChatwoot(client, customer, conversation, messageBody);
+      if (channel === 'whatsapp') {
+        this.logger.log(
+          `Conversation ${conversation.id} is with human agent. Forwarding to Chatwoot.`,
+        );
+        await this.forwardToChatwoot(client, customer, conversation, messageBody);
+      }
       return;
     }
 
@@ -319,9 +352,11 @@ export class WhatsAppService {
           content: pausedContent,
         },
       });
-      await this.senderService.sendMessage({
+      await this.sendToCustomer({
         client,
+        channel,
         to: from,
+        chatwootConversationId: conversation.chatwootConversationId,
         message: pausedContent,
       });
       this.logger.log(
@@ -352,9 +387,11 @@ export class WhatsAppService {
           content: limitContent,
         },
       });
-      await this.senderService.sendMessage({
+      await this.sendToCustomer({
         client,
+        channel,
         to: from,
+        chatwootConversationId: conversation.chatwootConversationId,
         message: limitContent,
       });
       this.logger.log(
@@ -411,9 +448,11 @@ export class WhatsAppService {
         : client.fallbackMessage ||
           'We will connect you to one of our available agents.';
 
-      await this.senderService.sendMessage({
+      await this.sendToCustomer({
         client,
+        channel,
         to: from,
+        chatwootConversationId: conversation.chatwootConversationId,
         message: this.withTicketRef(handoffMessage, handedOff.ticketRef),
       });
       return;
@@ -421,12 +460,14 @@ export class WhatsAppService {
 
     // 6.5 Show the "typing…" indicator on the customer's phone while the AI
     // prepares its reply (lasts up to 25s or until the reply is sent; also
-    // marks the incoming message as read). Fire-and-forget inside the
-    // sender — a failure here never blocks the reply.
-    await this.senderService.sendTypingIndicator({
-      client,
-      messageId: input.messageId,
-    });
+    // marks the incoming message as read). WhatsApp only — Chatwoot channels
+    // show their own read/typing state.
+    if (channel === 'whatsapp' && input.messageId) {
+      await this.senderService.sendTypingIndicator({
+        client,
+        messageId: input.messageId,
+      });
+    }
 
     // 7. Get conversation history for context
     const recentMessages = await this.prisma.message.findMany({
@@ -592,13 +633,21 @@ export class WhatsAppService {
       if (client.bookingsEnabled && this.isBookingAction(aiResult.action)) {
         actionResult = await this.bookingActionsService.execute({
           client,
-          customer,
+          customer: {
+            id: customer.id,
+            name: customer.name,
+            phoneNumber: customer.phoneNumber || from,
+          },
           action: aiResult.action,
         });
       } else if (client.ordersEnabled) {
         actionResult = await this.orderActionsService.execute({
           client,
-          customer,
+          customer: {
+            id: customer.id,
+            name: customer.name,
+            phoneNumber: customer.phoneNumber || from,
+          },
           conversationId: conversation.id,
           action: aiResult.action,
         });
@@ -690,8 +739,10 @@ export class WhatsAppService {
 
     // 10.5 Action side effects: notify staff in Chatwoot, and hand the
     // conversation to a human when a booking needs staff confirmation.
+    // (WhatsApp only — Messenger/Instagram conversations already live in
+    // Chatwoot, and contact creation there requires a phone number.)
     let handoffTicketRef: string | null = null;
-    if (actionResult?.staffNotification) {
+    if (actionResult?.staffNotification && channel === 'whatsapp') {
       await this.forwardToChatwoot(
         client,
         customer,
@@ -721,11 +772,79 @@ export class WhatsAppService {
     }
 
     // 12. Send AI reply to customer (with the ticket ref when handed off)
-    await this.senderService.sendMessage({
+    await this.sendToCustomer({
       client,
+      channel,
       to: from,
+      chatwootConversationId: conversation.chatwootConversationId,
       message: this.withTicketRef(reply, handoffTicketRef),
     });
+  }
+
+  /**
+   * Entry point for Messenger/Instagram messages bridged through Chatwoot.
+   * Runs the same AI pipeline as WhatsApp; outbound replies are posted back
+   * into the native Chatwoot conversation (see sendToCustomer).
+   */
+  async handleChannelIncomingMessage(input: {
+    clientId: string;
+    channel: 'messenger' | 'instagram';
+    channelSourceId: string;
+    contactName?: string;
+    messageBody: string;
+    chatwootConversationId?: number;
+  }): Promise<void> {
+    await this.handleIncomingMessage({
+      clientId: input.clientId,
+      channel: input.channel,
+      channelSourceId: input.channelSourceId,
+      contactName: input.contactName,
+      messageBody: input.messageBody,
+      chatwootConversationId: input.chatwootConversationId,
+    });
+  }
+
+  /**
+   * Channel-aware outbound: WhatsApp sends go through the Meta sender;
+   * Messenger/Instagram replies are posted into the existing Chatwoot
+   * conversation, which delivers them via the Facebook page token.
+   */
+  private async sendToCustomer(input: {
+    client: {
+      metaAccessToken: string;
+      whatsappPhoneNumberId: string;
+      chatwootAccountId?: number | null;
+    };
+    channel: string;
+    to?: string;
+    chatwootConversationId?: number | null;
+    message: string;
+  }): Promise<void> {
+    if (input.channel === 'whatsapp') {
+      if (!input.to) {
+        this.logger.warn('WhatsApp send skipped: no recipient number');
+        return;
+      }
+      await this.senderService.sendMessage({
+        client: input.client,
+        to: input.to,
+        message: input.message,
+      });
+      return;
+    }
+
+    if (!input.client.chatwootAccountId || !input.chatwootConversationId) {
+      this.logger.warn(
+        `${input.channel} send skipped: missing Chatwoot account/conversation`,
+      );
+      return;
+    }
+    await this.chatwootService.sendMessage(
+      input.client.chatwootAccountId,
+      input.chatwootConversationId,
+      input.message,
+      'outgoing',
+    );
   }
 
   /** Appends the ticket reference to a customer-facing handoff message. */
@@ -774,7 +893,7 @@ export class WhatsAppService {
 
   private async forwardToChatwoot(
     client: { chatwootAccountId?: number | null; chatwootInboxId?: number | null },
-    customer: { id: string; phoneNumber: string; name?: string | null; chatwootContactId?: number | null },
+    customer: { id: string; phoneNumber: string | null; name?: string | null; chatwootContactId?: number | null },
     conversation: { id: string; chatwootConversationId?: number | null },
     content: string,
   ) {
@@ -782,6 +901,11 @@ export class WhatsAppService {
       this.logger.log(
         `Client ${client.chatwootAccountId ? '' : 'missing account'} ${client.chatwootInboxId ? '' : 'missing inbox'}; cannot forward to Chatwoot`,
       );
+      return;
+    }
+
+    if (!customer.phoneNumber) {
+      this.logger.log(`Customer ${customer.id} has no WhatsApp number; cannot forward to Chatwoot`);
       return;
     }
 

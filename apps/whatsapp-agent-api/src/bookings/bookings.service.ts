@@ -87,7 +87,7 @@ export class BookingsService {
     startAt: Date;
     service: { name: string };
     staff: { name: string } | null;
-    customer: { name: string | null; phoneNumber: string };
+    customer: { name: string | null; phoneNumber: string | null };
     client: {
       name: string;
       timezone: string | null;
@@ -97,6 +97,10 @@ export class BookingsService {
     };
   }) {
     if (!['confirmed', 'cancelled'].includes(booking.status)) return;
+    if (!booking.customer.phoneNumber) {
+      this.logger.warn('Skipping booking notification: customer has no WhatsApp number');
+      return;
+    }
 
     const { client } = booking;
     const when = formatInTimezone(

@@ -1,7 +1,9 @@
-import { Controller, Post, Body, Logger } from '@nestjs/common';
+import { Controller, Post, Body, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ChatwootService } from './chatwoot.service';
 import { WhatsAppSenderService } from '../whatsapp-sender/whatsapp-sender.service';
+import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 
 interface ChatwootMessagePayload {
   event: string;
@@ -10,8 +12,17 @@ interface ChatwootMessagePayload {
   message_type?: string;
   private?: boolean;
   status?: string;
-  conversation?: { id?: number; status?: string };
-  sender?: { id?: number; name?: string; email?: string };
+  account?: { id?: number };
+  inbox?: { id?: number };
+  conversation?: {
+    id?: number;
+    status?: string;
+    channel?: string; // e.g. 'Channel::FacebookPage', 'Channel::Instagram', 'Channel::Api'
+    inbox_id?: number;
+    meta?: { sender?: { name?: string } };
+    contact_inbox?: { source_id?: string };
+  };
+  sender?: { id?: number; type?: string; name?: string; email?: string };
 }
 
 @Controller('webhooks/chatwoot')
@@ -22,6 +33,9 @@ export class ChatwootController {
     private readonly chatwootService: ChatwootService,
     private readonly senderService: WhatsAppSenderService,
     private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+    @Inject(forwardRef(() => WhatsAppService))
+    private readonly whatsappService: WhatsAppService,
   ) {}
 
   @Post()
@@ -33,6 +47,12 @@ export class ChatwootController {
 
       if (event === 'message_created' && payload.message_type === 'outgoing') {
         await this.handleAgentReply(payload);
+      }
+
+      // Messenger/Instagram customer messages arrive here from the native
+      // Chatwoot channel inboxes (WhatsApp uses the Meta webhook instead).
+      if (event === 'message_created' && payload.message_type === 'incoming') {
+        await this.handleChannelMessage(payload);
       }
 
       if (
@@ -65,7 +85,68 @@ export class ChatwootController {
     return { status: 'ok' };
   }
 
+  /**
+   * Routes an incoming Messenger/Instagram message from a native Chatwoot
+   * channel inbox into the AI pipeline. Defensive by design: Chatwoot
+   * payload shapes vary by version, so anything unrecognised is logged
+   * and skipped rather than erroring.
+   */
+  private async handleChannelMessage(data: ChatwootMessagePayload) {
+    if (data.private) return; // private notes are never customer messages
+
+    const accountId = data.account?.id;
+    const chatwootConversationId = data.conversation?.id;
+    const content = data.content;
+    if (!accountId || !chatwootConversationId || !content) return;
+
+    const client = await this.prisma.client.findFirst({
+      where: { chatwootAccountId: accountId },
+    });
+    if (!client) return;
+
+    // The client's own API inbox is the WhatsApp bridge — its incoming
+    // events are copies of messages the Meta webhook already processed.
+    const inboxId = data.inbox?.id ?? data.conversation?.inbox_id;
+    if (inboxId && client.chatwootInboxId && inboxId === client.chatwootInboxId) {
+      return;
+    }
+
+    const channelRaw = data.conversation?.channel || '';
+    const channel = channelRaw.includes('Facebook')
+      ? 'messenger'
+      : channelRaw.includes('Instagram')
+        ? 'instagram'
+        : null;
+    if (!channel) return; // Channel::Api and anything unknown
+
+    const sourceId =
+      data.conversation?.contact_inbox?.source_id ??
+      (data.sender?.id ? String(data.sender.id) : null);
+    if (!sourceId) {
+      this.logger.warn(
+        `Channel message without source id (conversation ${chatwootConversationId}); skipping`,
+      );
+      return;
+    }
+
+    await this.whatsappService.handleChannelIncomingMessage({
+      clientId: client.id,
+      channel,
+      channelSourceId: sourceId,
+      contactName:
+        data.conversation?.meta?.sender?.name || data.sender?.name || undefined,
+      messageBody: content,
+      chatwootConversationId,
+    });
+  }
+
   private async handleAgentReply(data: ChatwootMessagePayload) {
+    const adminUserId = this.configService.get<string>('CHATWOOT_ADMIN_USER_ID');
+    if (adminUserId && String(data.sender?.id) === adminUserId) {
+      this.logger.log('Skipping Chatwoot echo from API admin user');
+      return;
+    }
+
     const conversationId = data.conversation?.id;
     const content = data.content;
 
@@ -105,18 +186,35 @@ export class ChatwootController {
       },
     });
 
-    // Send to customer via WhatsApp
-    await this.senderService.sendMessage({
-      client: {
-        metaAccessToken: conversation.client.metaAccessToken,
-        whatsappPhoneNumberId: conversation.client.whatsappPhoneNumberId,
-      },
-      to: conversation.customer.phoneNumber,
-      message: finalContent,
-    });
+    if (!conversation.channel || conversation.channel === 'whatsapp') {
+      await this.senderService.sendMessage({
+        client: {
+          metaAccessToken: conversation.client.metaAccessToken,
+          whatsappPhoneNumberId: conversation.client.whatsappPhoneNumberId,
+        },
+        to: conversation.customer.phoneNumber as string,
+        message: finalContent,
+      });
 
+      this.logger.log(
+        `Agent reply forwarded to ${conversation.customer.phoneNumber} for conversation ${conversation.id}`,
+      );
+      return;
+    }
+
+    if (!conversation.client.chatwootAccountId || !conversation.chatwootConversationId) {
+      this.logger.warn(`Cannot send ${conversation.channel} reply without Chatwoot IDs`);
+      return;
+    }
+
+    await this.chatwootService.sendMessage(
+      conversation.client.chatwootAccountId,
+      conversation.chatwootConversationId,
+      finalContent,
+      'outgoing',
+    );
     this.logger.log(
-      `Agent reply forwarded to ${conversation.customer.phoneNumber} for conversation ${conversation.id}`,
+      `Agent reply forwarded through Chatwoot for conversation ${conversation.id}`,
     );
   }
 
@@ -189,7 +287,11 @@ export class ChatwootController {
 
     // Send CSAT rating request to the customer (skip if one is already
     // pending — e.g. the conversation was resolved, reopened, resolved again)
-    if (conversation.client.csatEnabled && !conversation.csatPending) {
+    if (
+      conversation.client.csatEnabled &&
+      !conversation.csatPending &&
+      conversation.customer.phoneNumber
+    ) {
       const csatMessage =
         conversation.client.csatMessage ||
         'Thank you for chatting with us! How would you rate your experience? Please reply with a number from 1 (poor) to 5 (excellent).';

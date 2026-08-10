@@ -43,7 +43,7 @@ interface OrderWithIncludes {
   type: string;
   address: string | null;
   total: number;
-  customer: { name: string | null; phoneNumber: string };
+  customer: { name: string | null; phoneNumber: string | null };
   client: {
     name: string;
     paymentInstructions: string | null;
@@ -162,6 +162,10 @@ export class OrdersService {
   private async notifyCustomerOnStatusChange(order: OrderWithIncludes) {
     const buildMessage = STATUS_NOTIFICATIONS[order.status];
     if (!buildMessage) return;
+    if (!order.customer.phoneNumber) {
+      this.logger.warn('Skipping order notification: customer has no WhatsApp number');
+      return;
+    }
 
     let message = buildMessage(order);
     if (order.status === 'confirmed' && order.client.orderConfirmationTemplate) {

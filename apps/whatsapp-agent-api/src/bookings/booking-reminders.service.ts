@@ -116,6 +116,11 @@ export class BookingRemindersService implements OnModuleInit, OnModuleDestroy {
         `${booking.staff ? ` with ${booking.staff.name}` : ''} is on ${when}. ` +
         `Reply R to reschedule or C to cancel.`;
 
+      if (!booking.customer.phoneNumber) {
+        this.logger.warn(`Skipping reminder for booking ${booking.id}: customer has no WhatsApp number`);
+        continue;
+      }
+
       try {
         await this.senderService.sendWithTemplateFallback({
           client: booking.client,

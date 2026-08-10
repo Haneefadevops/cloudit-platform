@@ -99,11 +99,14 @@ describe('WhatsAppService referral handling', () => {
       clientId: 'client-1',
       phoneNumber: '+94771234567',
       name: 'Nimal',
+      channel: 'whatsapp',
+      channelSourceId: undefined,
       leadSource: 'ctwa_ad',
     });
     expect(conversationsService.create).toHaveBeenCalledWith({
       clientId: 'client-1',
       customerId: 'cust-1',
+      channel: 'whatsapp',
       referral: REFERRAL,
     });
   });
@@ -142,10 +145,13 @@ describe('WhatsAppService referral handling', () => {
       clientId: 'client-1',
       phoneNumber: '+94771234567',
       name: 'Nimal',
+      channel: 'whatsapp',
+      channelSourceId: undefined,
     });
     expect(conversationsService.create).toHaveBeenCalledWith({
       clientId: 'client-1',
       customerId: 'cust-1',
+      channel: 'whatsapp',
     });
   });
 });

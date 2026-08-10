@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   UseGuards,
+  Logger,
 } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { WhatsAppSenderService } from '../whatsapp-sender/whatsapp-sender.service';
@@ -20,6 +21,8 @@ import { PrismaService } from '../prisma/prisma.service';
 @Controller('conversations')
 @UseGuards(JwtAuthGuard)
 export class ConversationsController {
+  private readonly logger = new Logger(ConversationsController.name);
+
   constructor(
     private readonly conversationsService: ConversationsService,
     private readonly senderService: WhatsAppSenderService,
@@ -84,6 +87,11 @@ export class ConversationsController {
         content,
       },
     });
+
+    if (!conversation.customer.phoneNumber) {
+      this.logger.warn(`Cannot send WhatsApp message: customer has no phone number`);
+      return { status: 'sent' };
+    }
 
     // Send via WhatsApp
     await this.senderService.sendMessage({

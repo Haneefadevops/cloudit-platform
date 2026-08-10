@@ -106,12 +106,14 @@ model Client {
 
 model Customer {
   id          String   @id @default(uuid())
-  phoneNumber String
+  phoneNumber String?
   name        String?
   email       String?
   address     String?
   chatwootContactId Int?
   leadSource  String?
+  channel     String   @default("whatsapp")
+  channelSourceId String?
   categoryId  String?
   category    CustomerCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   metadata    Json?    @default("{}")
@@ -125,6 +127,7 @@ model Customer {
   orders        Order[]
 
   @@unique([clientId, phoneNumber])
+  @@index([clientId, channel, channelSourceId])
   @@map("customers")
 }
 
@@ -164,6 +167,7 @@ model Conversation {
   csatRating              Int?
   csatFeedback            String?
   referral                Json?
+  channel                 String    @default("whatsapp")
 
   clientId     String
   client       Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)

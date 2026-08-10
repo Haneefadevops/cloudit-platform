@@ -33,12 +33,14 @@ export class ConversationsService {
     clientId: string;
     customerId: string;
     referral?: Prisma.InputJsonValue;
+    channel?: string;
   }) {
     return this.prisma.conversation.create({
       data: {
         clientId: data.clientId,
         customerId: data.customerId,
         ...(data.referral ? { referral: data.referral } : {}),
+        ...(data.channel ? { channel: data.channel } : {}),
         status: 'bot',
       },
     });
@@ -132,6 +134,11 @@ export class ConversationsService {
       this.logger.log(
         `Client ${client.id} has no Chatwoot setup; skipping Chatwoot handoff push`,
       );
+      return;
+    }
+
+    if (!customer.phoneNumber) {
+      this.logger.log(`Customer ${customer.id} has no WhatsApp number; skipping Chatwoot handoff push`);
       return;
     }
 

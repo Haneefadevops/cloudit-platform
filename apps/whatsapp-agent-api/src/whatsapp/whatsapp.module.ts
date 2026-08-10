@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { WhatsAppController } from './whatsapp.controller';
 import { WhatsAppService } from './whatsapp.service';
 import { MediaService } from './media.service';
@@ -22,7 +22,7 @@ import { WorkflowsModule } from '../workflows/workflows.module';
     CustomersModule,
     ClientsModule,
     WhatsAppSenderModule,
-    ChatwootModule,
+    forwardRef(() => ChatwootModule),
     KnowledgeBaseModule,
     BookingsModule,
     OrdersModule,

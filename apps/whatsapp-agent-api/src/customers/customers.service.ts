@@ -7,17 +7,51 @@ export class CustomersService {
 
   async findOrCreate(input: {
     clientId: string;
-    phoneNumber: string;
+    phoneNumber?: string;
     name?: string;
     leadSource?: string;
+    channel?: string;
+    channelSourceId?: string;
   }) {
-    const { clientId, phoneNumber, name, leadSource } = input;
+    const { clientId, phoneNumber, name, leadSource, channel, channelSourceId } = input;
+    const resolvedChannel = channel || 'whatsapp';
+
+    if (resolvedChannel !== 'whatsapp') {
+      const existing = await this.prisma.customer.findFirst({
+        where: {
+          clientId,
+          channel: resolvedChannel,
+          channelSourceId: channelSourceId ?? null,
+        },
+      });
+
+      if (existing) {
+        if (name && !existing.name) {
+          return this.prisma.customer.update({
+            where: { id: existing.id },
+            data: { name },
+          });
+        }
+        return existing;
+      }
+
+      return this.prisma.customer.create({
+        data: {
+          clientId,
+          phoneNumber: null,
+          name,
+          leadSource,
+          channel: resolvedChannel,
+          channelSourceId,
+        },
+      });
+    }
 
     const existing = await this.prisma.customer.findUnique({
       where: {
         clientId_phoneNumber: {
           clientId,
-          phoneNumber,
+          phoneNumber: phoneNumber as string,
         },
       },
     });
@@ -38,6 +72,8 @@ export class CustomersService {
         phoneNumber,
         name,
         leadSource,
+        channel,
+        channelSourceId,
       },
     });
   }

@@ -102,7 +102,7 @@ export class PlaygroundService {
     let playgroundCustomer: {
       id: string;
       name: string | null;
-      phoneNumber: string;
+      phoneNumber: string | null;
     } | null = null;
     if (client.bookingsEnabled || client.ordersEnabled) {
       playgroundCustomer = await this.prisma.customer.upsert({
@@ -174,16 +174,24 @@ export class PlaygroundService {
     // Chatwoot notifications and handoff).
     let reply = aiResult.reply;
     let actionResult: string | null = null;
-    if (aiResult.action && playgroundCustomer) {
+    if (aiResult.action && playgroundCustomer?.phoneNumber) {
       const result = BOOKING_ACTION_TYPES.includes(aiResult.action.type)
         ? await this.bookingActionsService.execute({
             client,
-            customer: playgroundCustomer,
+            customer: {
+              id: playgroundCustomer.id,
+              name: playgroundCustomer.name,
+              phoneNumber: playgroundCustomer.phoneNumber,
+            },
             action: aiResult.action,
           })
         : await this.orderActionsService.execute({
             client,
-            customer: playgroundCustomer,
+            customer: {
+              id: playgroundCustomer.id,
+              name: playgroundCustomer.name,
+              phoneNumber: playgroundCustomer.phoneNumber,
+            },
             conversationId: null,
             action: aiResult.action,
           });
