@@ -77,7 +77,7 @@ export default function TrustStrip() {
       </svg>
       <Reveal className="mx-auto flex max-w-6xl flex-col items-center gap-9 px-5">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gradient">
-          Built for businesses that live on WhatsApp
+          Built for businesses that live in their customers&apos; inboxes
         </p>
         <div className="grid w-full grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {stats.map((s) => (

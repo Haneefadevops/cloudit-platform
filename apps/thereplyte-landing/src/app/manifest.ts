@@ -4,10 +4,10 @@ export const dynamic = 'force-static';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'TheReplyte — AI Employee for WhatsApp',
+    name: 'TheReplyte — AI Employee for WhatsApp, Messenger & Instagram',
     short_name: 'TheReplyte',
     description:
-      'Hire an AI employee for your WhatsApp. Instant multilingual replies, orders, bookings and smart human handoff — 24/7.',
+      'On WhatsApp, Messenger and Instagram. Instant multilingual replies, orders, bookings, lead qualification and smart human handoff — 24/7.',
     start_url: '/',
     display: 'standalone',
     background_color: '#ffffff',

@@ -10,9 +10,9 @@ const inter = Inter({
 });
 
 const SITE_URL = 'https://thereplyte.com';
-const TITLE = 'TheReplyte — AI Employee for WhatsApp | 24/7 Multilingual Replies';
+const TITLE = 'TheReplyte — AI Employee for WhatsApp, Messenger & Instagram | 24/7 Multilingual Replies';
 const DESCRIPTION =
-  'Hire an AI employee for your WhatsApp. Answers customers instantly in their language, takes orders and bookings, and hands off to your team when it matters — 24/7.';
+  'On WhatsApp, Messenger and Instagram. Answers instantly in your customer\'s language, takes bookings and orders, qualifies your leads, and hands off to your team when it matters 24/7.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -31,6 +31,10 @@ export const metadata: Metadata = {
     'WhatsApp order taking',
     'AI employee',
     'business WhatsApp assistant',
+    'Messenger AI',
+    'Instagram DM automation',
+    'AI chatbot for Messenger',
+    'Instagram comment automation',
     'TheReplyte',
   ],
   applicationName: 'TheReplyte',

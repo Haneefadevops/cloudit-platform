@@ -20,7 +20,7 @@ export default function Hero() {
             transition={{ duration: 0.6, delay: 0.08 }}
             className="text-4xl font-extrabold leading-[1.08] tracking-tight text-[#12142b] sm:text-5xl lg:text-6xl"
           >
-            Hire an <span className="text-gradient">AI Employee</span> for Your WhatsApp
+            Hire an <span className="text-gradient">AI Employee</span> for every customer conversation
           </motion.h1>
 
           <motion.p
@@ -29,8 +29,8 @@ export default function Hero() {
             transition={{ duration: 0.6, delay: 0.16 }}
             className="mt-6 max-w-xl text-lg leading-relaxed text-[#5a5e7a]"
           >
-            Never miss another customer. Answer questions instantly, take bookings and orders,
-            qualify leads, and hand conversations to your team all automatically, 24/7.
+            On WhatsApp, Messenger and Instagram. Answers instantly in your customer&apos;s language,
+            takes bookings and orders, qualifies your leads, and hands off to your team when it matters 24/7.
           </motion.p>
 
           <motion.div

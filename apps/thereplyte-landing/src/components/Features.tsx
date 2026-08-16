@@ -22,7 +22,7 @@ const bars = [28, 40, 34, 52, 66, 84];
 const features: Feature[] = [
   {
     title: 'Multilingual AI',
-    copy: 'Auto-detects your customer’s language and replies in it — 50+ languages out of the box. English, Sinhala, Tamil, Arabic, Spanish and more, with zero setup.',
+    copy: 'Auto-detects your customer’s language and replies in it 50+ languages out of the box. English, Sinhala, Tamil, Arabic, Spanish and more, with zero setup. Even voice notes and photos are understood.',
     span: 'md:col-span-2',
     icon: (
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -45,7 +45,7 @@ const features: Feature[] = [
   },
   {
     title: 'Instant AI answers',
-    copy: 'Trained on your website, documents and FAQs — accurate answers in seconds, not hours.',
+    copy: 'Trained on your website, documents and FAQs. Accurate answers in seconds, not hours. It learns your tone, never invents prices, and says so when it doesn’t know.',
     span: '',
     icon: (
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -97,7 +97,7 @@ const features: Feature[] = [
   },
   {
     title: 'Smart human handoff',
-    copy: 'Complex question? It hands off to your team inbox with a full AI summary and smart labels — and goes quiet the moment a human replies.',
+    copy: 'Complex question? It hands off to your team inbox with a full AI summary and smart labels, and goes quiet the moment a human replies.',
     span: 'md:col-span-2',
     icon: (
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -128,8 +128,8 @@ const features: Feature[] = [
     ),
   },
   {
-    title: 'Voice notes & images',
-    copy: 'Understands voice notes via transcription and reads images with vision.',
+    title: 'AI Workflows',
+    copy: 'Tell it your playbooks in plain language: how to answer price questions, take bookings, prepare quotes, handle complaints. It guides every conversation through the right playbook and collects exactly the details your team needs. No flowcharts, no code.',
     span: '',
     icon: (
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -157,8 +157,22 @@ const features: Feature[] = [
     ),
   },
   {
+    title: 'Self-qualifying CRM',
+    copy: 'Every customer is automatically tagged into your own categories based on what they actually asked, with the collected details attached. See this week’s leads at a glance. Zero data entry.',
+    span: '',
+    icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h5" {...stroke} /></svg>,
+    visual: <div className="flex gap-1.5"><span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] text-indigo-600">new lead</span><span className="rounded-full bg-teal-50 px-2 py-1 text-[10px] text-teal-600">qualified</span></div>,
+  },
+  {
+    title: 'Comment moderation',
+    copy: 'Comments on your Facebook and Instagram posts get AI-drafted public replies. You approve with one tap. It invites commenters to DM, and when they do, the AI qualifies them as leads automatically.',
+    span: '',
+    icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5h16v11H9l-5 3V5Z" {...stroke} /></svg>,
+    visual: <div className="rounded-xl border border-[#e6e8f5] bg-white px-2.5 py-2 text-[10px] text-[#5a5e7a]"><span className="font-semibold text-[#12142b]">@nimal_t</span> Price? <span className="block pl-2 text-teal-brand">DM us for options</span></div>,
+  },
+  {
     title: 'Analytics & CSAT',
-    copy: 'Resolution rate, response times, CSAT and AI cost tracking — know exactly what your AI employee earns you.',
+    copy: 'Resolution rate, response times, CSAT and AI cost tracking. Know exactly what your AI employee earns you.',
     span: 'md:col-span-2',
     icon: (
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -186,6 +200,19 @@ const features: Feature[] = [
       </div>
     ),
   },
+  {
+    title: 'Developer API',
+    copy: 'Send OTPs, order updates and appointment reminders straight from your own systems: one simple API, per-client keys, and every message logged.',
+    span: '',
+    icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 6 3 12l5 6M16 6l5 6-5 6M13 4l-2 16" {...stroke} /></svg>,
+    visual: (
+      <div className="rounded-xl border border-[#e6e8f5] bg-[#12142b] px-3 py-2 font-mono text-[10px] leading-relaxed text-teal-200">
+        POST /api/v1/messages
+        <br />
+        <span className="text-[#8a8eb5]">{'{ "to": "+9477…", "template": "order_update" }'}</span>
+      </div>
+    ),
+  },
 ];
 
 export default function Features() {
@@ -210,7 +237,7 @@ export default function Features() {
           </h2>
           <p className="mt-4 text-lg text-[#5a5e7a]">
             Available 24/7 to answer questions, close sales, schedule bookings, and support your
-            customers all on WhatsApp.
+            customers across WhatsApp, Messenger and Instagram.
           </p>
         </Reveal>
 

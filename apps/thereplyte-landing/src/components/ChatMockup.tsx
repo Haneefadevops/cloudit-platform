@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { ChannelIcon, CHANNEL_HEADER, CHANNEL_LABEL } from './channel';
 
 type LangCode = 'en' | 'si' | 'ta' | 'ar' | 'es';
 
@@ -32,20 +33,23 @@ const localize = (text: string, lang: LangCode) =>
     .replaceAll('{food}', PRICES.food[lang])
     .replaceAll('{slip}', PRICES.slip[lang]);
 
-type StepType = 'c' | 'ai' | 'voice' | 'photo' | 'card' | 'handoff' | 'result';
+type StepType = 'c' | 'ai' | 'voice' | 'photo' | 'card' | 'handoff' | 'comment' | 'result';
 
-type ResultView = 'calendar' | 'orderbook';
+type ResultView = 'calendar' | 'orderbook' | 'leadtag';
 
 type Step = {
   t: StepType;
   text?: string;
   view?: ResultView;
+  commenter?: string;
+  reply?: string;
 };
 
 type Scenario = {
   business: string;
   avatarLetter: string;
   avatarColor: string;
+  channel: 'whatsapp' | 'messenger' | 'instagram';
   chip: string;
   steps: Record<LangCode, Step[]>;
 };
@@ -58,6 +62,7 @@ const SCENARIOS: Scenario[] = [
     business: 'City Clinic',
     avatarLetter: 'C',
     avatarColor: 'bg-indigo-500',
+    channel: 'whatsapp',
     chip: 'Booking',
     steps: {
       en: [
@@ -136,6 +141,7 @@ const SCENARIOS: Scenario[] = [
     business: 'Sweet Layers Bakery',
     avatarLetter: 'S',
     avatarColor: 'bg-rose-500',
+    channel: 'messenger',
     chip: 'Pricing',
     steps: {
       en: [
@@ -204,6 +210,7 @@ const SCENARIOS: Scenario[] = [
     business: 'Spice Route Kitchen',
     avatarLetter: 'S',
     avatarColor: 'bg-amber-500',
+    channel: 'whatsapp',
     chip: 'Food order',
     steps: {
       en: [
@@ -252,6 +259,7 @@ const SCENARIOS: Scenario[] = [
     business: 'QuickMart Stores',
     avatarLetter: 'Q',
     avatarColor: 'bg-teal-500',
+    channel: 'whatsapp',
     chip: 'Tracking',
     steps: {
       en: [
@@ -290,6 +298,7 @@ const SCENARIOS: Scenario[] = [
     business: 'Style Hub Clothing',
     avatarLetter: 'S',
     avatarColor: 'bg-violet-500',
+    channel: 'instagram',
     chip: 'Payment',
     steps: {
       en: [
@@ -347,6 +356,20 @@ const SCENARIOS: Scenario[] = [
         },
         { t: 'result', view: 'orderbook', text: '#79 · Dress ×1 · {slip} · Paid ✅' },
       ],
+    },
+  },
+  {
+    business: 'Ceylon Tours',
+    avatarLetter: 'C',
+    avatarColor: 'bg-fuchsia-500',
+    channel: 'instagram',
+    chip: 'Comment → DM',
+    steps: {
+      en: [{ t: 'comment', commenter: '@nimal_t', text: 'How much is the Ella tour package?', reply: 'Hi Nimal! Please DM us and we will help with the best package.' }, { t: 'c', text: 'Hi, I saw your reply. What are the Ella package prices?' }, { t: 'ai', text: 'Happy to help. Which month are you travelling, and how many travellers?' }, { t: 'c', text: 'July, for two people.' }, { t: 'ai', text: 'Perfect — I have tagged this for our tours team to prepare your options.' }, { t: 'result', view: 'leadtag', text: 'Tour package lead' }],
+      si: [{ t: 'comment', commenter: '@nimal_t', text: 'Ella tour package eka kiyada?', reply: 'Hi! DM ekak danna, best package eka help karannam.' }, { t: 'c', text: 'Hi, Ella package price eka mokakda?' }, { t: 'ai', text: 'Hari. Kawada yanne, travellers la keedenekda?' }, { t: 'c', text: 'July, dennai.' }, { t: 'ai', text: 'Perfect — options ready karanna team ekata tag kala.' }, { t: 'result', view: 'leadtag', text: 'Tour package lead' }],
+      ta: [{ t: 'comment', commenter: '@nimal_t', text: 'Ella tour package evvalavu?', reply: 'Hi! DM seiyungal, best package-ai help seigiroam.' }, { t: 'c', text: 'Ella package price enna?' }, { t: 'ai', text: 'Endha maadham, eththanai per payanam?' }, { t: 'c', text: 'July, rendu per.' }, { t: 'ai', text: 'Sari — engal team options anuppum.' }, { t: 'result', view: 'leadtag', text: 'Tour package lead' }],
+      ar: [{ t: 'comment', commenter: '@nimal_t', text: 'كم سعر باقة رحلة إيلا؟', reply: 'مرحباً! راسلنا في الخاص وسنساعدك بأفضل باقة.' }, { t: 'c', text: 'مرحباً، ما أسعار باقة إيلا؟' }, { t: 'ai', text: 'يسعدني المساعدة. في أي شهر وكم مسافراً؟' }, { t: 'c', text: 'يوليو، لشخصين.' }, { t: 'ai', text: 'ممتاز — أرسلت طلبك لفريق الرحلات.' }, { t: 'result', view: 'leadtag', text: 'Tour package lead' }],
+      es: [{ t: 'comment', commenter: '@nimal_t', text: '¿Cuánto cuesta el tour de Ella?', reply: '¡Hola! Escríbenos por DM y te ayudamos con la mejor opción.' }, { t: 'c', text: 'Hola, ¿cuáles son los precios de Ella?' }, { t: 'ai', text: 'Encantado. ¿En qué mes viajan y cuántas personas?' }, { t: 'c', text: 'Julio, dos personas.' }, { t: 'ai', text: 'Perfecto — envié tu solicitud al equipo de tours.' }, { t: 'result', view: 'leadtag', text: 'Tour package lead' }],
     },
   },
 ];
@@ -560,10 +583,16 @@ function OrderBookView({ row }: { row: string }) {
   );
 }
 
+function LeadTagView({ label }: { label: string }) {
+  return <div className="mx-auto w-full max-w-[260px] rounded-xl border border-[#e6e8f5] bg-white p-4 text-center shadow-sm"><p className="text-sm font-semibold text-[#12142b]">🏷️ Tagged: {label}</p><p className="mt-1 text-[11px] text-[#5a5e7a]">Added to this week&apos;s leads</p></div>;
+}
+
 type Msg = {
   id: number;
   kind: StepType;
   text: string;
+  commenter?: string;
+  reply?: string;
 };
 
 export default function ChatMockup() {
@@ -631,7 +660,7 @@ export default function ChatMockup() {
       while (!cancelled) {
         const reduced = reducedRef.current;
         const langIdx = i % LANGUAGES.length;
-        const scenIdx = (i * 3) % SCENARIOS.length;
+        const scenIdx = (i * 5) % SCENARIOS.length;
         const lang = LANGUAGES[langIdx];
         const scenario = SCENARIOS[scenIdx];
         setCycle(i);
@@ -656,6 +685,9 @@ export default function ChatMockup() {
               // keep pace with the Typewriter reveal (~12ms/char) plus a beat
               await wait(step.t === 'ai' ? 450 + text.length * 12 : 1400);
             }
+          } else if (step.t === 'comment') {
+            push({ kind: 'comment', text, commenter: step.commenter, reply: step.reply });
+            await wait(reduced ? 500 : 1400);
           } else if (step.t === 'handoff') {
             push({ kind: 'handoff', text: HANDOFF_TEXT });
             await wait(reduced ? 500 : 1400);
@@ -684,7 +716,7 @@ export default function ChatMockup() {
   }, []);
 
   const lang = LANGUAGES[cycle % LANGUAGES.length];
-  const scenario = SCENARIOS[(cycle * 3) % SCENARIOS.length];
+  const scenario = SCENARIOS[(cycle * 5) % SCENARIOS.length];
 
   return (
     <div ref={rootRef} className="relative w-full max-w-[min(400px,90vw)]">
@@ -705,7 +737,7 @@ export default function ChatMockup() {
       {/* Phone frame */}
       <div className="relative overflow-hidden rounded-[2rem] border border-[#e6e8f5] bg-white shadow-[0_30px_80px_-24px_rgba(74,66,252,0.28)]">
         {/* Header */}
-        <div className="flex items-center gap-3 bg-[#008069] px-4 py-3">
+        <div className="flex items-center gap-3 px-4 py-3" style={{ background: CHANNEL_HEADER[scenario.channel] }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={scenario.business}
@@ -737,6 +769,7 @@ export default function ChatMockup() {
             </p>
           </div>
           <AnimatePresence mode="wait">
+            <motion.span key={scenario.channel} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.3 }} className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-1 text-[10px] font-medium text-white"><ChannelIcon channel={scenario.channel} />{CHANNEL_LABEL[scenario.channel]}</motion.span>
             <motion.span
               key={scenario.chip}
               initial={{ opacity: 0, y: 6 }}
@@ -782,11 +815,7 @@ export default function ChatMockup() {
                 className="flex flex-col justify-center gap-2"
                 dir={lang.dir}
               >
-                {result.view === 'calendar' ? (
-                  <CalendarView />
-                ) : (
-                  <OrderBookView row={result.text} />
-                )}
+                {result.view === 'calendar' ? <CalendarView /> : result.view === 'leadtag' ? <LeadTagView label={result.text} /> : <OrderBookView row={result.text} />}
               </motion.div>
             ) : (
             <motion.div
@@ -827,6 +856,9 @@ export default function ChatMockup() {
                       <OrderCard total={m.text} />
                     </motion.div>
                   );
+                }
+                if (m.kind === 'comment') {
+                  return <motion.div key={m.id} initial={{ opacity: 0, y: 16, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.35 }} className="mx-auto w-full max-w-[260px] overflow-hidden rounded-xl bg-white shadow-sm"><div className="h-20 bg-gradient-to-br from-fuchsia-500 via-rose-500 to-amber-300" /><div className="p-2.5 text-[11px] text-[#12142b]"><p><span className="font-semibold">{m.commenter}</span> {m.text}</p><div className="ml-3 mt-1 border-l-2 border-fuchsia-300 pl-2 text-[#5a5e7a]"><span className="font-semibold">Ceylon Tours</span> {m.reply}</div></div></motion.div>;
                 }
                 const isAi = m.kind === 'ai';
                 return (

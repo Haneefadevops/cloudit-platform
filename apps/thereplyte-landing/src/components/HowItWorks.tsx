@@ -3,8 +3,8 @@ import Reveal from './Reveal';
 const steps = [
   {
     n: '01',
-    title: 'Connect your WhatsApp number',
-    copy: 'Link your existing business number in minutes. No code, no new hardware, no SIM swaps.',
+    title: 'Connect your channels',
+    copy: 'Link your WhatsApp number, Facebook page or Instagram account in minutes. No code, no new hardware, no SIM swaps.',
   },
   {
     n: '02',

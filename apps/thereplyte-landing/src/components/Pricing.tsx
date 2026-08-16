@@ -22,9 +22,9 @@ const plans: Plan[] = [
     period: '/mo',
     blurb: 'For small teams getting their first AI employee.',
     bullets: [
-      '1 WhatsApp number',
+      '1 connected channel',
       '500 AI conversations / month included',
-      'AI replies 24/7 — 50+ languages',
+      'AI replies 24/7 in 50+ languages',
       'Knowledge base (website crawl + docs)',
       'Welcome & fallback messages, operating hours',
       'Human handoff to team inbox',
@@ -35,11 +35,13 @@ const plans: Plan[] = [
     name: 'Business',
     price: { USD: '$25', LKR: 'LKR 7,500' },
     period: '/mo',
-    blurb: 'For businesses that sell and book on WhatsApp daily.',
+    blurb: 'For businesses that sell and book on every channel, daily.',
     bullets: [
       'Everything in Starter',
+      'Multiple channels: WhatsApp, Messenger & Instagram',
+      'AI workflows & lead categories',
       '1,500 AI conversations / month included',
-      'Orders & bookings — calendar + order book',
+      'Orders & bookings: calendar + order book',
       'Voice notes, images & bank-slip reading',
       'Smart handoff with AI summary & labels',
       'Canned responses for agents',
@@ -57,7 +59,7 @@ const plans: Plan[] = [
       'Everything in Business',
       'Multiple numbers & brands',
       'Custom conversation volumes',
-      'Broadcast campaigns',
+      'Comment moderation with AI public replies',
       'Custom integrations & API access',
       'Dedicated success manager & SLA',
     ],
@@ -150,8 +152,8 @@ export default function Pricing() {
 
         <Reveal className="mx-auto mt-10 max-w-3xl text-center">
           <p className="text-xs leading-relaxed text-[#5a5e7a]">
-            Extra usage: {overage[currency]} per conversation beyond your plan. Extra WhatsApp
-            number: {extraNumber[currency]}. Spending caps &amp; alerts included — no surprise
+            Extra usage: {overage[currency]} per conversation beyond your plan. Extra
+            channel: {extraNumber[currency]}. Spending caps &amp; alerts included. No surprise
             bills. Sri Lankan customers are billed in LKR; international customers in USD.
           </p>
         </Reveal>
