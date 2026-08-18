@@ -841,6 +841,18 @@ Exit criteria:
 
 **Phase 3A2 remaining:** build the People workspace UI on `/dashboard/customers` and `/dashboard/customers/[id]`, use the People endpoint and its `Recently added` label, present smart-view counts and pagination, and complete the requested person-detail/Today frontend work. No frontend route or behavior changed in Phase 3A1.
 
+#### Phase 3A2 People workspace frontend — 2026-08-18
+
+- Reshaped `/dashboard/customers` into the People workspace while retaining the route and all person-detail deep links at `/dashboard/customers/[id]`. The existing backend customer terminology, permissions, and advanced routes remain unchanged.
+- Added the typed `usePeople` React Query hook for `GET /v2/customers/people`. Its key includes view, search, page, page size, and timezone; its request receives React Query's abort signal, so a superseded search or smart-view request cannot replace current results.
+- View, search, and pagination are URL query state. Changing the view or submitting a new search resets to page one; refresh and browser navigation retain the selected People workspace state.
+- Browser timezone is discovered only after client mount through `Intl.DateTimeFormat().resolvedOptions().timeZone`, with UTC as the safe server-rendered and discovery-failure fallback. Displayed action and booking dates use that timezone.
+- Added keyboard-accessible smart-view tabs with API-provided counts for Needs attention, Due today, Overdue, Upcoming, Recently added, and All people. Counts are always rendered from the endpoint response, never calculated from the current page.
+- Added responsive People cards, a basic Add person action, initial/view-change loading treatment, empty organization/view/search states, and a retryable permission-safe API-error state. Cards only describe supported relationship data and gracefully handle absent contact, interaction, action, and booking fields.
+- Kept pipeline, duplicate handling, and CRM settings reachable in a secondary Workspace tools area; no advanced CRM routes were removed or rewritten. Rendered mobile/tablet/dark/accessibility QA remains deferred as documented Phase 1 follow-up work.
+
+**Phase 3B remaining:** redesign the Person detail and Today experiences, make next-action creation more prominent across those flows, and add reminder/one-click communication work after their product contracts are approved.
+
 Exit criteria:
 
 - A user can capture a person and set a next action in under one minute
