@@ -12,9 +12,14 @@ datasource db {
 model Client {
   id                    String   @id @default(uuid())
   name                  String
-  whatsappNumber        String   @unique
-  whatsappPhoneNumberId String   @unique
-  metaAccessToken       String
+  whatsappNumber        String?  @unique
+  whatsappPhoneNumberId String?  @unique
+  metaAccessToken       String?
+
+  // Channel enablement
+  whatsappEnabled     Boolean  @default(true)
+  messengerEnabled    Boolean  @default(false)
+  instagramEnabled    Boolean  @default(false)
 
   // Business information
   industry              String?

@@ -811,8 +811,8 @@ export class WhatsAppService {
    */
   private async sendToCustomer(input: {
     client: {
-      metaAccessToken: string;
-      whatsappPhoneNumberId: string;
+      metaAccessToken?: string | null;
+      whatsappPhoneNumberId?: string | null;
       chatwootAccountId?: number | null;
     };
     channel: string;
@@ -823,6 +823,10 @@ export class WhatsAppService {
     if (input.channel === 'whatsapp') {
       if (!input.to) {
         this.logger.warn('WhatsApp send skipped: no recipient number');
+        return;
+      }
+      if (!input.client.metaAccessToken || !input.client.whatsappPhoneNumberId) {
+        this.logger.warn('WhatsApp send skipped: missing Meta credentials');
         return;
       }
       await this.senderService.sendMessage({
@@ -861,9 +865,10 @@ export class WhatsAppService {
    * 30 minutes, not one per customer message.
    */
   private async maybeAlertFailover(
-    client: { metaAccessToken: string; whatsappPhoneNumberId: string },
+    client: { metaAccessToken: string | null; whatsappPhoneNumberId: string | null },
     metadata: any,
   ): Promise<void> {
+    if (!client.metaAccessToken || !client.whatsappPhoneNumberId) return;
     const failover = metadata?.failover;
     if (!failover) return;
     const now = Date.now();
@@ -1029,11 +1034,16 @@ export class WhatsAppService {
    * consumed as a rating and the normal flow should stop.
    */
   private async handleCsatResponse(
-    client: { id: string; metaAccessToken: string; whatsappPhoneNumberId: string },
+    client: {
+      id: string;
+      metaAccessToken: string | null;
+      whatsappPhoneNumberId: string | null;
+    },
     customer: { id: string },
     messageBody: string,
     from: string,
   ): Promise<boolean> {
+    if (!client.metaAccessToken || !client.whatsappPhoneNumberId) return false;
     const pending = await this.prisma.conversation.findFirst({
       where: { customerId: customer.id, csatPending: true },
       orderBy: { resolvedAt: 'desc' },

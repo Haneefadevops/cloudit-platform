@@ -91,8 +91,8 @@ export class BookingsService {
     client: {
       name: string;
       timezone: string | null;
-      metaAccessToken: string;
-      whatsappPhoneNumberId: string;
+      metaAccessToken: string | null;
+      whatsappPhoneNumberId: string | null;
       bookingConfirmationTemplate: string | null;
     };
   }) {
@@ -103,6 +103,10 @@ export class BookingsService {
     }
 
     const { client } = booking;
+    if (!client.metaAccessToken || !client.whatsappPhoneNumberId) {
+      this.logger.warn('Skipping booking notification: client has no WhatsApp credentials');
+      return;
+    }
     const when = formatInTimezone(
       booking.startAt.toISOString(),
       client.timezone,

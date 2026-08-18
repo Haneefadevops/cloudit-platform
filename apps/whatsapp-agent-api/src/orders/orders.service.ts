@@ -48,8 +48,8 @@ interface OrderWithIncludes {
     name: string;
     paymentInstructions: string | null;
     orderConfirmationTemplate: string | null;
-    metaAccessToken: string;
-    whatsappPhoneNumberId: string;
+    metaAccessToken: string | null;
+    whatsappPhoneNumberId: string | null;
   };
   items: Array<{
     quantity: number;
@@ -164,6 +164,10 @@ export class OrdersService {
     if (!buildMessage) return;
     if (!order.customer.phoneNumber) {
       this.logger.warn('Skipping order notification: customer has no WhatsApp number');
+      return;
+    }
+    if (!order.client.metaAccessToken || !order.client.whatsappPhoneNumberId) {
+      this.logger.warn('Skipping order notification: client has no WhatsApp credentials');
       return;
     }
 

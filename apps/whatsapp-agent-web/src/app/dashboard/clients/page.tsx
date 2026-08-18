@@ -21,9 +21,15 @@ import {
 interface Client {
   id: string;
   name: string;
-  whatsappNumber: string;
-  whatsappPhoneNumberId: string;
-  metaAccessToken: string;
+  whatsappNumber?: string | null;
+  whatsappPhoneNumberId?: string | null;
+  metaAccessToken?: string | null;
+  whatsappEnabled: boolean;
+  messengerEnabled: boolean;
+  instagramEnabled: boolean;
+  facebookPageId?: string | null;
+  facebookPageAccessToken?: string | null;
+  instagramAccountId?: string | null;
   status: string;
   industry?: string | null;
   website?: string | null;
@@ -119,9 +125,15 @@ export default function ClientsPage() {
     language: 'en',
     adminEmail: '',
     adminPhone: '',
+    whatsappEnabled: true,
+    messengerEnabled: false,
+    instagramEnabled: false,
     whatsappNumber: '',
     whatsappPhoneNumberId: '',
     metaAccessToken: '',
+    facebookPageId: '',
+    facebookPageAccessToken: '',
+    instagramAccountId: '',
     businessDescription: '',
     welcomeMessage: 'Hello! How can we help you today?',
     fallbackMessage:
@@ -231,9 +243,15 @@ export default function ClientsPage() {
       language: 'en',
       adminEmail: '',
       adminPhone: '',
+      whatsappEnabled: true,
+      messengerEnabled: false,
+      instagramEnabled: false,
       whatsappNumber: '',
       whatsappPhoneNumberId: '',
       metaAccessToken: '',
+      facebookPageId: '',
+      facebookPageAccessToken: '',
+      instagramAccountId: '',
       businessDescription: '',
       welcomeMessage: 'Hello! How can we help you today?',
       fallbackMessage:
@@ -267,9 +285,31 @@ export default function ClientsPage() {
 
     const payload: Record<string, unknown> = {
       name: form.name,
-      whatsappNumber: form.whatsappNumber,
-      whatsappPhoneNumberId: form.whatsappPhoneNumberId,
-      metaAccessToken: form.metaAccessToken,
+      whatsappEnabled: form.whatsappEnabled,
+      messengerEnabled: form.messengerEnabled,
+      instagramEnabled: form.instagramEnabled,
+      ...(form.whatsappEnabled
+        ? {
+            whatsappNumber: form.whatsappNumber || null,
+            whatsappPhoneNumberId: form.whatsappPhoneNumberId || null,
+            metaAccessToken: form.metaAccessToken || null,
+          }
+        : {
+            whatsappNumber: null,
+            whatsappPhoneNumberId: null,
+            metaAccessToken: null,
+          }),
+      ...(form.messengerEnabled || form.instagramEnabled
+        ? {
+            facebookPageId: form.facebookPageId || null,
+            facebookPageAccessToken: form.facebookPageAccessToken || null,
+            instagramAccountId: form.instagramAccountId || null,
+          }
+        : {
+            facebookPageId: null,
+            facebookPageAccessToken: null,
+            instagramAccountId: null,
+          }),
       industry: form.industry || null,
       website: form.website || null,
       timezone: form.timezone || 'UTC',
@@ -363,9 +403,15 @@ export default function ClientsPage() {
       language: client.language || 'en',
       adminEmail: client.adminEmail || '',
       adminPhone: client.adminPhone || '',
-      whatsappNumber: client.whatsappNumber,
-      whatsappPhoneNumberId: client.whatsappPhoneNumberId,
-      metaAccessToken: client.metaAccessToken,
+      whatsappEnabled: client.whatsappEnabled ?? true,
+      messengerEnabled: client.messengerEnabled ?? false,
+      instagramEnabled: client.instagramEnabled ?? false,
+      whatsappNumber: client.whatsappNumber || '',
+      whatsappPhoneNumberId: client.whatsappPhoneNumberId || '',
+      metaAccessToken: client.metaAccessToken || '',
+      facebookPageId: client.facebookPageId || '',
+      facebookPageAccessToken: client.facebookPageAccessToken || '',
+      instagramAccountId: client.instagramAccountId || '',
       businessDescription: client.businessDescription || '',
       welcomeMessage: client.welcomeMessage || '',
       fallbackMessage: client.fallbackMessage || '',
@@ -617,32 +663,102 @@ export default function ClientsPage() {
           </fieldset>
 
           <fieldset className={sectionClass}>
-            <div className={sectionTitleClass}>3. WhatsApp Configuration</div>
+            <div className={sectionTitleClass}>3. Channels</div>
             <div className="flex flex-col gap-3">
-              <Input
-                placeholder="WhatsApp Business number (e.g. +94751234567) *"
-                value={form.whatsappNumber}
-                onChange={(e) =>
-                  setForm({ ...form, whatsappNumber: e.target.value })
-                }
-                required
-              />
-              <Input
-                placeholder="WhatsApp Phone Number ID *"
-                value={form.whatsappPhoneNumberId}
-                onChange={(e) =>
-                  setForm({ ...form, whatsappPhoneNumberId: e.target.value })
-                }
-                required
-              />
-              <Input
-                placeholder="Meta Access Token *"
-                value={form.metaAccessToken}
-                onChange={(e) =>
-                  setForm({ ...form, metaAccessToken: e.target.value })
-                }
-                required
-              />
+              <div className="flex flex-wrap gap-4 text-sm">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={form.whatsappEnabled}
+                    onChange={(e) =>
+                      setForm({ ...form, whatsappEnabled: e.target.checked })
+                    }
+                  />
+                  WhatsApp
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={form.messengerEnabled}
+                    onChange={(e) =>
+                      setForm({ ...form, messengerEnabled: e.target.checked })
+                    }
+                  />
+                  Messenger
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={form.instagramEnabled}
+                    onChange={(e) =>
+                      setForm({ ...form, instagramEnabled: e.target.checked })
+                    }
+                  />
+                  Instagram
+                </label>
+              </div>
+
+              {form.whatsappEnabled && (
+                <div className="flex flex-col gap-3 border-t border-line pt-3">
+                  <div className="text-sm font-medium">WhatsApp Configuration</div>
+                  <Input
+                    placeholder="WhatsApp Business number (e.g. +94751234567) *"
+                    value={form.whatsappNumber}
+                    onChange={(e) =>
+                      setForm({ ...form, whatsappNumber: e.target.value })
+                    }
+                    required={form.whatsappEnabled}
+                  />
+                  <Input
+                    placeholder="WhatsApp Phone Number ID *"
+                    value={form.whatsappPhoneNumberId}
+                    onChange={(e) =>
+                      setForm({ ...form, whatsappPhoneNumberId: e.target.value })
+                    }
+                    required={form.whatsappEnabled}
+                  />
+                  <Input
+                    placeholder="Meta Access Token *"
+                    value={form.metaAccessToken}
+                    onChange={(e) =>
+                      setForm({ ...form, metaAccessToken: e.target.value })
+                    }
+                    required={form.whatsappEnabled}
+                  />
+                </div>
+              )}
+
+              {(form.messengerEnabled || form.instagramEnabled) && (
+                <div className="flex flex-col gap-3 border-t border-line pt-3">
+                  <div className="text-sm font-medium">
+                    Messenger & Instagram Configuration
+                  </div>
+                  <Input
+                    placeholder="Facebook Page ID"
+                    value={form.facebookPageId}
+                    onChange={(e) =>
+                      setForm({ ...form, facebookPageId: e.target.value })
+                    }
+                  />
+                  <Input
+                    placeholder="Facebook Page Access Token (optional)"
+                    value={form.facebookPageAccessToken}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        facebookPageAccessToken: e.target.value,
+                      })
+                    }
+                  />
+                  <Input
+                    placeholder="Instagram Account ID"
+                    value={form.instagramAccountId}
+                    onChange={(e) =>
+                      setForm({ ...form, instagramAccountId: e.target.value })
+                    }
+                  />
+                </div>
+              )}
             </div>
           </fieldset>
 
@@ -970,7 +1086,7 @@ export default function ClientsPage() {
         <div>
           <EmptyState
             title="No clients yet"
-            hint="Add your first client to connect WhatsApp, Chatwoot and the AI agent."
+            hint="Add your first client to connect WhatsApp, Messenger, Instagram, Chatwoot and the AI agent."
             action={
               <Button
                 onClick={() => {
@@ -999,6 +1115,15 @@ export default function ClientsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <strong className="text-brand-navy">{c.name}</strong>
                       <StatusBadge status={c.status} />
+                      {c.whatsappEnabled && (
+                        <Badge tone="teal">WhatsApp</Badge>
+                      )}
+                      {c.messengerEnabled && (
+                        <Badge tone="blue">Messenger</Badge>
+                      )}
+                      {c.instagramEnabled && (
+                        <Badge tone="amber">Instagram</Badge>
+                      )}
                       <Badge tone={metaActive ? 'teal' : 'gray'}>
                         Meta {metaActive ? 'active' : 'pending'}
                       </Badge>
@@ -1007,7 +1132,13 @@ export default function ClientsPage() {
                       </Badge>
                     </div>
                     <div className="mt-1 text-sm text-muted">
-                      {c.whatsappNumber}
+                      {c.whatsappEnabled && c.whatsappNumber
+                        ? c.whatsappNumber
+                        : c.messengerEnabled && c.facebookPageId
+                        ? `Page ${c.facebookPageId}`
+                        : c.instagramEnabled && c.instagramAccountId
+                        ? `IG ${c.instagramAccountId}`
+                        : 'No channel identifier'}
                     </div>
                     {c.adminEmail && (
                       <div className="mt-0.5 text-xs text-muted">
@@ -1225,94 +1356,147 @@ export default function ClientsPage() {
         <Modal
           open
           onClose={() => setMetaGuideClient(null)}
-          title="Meta Webhook Setup"
+          title="Meta Setup"
         >
           <div className="flex flex-col gap-3">
             <p className="m-0 text-sm text-muted">
-              Copy the values below into your Meta Developers app WhatsApp
-              product configuration.
+              Configure the Meta products for the channels this client has
+              enabled.
             </p>
 
-            <div>
-              <span className="mb-1 block text-sm font-medium">Callback URL</span>
-              <div className="flex gap-2">
-                <Input readOnly value={callbackUrl} />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => copyToClipboard(callbackUrl)}
-                >
-                  Copy
-                </Button>
-              </div>
-            </div>
+            {metaGuideClient.whatsappEnabled && (
+              <div className={sectionClass}>
+                <div className={sectionTitleClass}>WhatsApp webhook</div>
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <span className="mb-1 block text-sm font-medium">
+                      Callback URL
+                    </span>
+                    <div className="flex gap-2">
+                      <Input readOnly value={callbackUrl} />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => copyToClipboard(callbackUrl)}
+                      >
+                        Copy
+                      </Button>
+                    </div>
+                  </div>
 
-            <div>
-              <span className="mb-1 block text-sm font-medium">Verify Token</span>
-              <div className="flex gap-2">
-                <Input
-                  readOnly
-                  value={metaGuideClient.verifyToken || 'Not generated'}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    metaGuideClient.verifyToken &&
-                    copyToClipboard(metaGuideClient.verifyToken)
-                  }
-                >
-                  Copy
-                </Button>
-              </div>
-            </div>
+                  <div>
+                    <span className="mb-1 block text-sm font-medium">
+                      Verify Token
+                    </span>
+                    <div className="flex gap-2">
+                      <Input
+                        readOnly
+                        value={metaGuideClient.verifyToken || 'Not generated'}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          metaGuideClient.verifyToken &&
+                          copyToClipboard(metaGuideClient.verifyToken)
+                        }
+                      >
+                        Copy
+                      </Button>
+                    </div>
+                  </div>
 
-            <div className={sectionClass}>
-              <div className={sectionTitleClass}>Steps</div>
-              <ol className="m-0 list-decimal pl-5 text-sm leading-relaxed text-brand-navy">
-                <li>
-                  Open{' '}
-                  <a
-                    href="https://developers.facebook.com/apps/"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-brand-indigo underline"
+                  <ol className="m-0 list-decimal pl-5 text-sm leading-relaxed text-brand-navy">
+                    <li>
+                      Open{' '}
+                      <a
+                        href="https://developers.facebook.com/apps/"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-brand-indigo underline"
+                      >
+                        Meta Developers
+                      </a>{' '}
+                      and select your app.
+                    </li>
+                    <li>Go to WhatsApp → Configuration.</li>
+                    <li>Paste the Callback URL and Verify Token.</li>
+                    <li>Click Verify and Save.</li>
+                    <li>
+                      Subscribe to <strong>messages</strong> and{' '}
+                      <strong>message_deliveries</strong> webhook fields.
+                    </li>
+                  </ol>
+
+                  <div
+                    className={`rounded-lg px-3 py-2 text-sm ${
+                      metaGuideClient.metaWebhookStatus === 'active'
+                        ? 'bg-green-50 text-green-800'
+                        : 'bg-amber-50 text-amber-800'
+                    }`}
                   >
-                    Meta Developers
-                  </a>{' '}
-                  and select your app.
-                </li>
-                <li>Go to WhatsApp → Configuration.</li>
-                <li>Paste the Callback URL above into the Callback URL field.</li>
-                <li>Paste the Verify Token above into the Verify Token field.</li>
-                <li>Click Verify and Save.</li>
-                <li>
-                  Subscribe to <strong>messages</strong> and{' '}
-                  <strong>message_deliveries</strong> webhook fields.
-                </li>
-              </ol>
-            </div>
-
-            <div
-              className={`rounded-lg px-3 py-2 text-sm ${
-                metaGuideClient.metaWebhookStatus === 'active'
-                  ? 'bg-green-50 text-green-800'
-                  : 'bg-amber-50 text-amber-800'
-              }`}
-            >
-              Status:{' '}
-              <strong>
-                {metaGuideClient.metaWebhookStatus === 'active'
-                  ? 'Recent webhook received'
-                  : 'Waiting for first webhook'}
-              </strong>
-              {metaGuideClient.lastWebhookAt && (
-                <div>
-                  Last received:{' '}
-                  {new Date(metaGuideClient.lastWebhookAt).toLocaleString()}
+                    Status:{' '}
+                    <strong>
+                      {metaGuideClient.metaWebhookStatus === 'active'
+                        ? 'Recent webhook received'
+                        : 'Waiting for first webhook'}
+                    </strong>
+                    {metaGuideClient.lastWebhookAt && (
+                      <div>
+                        Last received:{' '}
+                        {new Date(metaGuideClient.lastWebhookAt).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {(metaGuideClient.messengerEnabled ||
+              metaGuideClient.instagramEnabled) && (
+              <div className={sectionClass}>
+                <div className={sectionTitleClass}>
+                  Messenger & Instagram native inboxes
+                </div>
+                <ol className="m-0 list-decimal pl-5 text-sm leading-relaxed text-brand-navy">
+                  <li>
+                    In Chatwoot, open the client account at{' '}
+                    <a
+                      href="https://inbox.thereplyte.com"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-brand-indigo underline"
+                    >
+                      inbox.thereplyte.com
+                    </a>
+                    .
+                  </li>
+                  <li>
+                    Go to <strong>Settings → Inboxes → Add Inbox</strong>.
+                  </li>
+                  {metaGuideClient.messengerEnabled && (
+                    <li>
+                      Select <strong>Facebook</strong> and connect the client's
+                      Facebook Page.
+                    </li>
+                  )}
+                  {metaGuideClient.instagramEnabled && (
+                    <li>
+                      Select <strong>Instagram</strong> and connect the client's
+                      professional Instagram account.
+                    </li>
+                  )}
+                  <li>
+                    Send a test message on each enabled channel and confirm it
+                    reaches the AI.
+                  </li>
+                </ol>
+                <p className="m-0 mt-2 text-xs text-muted">
+                  Full platform-level setup steps are in{' '}
+                  <code>docs/THEREPLYTE_MESSENGER_INSTAGRAM_SETUP.md</code>.
+                </p>
+              </div>
+            )}
 
             <div>
               <Button variant="outline" onClick={() => setMetaGuideClient(null)}>

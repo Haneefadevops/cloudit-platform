@@ -157,7 +157,7 @@ export class StaffAlertsService {
   }
 
   async sendAlert(
-    client: { metaAccessToken: string; whatsappPhoneNumberId: string },
+    client: { metaAccessToken?: string | null; whatsappPhoneNumberId?: string | null },
     message: string,
   ): Promise<void> {
     const totalContacts = await this.prisma.staffAlertContact.count();

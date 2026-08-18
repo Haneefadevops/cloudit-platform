@@ -35,8 +35,22 @@ export class WhatsAppSendError extends Error {
 }
 
 interface SenderClient {
-  metaAccessToken: string;
-  whatsappPhoneNumberId: string;
+  metaAccessToken?: string | null;
+  whatsappPhoneNumberId?: string | null;
+}
+
+function assertWhatsAppCredentials(
+  client: SenderClient,
+): { metaAccessToken: string; whatsappPhoneNumberId: string } {
+  if (!client.metaAccessToken || !client.whatsappPhoneNumberId) {
+    throw new WhatsAppSendError(
+      'Missing WhatsApp credentials (metaAccessToken or whatsappPhoneNumberId)',
+    );
+  }
+  return {
+    metaAccessToken: client.metaAccessToken,
+    whatsappPhoneNumberId: client.whatsappPhoneNumberId,
+  };
 }
 
 @Injectable()
@@ -50,7 +64,8 @@ export class WhatsAppSenderService {
     to: string;
     message: string;
   }): Promise<void> {
-    const { client, to, message } = input;
+    const { to, message } = input;
+    const client = assertWhatsAppCredentials(input.client);
 
     await this.post(client, {
       messaging_product: 'whatsapp',
@@ -76,7 +91,8 @@ export class WhatsAppSenderService {
     client: SenderClient;
     messageId: string;
   }): Promise<void> {
-    const { client, messageId } = input;
+    const { messageId } = input;
+    const client = assertWhatsAppCredentials(input.client);
 
     try {
       await this.post(client, {
@@ -104,8 +120,8 @@ export class WhatsAppSenderService {
     parameters?: string[];
     languageCode?: string;
   }): Promise<void> {
-    const { client, to, templateName, parameters = [], languageCode = 'en' } =
-      input;
+    const { to, templateName, parameters = [], languageCode = 'en' } = input;
+    const client = assertWhatsAppCredentials(input.client);
 
     await this.post(client, {
       messaging_product: 'whatsapp',
@@ -140,7 +156,8 @@ export class WhatsAppSenderService {
     template: { kind: WhatsAppTemplateKind; parameters: string[] };
     languageCode?: string;
   }): Promise<void> {
-    const { client, to, message, template, languageCode } = input;
+    const { to, message, template, languageCode } = input;
+    const client = assertWhatsAppCredentials(input.client);
 
     try {
       await this.sendMessage({ client, to, message });

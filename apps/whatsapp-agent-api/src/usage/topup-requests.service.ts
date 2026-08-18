@@ -257,9 +257,13 @@ export class TopUpRequestsService {
    * (who is on duty, rotation, env fallback) lives in StaffAlertsService.
    */
   private async alertStaff(
-    client: { metaAccessToken: string; whatsappPhoneNumberId: string },
+    client: { metaAccessToken: string | null; whatsappPhoneNumberId: string | null },
     message: string,
   ) {
+    if (!client.metaAccessToken || !client.whatsappPhoneNumberId) {
+      this.logger.warn('Skipping staff top-up alert: client has no WhatsApp credentials');
+      return;
+    }
     try {
       await this.staffAlertsService.sendAlert(client, message);
     } catch (error) {

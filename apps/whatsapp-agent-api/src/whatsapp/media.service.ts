@@ -200,11 +200,15 @@ export class MediaService {
   async mediaToText(input: {
     type: IncomingMediaType;
     mediaId: string;
-    accessToken: string;
+    accessToken?: string | null;
     caption?: string;
     filename?: string;
   }): Promise<string> {
-    const { type, mediaId, accessToken, caption, filename } = input;
+    const { type, mediaId, caption, filename } = input;
+    const accessToken = input.accessToken ?? '';
+    if (!accessToken) {
+      return `[${type === 'audio' ? 'Voice note' : type === 'image' ? 'Image' : 'Document'}: could not retrieve media — missing access token]`;
+    }
     const label =
       type === 'audio' ? 'voice note' : type === 'image' ? 'image' : 'document';
 
