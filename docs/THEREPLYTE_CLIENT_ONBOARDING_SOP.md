@@ -10,6 +10,7 @@ over 1–3 days (some steps wait on the client or Meta).
 **Related docs:**
 - `docs/THEREPLYTE_CHATWOOT_USER_MANUAL.md` (Part B = the client training handout)
 - `docs/THEREPLYTE_BOOKINGS_ORDERS_TEST_PLAN.md` (testing details)
+- `docs/THEREPLYTE_MESSENGER_INSTAGRAM_SETUP.md` (Messenger & Instagram platform setup and Chatwoot inboxes)
 
 ---
 
@@ -25,7 +26,11 @@ or simple form to the client works.
 - [ ] Preferred language(s) of their customers
 - [ ] Owner's email (becomes the Chatwoot + portal admin login)
 - [ ] Owner's phone number
-- [ ] The WhatsApp number for the bot:
+- [ ] **Channels to enable** — WhatsApp, Messenger, Instagram, or any combination
+  - WhatsApp: see the WhatsApp number details below.
+  - Messenger: the client's **Facebook Page name** and **Page ID** (or Page URL).
+  - Instagram: the client's **Instagram account handle** and **Account ID** (must be a professional/creator account linked to the Facebook Page above).
+- [ ] The WhatsApp number for the bot (if WhatsApp is enabled):
   - **Option A — their existing WhatsApp Business app number** (migrates to
     the Cloud API; the app on their phone stops working for that number —
     explain this clearly and get explicit approval), or
@@ -39,20 +44,26 @@ or simple form to the client works.
 - [ ] Signed agreement / payment for setup fee + first month
 
 **Explain to the client at this stage (set expectations):**
-- Same number, customers notice nothing
+- Same WhatsApp number, customers notice nothing.
 - The phone app is replaced by a team inbox (Chatwoot) where the AI and
-  their staff work together
-- Their old chat history stays backed up on their phone, restorable anytime
+  their staff work together.
+- Their old chat history stays backed up on their phone, restorable anytime.
+- Messenger and Instagram conversations live in the same Chatwoot inbox as
+  WhatsApp; staff reply from one place.
+- A customer who contacts them through multiple channels is treated as
+  separate customers per channel for now.
 
 ---
 
-## STAGE 1 — Meta setup (the WhatsApp plumbing, from zero)
+## STAGE 1 — Meta setup
 
 Done by CloudIT staff, with the client where noted. Everything happens in
 two Meta websites: **business.facebook.com** (business management) and
 **developers.facebook.com** (the API app). Work inside the CLIENT's Meta
 Business Portfolio — if they don't have one, create it with them in step
 1.1 (needs their Facebook login).
+
+Skip the sub-sections below for any channel the client is not using.
 
 ### 1.1 Create/confirm the Meta Business Portfolio
 
@@ -72,6 +83,10 @@ Business Portfolio — if they don't have one, create it with them in step
 3. Use case: choose **"Other"** → app type: **"Business"**.
 4. Name it (e.g. "CloudIT WhatsApp" or the client's name), set the contact
    email, and **link the Business Portfolio** from 1.1 → Create app.
+
+### 1A — WhatsApp setup
+
+Do this only if WhatsApp is enabled in Stage 0.
 
 ### 1.3 Add the WhatsApp product
 
@@ -180,6 +195,27 @@ out-of-window notifications yet.
 **Checkpoint:** you hold three values — **Phone Number ID**, **permanent
 access token**, **the WhatsApp number itself** — plus the profile is set.
 
+### 1B — Messenger & Instagram platform setup
+
+Do this only if Messenger or Instagram is enabled in Stage 0. The platform-level
+Meta app configuration is the same for every client; per-client Page/account
+connection happens later in Chatwoot (Stage 2.4).
+
+1. In the same Meta Developer app from 1.2, add the **Messenger** and
+   **Instagram** products if they are not already present.
+2. Request the permissions `pages_messaging`, `pages_manage_metadata`, and
+   `instagram_manage_messages`.
+3. Confirm the client's Instagram account is a professional/creator account
+   linked to the Facebook Page collected in Stage 0.
+4. For production use with business accounts, Meta App Review approval is
+   required for the messaging permissions.
+
+For the full platform-level steps, webhook URLs, and environment variables,
+see `docs/THEREPLYTE_MESSENGER_INSTAGRAM_SETUP.md`.
+
+**Checkpoint:** Messenger and Instagram products are added to the Meta app and
+permission requests are submitted.
+
 ---
 
 ## STAGE 2 — TheReplyte onboarding (app.thereplyte.com)
@@ -210,14 +246,31 @@ end (Stage 7). Below is the exact click-by-click procedure.
   owner's real email, not a generic one
 - **Primary admin phone** — owner's mobile (recovery and alerts)
 
-**Section 3 — WhatsApp Configuration** (values from Stage 1)
+**Section 3 — Channels**
+
+Select the channels the client wants. Each channel exposes its own fields below.
+- **WhatsApp enabled**
+- **Messenger enabled**
+- **Instagram enabled**
+
+**Section 4 — WhatsApp Configuration** (only when WhatsApp is enabled)
 - **WhatsApp Business number** — with country code, e.g. +9477XXXXXXX
 - **WhatsApp Phone Number ID** — the long numeric ID from Meta API Setup
   (NOT the phone number)
-- **Meta access token** — the PERMANENT system-user token from Stage 1.5
+- **Meta access token** — the PERMANENT system-user token from Stage 1A
   (never the 24-hour temporary token)
 
-**Section 4 — AI Behavior** (defaults are safe; refined in Stage 3)
+**Section 5 — Messenger & Instagram Configuration** (only when Messenger or
+Instagram is enabled)
+- **Facebook Page ID** — numeric ID of the Facebook Page (for Messenger)
+- **Facebook Page access token** — page-scoped token if available; optional
+  for the dashboard, required only if the API posts back to the Page
+- **Instagram Account ID** — numeric ID of the Instagram professional account
+  (for Instagram)
+
+Leave these blank if the client is WhatsApp-only.
+
+**Section 6 — AI Behavior** (defaults are safe; refined in Stage 3)
 - **Business description** — 2–3 lines about the business
 - **Welcome message** — first message to new customers
 - **Fallback message** — sent when the AI can't answer / hands off
@@ -227,7 +280,7 @@ end (Stage 7). Below is the exact click-by-click procedure.
 - **Operating hours** — open/close times + closed days (drives the
   after-hours message and handoff)
 
-**Section 5 — Modules**
+**Section 7 — Modules**
 - **Bookings enabled** — on for appointments businesses (clinics, salons,
   consultants). When on, also set:
   - **Approval mode** — keep ON (every booking waits for staff confirm;
@@ -259,7 +312,9 @@ end (Stage 7). Below is the exact click-by-click procedure.
 3. Verify the card now shows **"Chatwoot connected • Account # (name)"**.
    If it errors, check the server logs before retrying.
 
-### 2.3 Connect the Meta webhook
+### 2.3 Connect the Meta webhook (WhatsApp only)
+
+Skip this if the client is not using WhatsApp.
 
 1. On the client card, click **Meta Setup** — it shows two values:
    the **Callback URL** (`https://api.thereplyte.com/api/webhooks/whatsapp`)
@@ -274,8 +329,23 @@ end (Stage 7). Below is the exact click-by-click procedure.
    Back on the client card, click **Refresh Status** — the Meta status
    should show active with a recent "last webhook" time.
 
-**Checkpoint:** a WhatsApp message to the client number reaches TheReplyte
-(customer + conversation created, AI replies on WhatsApp).
+### 2.4 Add Messenger & Instagram inboxes (Messenger/Instagram only)
+
+Skip this if the client is not using Messenger or Instagram.
+
+1. Open the client's Chatwoot account at `https://inbox.thereplyte.com`.
+2. Go to **Settings → Inboxes → Add Inbox**.
+3. Select **Facebook** to connect the client's Facebook Page (Messenger) or
+   **Instagram** to connect the professional Instagram account.
+4. Complete the OAuth flow and confirm the inbox is connected.
+5. Repeat for each enabled channel.
+6. Copy the connected **Facebook Page ID** and/or **Instagram Account ID**
+   back into the client card in the dashboard if they were not entered earlier.
+
+For the full runbook, see `docs/THEREPLYTE_MESSENGER_INSTAGRAM_SETUP.md`.
+
+**Checkpoint:** a message on each enabled channel reaches TheReplyte
+(customer + conversation created, AI replies on that channel).
 
 ---
 
@@ -299,8 +369,8 @@ Dashboard → **AI Settings** (select the client):
       ```
 
       When a handoff happens, the customer automatically receives a ticket
-      reference (TK-XXXXX) on WhatsApp, and the resolved ticket is stored
-      under Dashboard → **Support** (Support History).
+      reference (TK-XXXXX) on the channel they are using, and the resolved
+      ticket is stored under Dashboard → **Support** (Support History).
 - [ ] **3.2 Temperature** — 0.3–0.5 for most businesses (consistent, not
       creative).
 - [ ] **3.3 Messages** — welcome message, fallback message, outside-hours
@@ -365,11 +435,19 @@ Follow `docs/THEREPLYTE_BOOKINGS_ORDERS_TEST_PLAN.md`. Minimum:
 - [ ] **5.3 Playground orders** (if enabled) — order 2 items → backend total
       (check the math!) → address → confirm → appears in **Orders** →
       advance the pipeline.
-- [ ] **5.4 Real WhatsApp** — from your own phone: greeting → question →
-      booking or order → ask for a human → verify the handoff lands in
-      Chatwoot with summary + labels → agent replies from Chatwoot →
+- [ ] **5.4 Real WhatsApp** (if enabled) — from your own phone: greeting →
+      question → booking or order → ask for a human → verify the handoff lands
+      in Chatwoot with summary + labels → agent replies from Chatwoot →
       customer receives it → Resolve → CSAT request arrives once.
-- [ ] **5.5 Wallet** — confirm the plan allowance shows on the client card
+- [ ] **5.5 Real Messenger** (if enabled) — from a test Facebook account:
+      message the client's Page → greeting → question → ask for a human →
+      handoff lands in the Facebook inbox in Chatwoot → agent reply reaches
+      the test user.
+- [ ] **5.6 Real Instagram** (if enabled) — from a test Instagram account:
+      direct-message the client's professional account → greeting → question →
+      ask for a human → handoff lands in the Instagram inbox in Chatwoot →
+      agent reply reaches the test user.
+- [ ] **5.7 Wallet** — confirm the plan allowance shows on the client card
       and the portal usage card matches.
 
 ---

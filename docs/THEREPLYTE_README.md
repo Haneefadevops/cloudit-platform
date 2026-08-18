@@ -1,6 +1,10 @@
-# TheReplyte — WhatsApp AI Agent
+# TheReplyte — Multi-Channel AI Agent
 
-TheReplyte is a no-code WhatsApp AI agent platform. Businesses get an AI that answers customer messages from their own knowledge base, hands off to human agents in Chatwoot when needed, and reports back to the owner. The TheReplyte dashboard is used by platform staff only, for client onboarding and AI configuration; the client's agents work entirely inside Chatwoot.
+TheReplyte is a no-code AI agent platform for WhatsApp, Messenger, and Instagram.
+Businesses get an AI that answers customer messages from their own knowledge base,
+hands off to human agents in Chatwoot when needed, and reports back to the owner.
+The TheReplyte dashboard is used by platform staff only, for client onboarding and
+AI configuration; the client's agents work entirely inside Chatwoot.
 
 - Dashboard: `https://app.thereplyte.com`
 - API: `https://api.thereplyte.com`
@@ -11,15 +15,16 @@ TheReplyte is a no-code WhatsApp AI agent platform. Businesses get an AI that an
 ## Architecture
 
 ```
-End Customer (WhatsApp)
+End Customer (WhatsApp / Messenger / Instagram)
         ↓
-Meta WhatsApp Cloud API
+Meta APIs (WhatsApp Cloud API, Messenger, Instagram)
         ↓
 TheReplyte API (api.thereplyte.com)        ← apps/whatsapp-agent-api (NestJS + Prisma + Postgres/pgvector)
+  ├─ Channel-aware routing (WhatsApp / Messenger / Instagram)
   ├─ AI replies from knowledge base (Kimi + RAG)
-  ├─ Media understanding (voice/image/documents)
+  ├─ Media understanding (voice/image/documents; WhatsApp primarily)
   ├─ Human handoff to Chatwoot (summary, labels, CSAT)
-  └─ Forwards agent replies back to WhatsApp
+  └─ Forwards agent replies back on the customer's channel
         ↓
 Chatwoot (inbox.thereplyte.com)            ← infra/chatwoot
         ↓
@@ -43,8 +48,11 @@ Supporting services: Postgres (with `pgvector`), Chatwoot, n8n (optional alerts)
 ## Features (current)
 
 ### Onboarding (no-code)
-- Staff creates a client in the dashboard; the system automatically creates a dedicated Chatwoot account, API inbox, and Chatwoot webhook; creates a default client admin user and auto-confirms it (direct DB update via `CHATWOOT_DATABASE_URL`, so SMTP is not required); stores Meta credentials; applies default AI settings.
-- Client card shows Chatwoot connection status, Meta webhook status (green when a webhook was received in the last 24h), and quick actions: Open Chatwoot, Meta Setup, Refresh Status, Edit AI Settings.
+- Staff creates a client in the dashboard and selects the channels the business will use: WhatsApp, Messenger, Instagram, or any combination.
+- The system stores WhatsApp credentials (Phone Number ID, access token, verify token), plus optional Facebook Page ID / access token and Instagram Account ID.
+- For WhatsApp: the system automatically creates a dedicated Chatwoot account, API inbox, and Chatwoot webhook; creates a default client admin user and auto-confirms it (direct DB update via `CHATWOOT_DATABASE_URL`, so SMTP is not required); applies default AI settings.
+- For Messenger/Instagram: staff connect the native Facebook/Instagram inboxes in Chatwoot using the platform runbook.
+- Client card shows Chatwoot connection status, Meta webhook status (green when a webhook was received in the last 24h), enabled channel badges, and quick actions: Open Chatwoot, Meta Setup, Refresh Status, Edit AI Settings.
 - Meta Setup panel shows the callback URL, verify token, and step-by-step instructions (guided copy-paste flow).
 
 ### AI message handling
@@ -61,7 +69,7 @@ Supporting services: Postgres (with `pgvector`), Chatwoot, n8n (optional alerts)
 - Handoff creates/links the Chatwoot contact and conversation and pushes the full bot/customer transcript.
 - An AI-generated conversation summary is saved on the conversation and posted as a Chatwoot private note.
 - Labels applied automatically: rule-based (`ai-handoff`, `after-hours`/`in-hours`, `urgent`) plus 1–3 AI-suggested topic labels.
-- Agent replies in Chatwoot are forwarded to the customer's WhatsApp automatically.
+- Agent replies in Chatwoot are forwarded back to the customer's original channel (WhatsApp, Messenger, or Instagram) automatically.
 - Canned responses: per-client templates; agents type `/shortcut` in Chatwoot and the webhook expands `{{customer_name}}`, `{{business_name}}`, `{{agent_name}}` before sending.
 
 ### CSAT
@@ -73,7 +81,8 @@ Supporting services: Postgres (with `pgvector`), Chatwoot, n8n (optional alerts)
 - Dashboard Analytics page with client selector and stat cards.
 
 ### AI testing playground
-- Dashboard page + `POST /api/playground/:clientId/message`: runs the real pipeline (client settings + KB search + Kimi) read-only — no WhatsApp sends, no conversation records, no handoffs.
+- Dashboard page + `POST /api/playground/:clientId/message`: runs the real pipeline (client settings + KB search + Kimi) read-only — no live sends, no conversation records, no handoffs.
+- Staff can simulate a WhatsApp, Messenger, or Instagram incoming message.
 - Returns the reply, handoff recommendation + reason, token usage, and the KB sources used (with similarity scores).
 
 ### Knowledge base
@@ -86,7 +95,7 @@ Supporting services: Postgres (with `pgvector`), Chatwoot, n8n (optional alerts)
 
 | Page | Purpose |
 |---|---|
-| `/dashboard/clients` | Client list, onboarding, Chatwoot/Meta status, quick actions |
+| `/dashboard/clients` | Client list, onboarding, channel selection, Chatwoot/Meta status, quick actions |
 | `/dashboard/ai-settings` | Per-client AI behaviour (prompt, model, temperature, max tokens, confidence threshold, messages, handoff keywords, operating hours, CSAT) |
 | `/dashboard/knowledge-base` | Text entries, file upload, website crawl, document list |
 | `/dashboard/canned-responses` | `/shortcut` templates with variables |
@@ -106,11 +115,11 @@ Note: there is intentionally **no conversations page** — platform staff do not
 
 ### Main API modules
 
-`auth`, `clients`, `chatwoot` (webhook + API client), `whatsapp` (webhook + message pipeline), `conversations`, `ai`, `knowledge-base`, `canned-responses`, `analytics`, `playground`, `media`.
+`auth`, `clients`, `chatwoot` (webhook + API client), `whatsapp` (webhook + message pipeline), `conversations` (channel-aware replies and handoffs), `ai`, `knowledge-base`, `canned-responses`, `analytics`, `playground`, `media`.
 
 ### Key data models
 
-`Client` (onboarding + all AI settings), `Customer`, `Conversation` (status, CSAT fields, `summary`, Chatwoot links), `Message` (with `kimiMetadata` token usage), `HandoffLog` (reason, response time, satisfaction), `Document` (KB chunks + embeddings), `CannedResponse`, dashboard `User`.
+`Client` (onboarding + all AI settings, plus `facebookPageId` / `instagramAccountId`), `Customer` (with `channel` and `channelSourceId`), `Conversation` (status, CSAT fields, `summary`, `channel`, Chatwoot links), `Message` (with `kimiMetadata` token usage), `HandoffLog` (reason, response time, satisfaction), `Document` (KB chunks + embeddings), `CannedResponse`, dashboard `User`.
 
 ---
 
@@ -121,6 +130,7 @@ See `apps/whatsapp-agent-api/.env.example` for the full commented list. Highligh
 - `DATABASE_URL` — Postgres (pgvector-enabled).
 - `JWT_SECRET`, `JWT_EXPIRES_IN` — dashboard auth.
 - `META_API_BASE_URL`, `META_VERIFY_TOKEN`, `META_WEBHOOK_SECRET` — WhatsApp Cloud API.
+- `FB_APP_ID`, `FB_APP_SECRET`, `FB_VERIFY_TOKEN`, `IG_VERIFY_TOKEN` — Messenger and Instagram integration via Chatwoot (set in `infra/chatwoot/.env`).
 - `KIMI_API_KEY`, `KIMI_API_URL`, `KIMI_MODEL`, `KIMI_VISION_MODEL` — AI replies + image understanding.
 - `EMBEDDING_API_URL`, `EMBEDDING_API_KEY`, `EMBEDDING_MODEL` — KB embeddings.
 - `WHISPER_API_URL`, `WHISPER_API_KEY`, `WHISPER_MODEL` — voice-note transcription (falls back to `EMBEDDING_API_KEY`).
@@ -132,7 +142,7 @@ See `apps/whatsapp-agent-api/.env.example` for the full commented list. Highligh
 - `N8N_WEBHOOK_URL` — optional urgent-handoff alerts.
 - `CORS_ORIGIN` — dashboard origins.
 
-Per-client Meta credentials (access token, phone number ID, verify token) are stored on the `Client` record, not in env.
+Per-client Meta credentials (access token, phone number ID, verify token) and channel identifiers (`facebookPageId`, `instagramAccountId`) are stored on the `Client` record, not in env.
 
 ---
 
@@ -174,4 +184,6 @@ Env changes to the API require `docker compose up -d --force-recreate` (a plain 
 
 - `docs/THEREPLYTE_PRODUCTION_PLAN.md` — completed foundation plan (Phases 1–4) with implementation notes.
 - `docs/THEREPLYTE_NEXT_FEATURES_PLAN.md` — planned roadmap: core-loop polish, learning loop, SL commerce features, clinic vertical pack.
+- `docs/THEREPLYTE_MESSENGER_INSTAGRAM_SETUP.md` — Messenger & Instagram setup runbook (platform app config + per-client Chatwoot inboxes).
+- `docs/THEREPLYTE_CLIENT_ONBOARDING_SOP.md` — step-by-step client onboarding for WhatsApp, Messenger, and Instagram.
 - `docs/deployment-guide.md`, `docs/architecture.md`, `docs/backup-restore.md` — platform-wide operations.
