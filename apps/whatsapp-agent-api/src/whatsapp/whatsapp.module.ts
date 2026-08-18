@@ -19,7 +19,7 @@ import { SocialCommentsModule } from '../social-comments/social-comments.module'
 @Module({
   imports: [
     AiModule,
-    ConversationsModule,
+    forwardRef(() => ConversationsModule),
     CustomersModule,
     ClientsModule,
     WhatsAppSenderModule,
