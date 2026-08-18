@@ -410,8 +410,9 @@ Dashboard → **Canned Responses**:
 - [ ] **4.1 Client admin password** — the owner goes to inbox.thereplyte.com
       → Forgot password → sets it via the Zoho-delivered email. (The
       account itself was auto-created in 2.4.)
-- [ ] **4.2 Auto-assignment** — Settings → Inboxes → the WhatsApp inbox →
-      enable **Auto Assignment** (new handoffs round-robin to online agents).
+- [ ] **4.2 Auto-assignment** — Settings → Inboxes → enable **Auto Assignment**
+      on each connected inbox (WhatsApp, Messenger, Instagram). New handoffs
+      round-robin to online agents.
 - [ ] **4.3 Agents** — Settings → Agents → add the client's staff (role:
       Agent; Administrator only for owner/manager). Invitation emails now
       work via Zoho SMTP.
@@ -449,6 +450,23 @@ Follow `docs/THEREPLYTE_BOOKINGS_ORDERS_TEST_PLAN.md`. Minimum:
       agent reply reaches the test user.
 - [ ] **5.7 Wallet** — confirm the plan allowance shows on the client card
       and the portal usage card matches.
+
+### 5.8 CloudIT multi-channel go-live (staff-only)
+
+For CloudIT itself, before any Messenger/Instagram client goes live:
+
+- [ ] **Set Meta credentials** — add `FB_APP_ID`, `FB_APP_SECRET`,
+      `FB_VERIFY_TOKEN`, and `IG_VERIFY_TOKEN` to `infra/chatwoot/.env`
+      (see `infra/chatwoot/.env.example`) and restart Chatwoot.
+- [ ] **Record CloudIT assets** — populate `facebookPageId` and
+      `instagramAccountId` on CloudIT's own `Client` record in the dashboard.
+- [ ] **Native inboxes** — create Messenger and Instagram inboxes in CloudIT's
+      Chatwoot account and complete the Meta OAuth flow.
+- [ ] **End-to-end test** — send real messages from WhatsApp, Messenger, and
+      Instagram; confirm AI replies, agent handoffs, and agent replies reach
+      the customer on every channel.
+- [ ] **Regression** — repeat the real WhatsApp test for at least one
+      existing client to confirm no regression.
 
 ---
 
@@ -509,7 +527,7 @@ month, knowledge base updates on request, top-up approvals as they come in.
 
 | Problem | Cause | Fix |
 |---|---|---|
-| Webhook not receiving | Wrong callback URL/verify token in Meta, or messages field not subscribed | Redo step 2.5 exactly |
+| Webhook not receiving | Wrong callback URL/verify token in Meta, or messages field not subscribed | Redo step 2.3 exactly |
 | Client admin can't log in | Password never set | Forgot password on the login page (Zoho email) |
 | Agent invite not arriving | Spam folder, or SMTP issue | Check spam; verify Zoho SMTP logs |
 | AI says "no slots available" for everything | No staff hours set | Stage 3.11 — set real weekly hours |
