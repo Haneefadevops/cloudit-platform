@@ -130,15 +130,30 @@ export class ConversationsService {
     if (!conversation) return;
     const { client, customer } = conversation;
 
-    if (!client.chatwootAccountId || !client.chatwootInboxId) {
+    if (!client.chatwootAccountId) {
       this.logger.log(
         `Client ${client.id} has no Chatwoot setup; skipping Chatwoot handoff push`,
       );
       return;
     }
 
-    if (!customer.phoneNumber) {
-      this.logger.log(`Customer ${customer.id} has no WhatsApp number; skipping Chatwoot handoff push`);
+    const channel = conversation.channel || 'whatsapp';
+    const isWhatsApp = channel === 'whatsapp';
+
+    if (isWhatsApp && !client.chatwootInboxId) {
+      this.logger.log(
+        `Client ${client.id} has no Chatwoot inbox; skipping WhatsApp handoff push`,
+      );
+      return;
+    }
+
+    // Messenger/Instagram conversations already exist as native Chatwoot
+    // conversations (created when the customer first messaged). A handoff
+    // must link to that conversation to add labels/summary.
+    if (!isWhatsApp && !conversation.chatwootConversationId) {
+      this.logger.warn(
+        `Cannot push ${channel} handoff ${conversation.id}: no native Chatwoot conversation id`,
+      );
       return;
     }
 
@@ -147,8 +162,9 @@ export class ConversationsService {
       if (!chatwootContactId) {
         const contact = await this.chatwootService.createContact(
           client.chatwootAccountId,
-          customer.phoneNumber,
+          isWhatsApp ? customer.phoneNumber || undefined : undefined,
           customer.name || undefined,
+          !isWhatsApp ? customer.channelSourceId || undefined : undefined,
         );
         chatwootContactId = contact.payload.contact.id;
         await this.prisma.customer.update({
@@ -158,7 +174,11 @@ export class ConversationsService {
       }
 
       let chatwootConversationId = conversation.chatwootConversationId;
+      let isNewConversation = false;
+
       if (!chatwootConversationId) {
+        // Only WhatsApp conversations are created here; Messenger/Instagram
+        // conversations are native to Chatwoot.
         const recentMessages = await this.prisma.message.findMany({
           where: { conversationId: conversation.id },
           orderBy: { createdAt: 'asc' },
@@ -179,12 +199,13 @@ export class ConversationsService {
         const chatwootConversation =
           await this.chatwootService.createConversation(
             client.chatwootAccountId,
-            client.chatwootInboxId,
+            client.chatwootInboxId as number,
             chatwootContactId,
             undefined,
             history,
           );
         chatwootConversationId = chatwootConversation.id;
+        isNewConversation = true;
         await this.prisma.conversation.update({
           where: { id: conversation.id },
           data: {
@@ -218,41 +239,58 @@ export class ConversationsService {
             `Failed to generate or post summary: ${(error as Error).message}`,
           );
         }
+      }
 
-        // Apply handoff labels in Chatwoot (rule-based + AI-suggested)
-        const labels = ['ai-handoff'];
-        const lowerReason = reason.toLowerCase();
-        if (triggeredBy === 'system' && lowerReason.includes('outside operating hours')) {
-          labels.push('after-hours');
-        } else {
-          labels.push('in-hours');
-        }
-        if (URGENT_KEYWORDS.some((k) => lowerReason.includes(k))) {
-          labels.push('urgent');
-        }
+      // Apply handoff labels in Chatwoot (rule-based + AI-suggested)
+      const labels = ['ai-handoff'];
+      const lowerReason = reason.toLowerCase();
+      if (
+        triggeredBy === 'system' &&
+        lowerReason.includes('outside operating hours')
+      ) {
+        labels.push('after-hours');
+      } else {
+        labels.push('in-hours');
+      }
+      if (URGENT_KEYWORDS.some((k) => lowerReason.includes(k))) {
+        labels.push('urgent');
+      }
 
-        try {
-          const labelText = history
-            .map((m) => `${m.senderType}: ${m.content}`)
-            .join('\n');
-          const aiLabels = await this.aiService.suggestLabels(labelText);
-          for (const label of aiLabels) {
-            if (!labels.includes(label)) {
-              labels.push(label);
-            }
+      try {
+        const recentMessages = await this.prisma.message.findMany({
+          where: { conversationId: conversation.id },
+          orderBy: { createdAt: 'asc' },
+          take: 50,
+        });
+        const history = recentMessages.map((m) => ({
+          content: m.content,
+          senderType: m.senderType,
+        }));
+        history.push({
+          content: `AI handoff triggered. ${reason}\nTicket: ${conversation.ticketRef}`,
+          senderType: 'agent',
+        });
+
+        const labelText = history
+          .map((m) => `${m.senderType}: ${m.content}`)
+          .join('\n');
+        const aiLabels = await this.aiService.suggestLabels(labelText);
+        for (const label of aiLabels) {
+          if (!labels.includes(label)) {
+            labels.push(label);
           }
-        } catch (error) {
-          this.logger.error(
-            `AI label suggestion failed: ${(error as Error).message}`,
-          );
         }
-
-        await this.chatwootService.addLabelsToConversation(
-          client.chatwootAccountId,
-          chatwootConversationId,
-          labels,
+      } catch (error) {
+        this.logger.error(
+          `AI label suggestion failed: ${(error as Error).message}`,
         );
       }
+
+      await this.chatwootService.addLabelsToConversation(
+        client.chatwootAccountId,
+        chatwootConversationId,
+        labels,
+      );
 
       this.logger.log(
         `Pushed handoff for conversation ${conversation.id} to Chatwoot conversation ${chatwootConversationId}`,

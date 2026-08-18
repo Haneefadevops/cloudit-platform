@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { WhatsAppSenderService } from '../whatsapp-sender/whatsapp-sender.service';
+import { ChatwootService } from '../chatwoot/chatwoot.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ScopedClientId } from '../common/decorators/scoped-client-id.decorator';
@@ -26,6 +27,7 @@ export class ConversationsController {
   constructor(
     private readonly conversationsService: ConversationsService,
     private readonly senderService: WhatsAppSenderService,
+    private readonly chatwootService: ChatwootService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -88,20 +90,42 @@ export class ConversationsController {
       },
     });
 
-    if (!conversation.customer.phoneNumber) {
-      this.logger.warn(`Cannot send WhatsApp message: customer has no phone number`);
+    const channel = conversation.channel || 'whatsapp';
+
+    if (channel === 'whatsapp') {
+      if (!conversation.customer.phoneNumber) {
+        this.logger.warn(`Cannot send WhatsApp message: customer has no phone number`);
+        return { status: 'sent' };
+      }
+
+      // Send via WhatsApp
+      await this.senderService.sendMessage({
+        client: {
+          metaAccessToken: conversation.client.metaAccessToken,
+          whatsappPhoneNumberId: conversation.client.whatsappPhoneNumberId,
+        },
+        to: conversation.customer.phoneNumber,
+        message: content,
+      });
+
       return { status: 'sent' };
     }
 
-    // Send via WhatsApp
-    await this.senderService.sendMessage({
-      client: {
-        metaAccessToken: conversation.client.metaAccessToken,
-        whatsappPhoneNumberId: conversation.client.whatsappPhoneNumberId,
-      },
-      to: conversation.customer.phoneNumber,
-      message: content,
-    });
+    // Messenger / Instagram: reply by posting back into the existing native
+    // Chatwoot conversation.
+    if (!conversation.client.chatwootAccountId || !conversation.chatwootConversationId) {
+      this.logger.warn(
+        `Cannot send ${channel} reply: missing Chatwoot account or conversation id`,
+      );
+      return { status: 'sent' };
+    }
+
+    await this.chatwootService.sendMessage(
+      conversation.client.chatwootAccountId,
+      conversation.chatwootConversationId,
+      content,
+      'outgoing',
+    );
 
     return { status: 'sent' };
   }

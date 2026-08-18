@@ -168,17 +168,31 @@ export class ChatwootService implements OnModuleInit {
 
   async createContact(
     accountId: number,
-    phone: string,
+    phone?: string,
     name?: string,
+    identifier?: string,
+    sourceId?: string,
   ): Promise<ChatwootContact> {
-    // Ensure E.164 format: strip whitespace and prepend + if missing
-    const normalized = phone.trim().replace(/\s/g, '');
-    const e164 = normalized.startsWith('+') ? normalized : `+${normalized}`;
-
-    const payload = {
-      phone_number: e164,
-      name: name || phone,
+    const payload: Record<string, unknown> = {
+      name: name || phone || identifier || 'Customer',
     };
+
+    if (phone) {
+      // Ensure E.164 format: strip whitespace and prepend + if missing
+      const normalized = phone.trim().replace(/\s/g, '');
+      payload.phone_number = normalized.startsWith('+')
+        ? normalized
+        : `+${normalized}`;
+    }
+
+    if (identifier) {
+      payload.identifier = identifier;
+    }
+
+    if (sourceId) {
+      payload.source_id = sourceId;
+    }
+
     return this.request<ChatwootContact>(
       `/api/v1/accounts/${accountId}/contacts`,
       {

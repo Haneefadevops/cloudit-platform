@@ -16,6 +16,7 @@ describe('ConversationsService ticket refs', () => {
         return assignedRef;
       },
       chatwootConversationId: null,
+      channel: 'whatsapp',
       customer: { id: 'cust-1', phoneNumber: '+9477', chatwootContactId: 10 },
       client: { id: 'client-1', chatwootAccountId: 1, chatwootInboxId: 2 },
     };
@@ -45,6 +46,9 @@ describe('ConversationsService ticket refs', () => {
     };
 
     const chatwootService = {
+      createContact: jest.fn().mockResolvedValue({
+        payload: { contact: { id: 100 } },
+      }),
       createConversation: jest.fn().mockResolvedValue({ id: 456 }),
       sendMessage: jest.fn().mockResolvedValue({}),
       addLabelsToConversation: jest.fn().mockResolvedValue({}),
@@ -115,5 +119,174 @@ describe('ConversationsService ticket refs', () => {
     const contextMessage = history[history.length - 1].content;
     expect(contextMessage).toContain('AI handoff triggered.');
     expect(contextMessage).toContain(`Ticket: ${conversation.ticketRef}`);
+  });
+});
+
+describe('ConversationsService pushHandoffToChatwoot channels', () => {
+  function setup(options: {
+    channel?: string;
+    phoneNumber?: string | null;
+    channelSourceId?: string | null;
+    chatwootContactId?: number | null;
+    chatwootConversationId?: number | null;
+    chatwootInboxId?: number | null;
+  } = {}) {
+    const conversationWithClient = {
+      id: 'conv-1',
+      ticketRef: 'TK-12345',
+      channel: options.channel || 'whatsapp',
+      chatwootConversationId: options.chatwootConversationId ?? null,
+      customer: {
+        id: 'cust-1',
+        phoneNumber: options.phoneNumber ?? '+9477',
+        channelSourceId: options.channelSourceId ?? null,
+        chatwootContactId: options.chatwootContactId ?? null,
+      },
+      client: {
+        id: 'client-1',
+        chatwootAccountId: 1,
+        chatwootInboxId: options.chatwootInboxId ?? 2,
+      },
+    };
+
+    const prisma = {
+      conversation: {
+        findUnique: jest.fn().mockResolvedValue(conversationWithClient),
+        update: jest.fn().mockResolvedValue({ id: 'conv-1' }),
+      },
+      message: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      handoffLog: { create: jest.fn().mockResolvedValue({}) },
+      customer: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+
+    const chatwootService = {
+      createContact: jest.fn().mockResolvedValue({
+        payload: { contact: { id: 100 } },
+      }),
+      createConversation: jest.fn().mockResolvedValue({ id: 456 }),
+      sendMessage: jest.fn().mockResolvedValue({}),
+      addLabelsToConversation: jest.fn().mockResolvedValue({}),
+    };
+    const aiService = {
+      summarizeConversation: jest.fn().mockResolvedValue('summary'),
+      suggestLabels: jest.fn().mockResolvedValue([]),
+    };
+    const config = { get: (_k: string, def?: unknown) => def };
+
+    const service = new ConversationsService(
+      prisma as never,
+      chatwootService as never,
+      config as never,
+      aiService as never,
+    );
+
+    return { prisma, chatwootService, service };
+  }
+
+  it('creates WhatsApp contact from phone number when contact id is missing', async () => {
+    const { chatwootService, service } = setup({
+      chatwootContactId: null,
+      chatwootConversationId: null,
+    });
+
+    await service.handoffToHuman({
+      conversationId: 'conv-1',
+      triggeredBy: 'customer',
+      reason: 'Customer requested human agent',
+    });
+
+    expect(chatwootService.createContact).toHaveBeenCalledWith(
+      1,
+      '+9477',
+      undefined,
+      undefined,
+    );
+    expect(chatwootService.createConversation).toHaveBeenCalled();
+    expect(chatwootService.addLabelsToConversation).toHaveBeenCalledWith(
+      1,
+      456,
+      expect.arrayContaining(['ai-handoff']),
+    );
+  });
+
+  it('does not abort Messenger/Instagram handoff when phone number is missing', async () => {
+    const { chatwootService, service } = setup({
+      channel: 'messenger',
+      phoneNumber: null,
+      channelSourceId: 'PSID-123',
+      chatwootContactId: null,
+      chatwootConversationId: 789,
+    });
+
+    await service.handoffToHuman({
+      conversationId: 'conv-1',
+      triggeredBy: 'customer',
+      reason: 'Customer requested human agent',
+    });
+
+    expect(chatwootService.createContact).toHaveBeenCalledWith(
+      1,
+      undefined,
+      undefined,
+      'PSID-123',
+    );
+    expect(chatwootService.createConversation).not.toHaveBeenCalled();
+    expect(chatwootService.addLabelsToConversation).toHaveBeenCalledWith(
+      1,
+      789,
+      expect.arrayContaining(['ai-handoff']),
+    );
+  });
+
+  it('creates Instagram contact from channelSourceId and labels existing conversation', async () => {
+    const { chatwootService, service } = setup({
+      channel: 'instagram',
+      phoneNumber: null,
+      channelSourceId: 'IGSID-456',
+      chatwootContactId: null,
+      chatwootConversationId: 999,
+    });
+
+    await service.handoffToHuman({
+      conversationId: 'conv-1',
+      triggeredBy: 'customer',
+      reason: 'Customer requested human agent',
+    });
+
+    expect(chatwootService.createContact).toHaveBeenCalledWith(
+      1,
+      undefined,
+      undefined,
+      'IGSID-456',
+    );
+    expect(chatwootService.createConversation).not.toHaveBeenCalled();
+    expect(chatwootService.addLabelsToConversation).toHaveBeenCalledWith(
+      1,
+      999,
+      expect.arrayContaining(['ai-handoff']),
+    );
+  });
+
+  it('skips non-WhatsApp handoff when no native Chatwoot conversation exists', async () => {
+    const { chatwootService, service } = setup({
+      channel: 'messenger',
+      phoneNumber: null,
+      channelSourceId: 'PSID-123',
+      chatwootConversationId: null,
+    });
+
+    await service.handoffToHuman({
+      conversationId: 'conv-1',
+      triggeredBy: 'customer',
+      reason: 'Customer requested human agent',
+    });
+
+    expect(chatwootService.createContact).not.toHaveBeenCalled();
+    expect(chatwootService.addLabelsToConversation).not.toHaveBeenCalled();
   });
 });
