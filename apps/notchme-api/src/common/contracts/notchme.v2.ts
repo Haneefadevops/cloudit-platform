@@ -205,7 +205,12 @@ export type AnalyticsEventType =
   | "booking_cancelled"
   | "booking_rescheduled"
   | "rating_submitted"
-  | "plan_upgraded";
+  | "plan_upgraded"
+  | "activation_started"
+  | "activation_profile_completed"
+  | "activation_booking_configured"
+  | "activation_page_published"
+  | "activation_share_opened";
 
 export type TrackEventInput = {
   profileId: string;

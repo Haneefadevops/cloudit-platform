@@ -6,7 +6,7 @@ import QRCode from "react-qr-code";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Copy, ExternalLink, QrCode, Upload, X } from "lucide-react";
+import { Calendar, Copy, Download, ExternalLink, Link2, QrCode, Upload, X } from "lucide-react";
 import { ActivationChecklist } from "@/components/activation/activation-checklist";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useMyProfile, useUpdateProfile } from "@/hooks/useProfile";
+import { useMeetingTypes } from "@/hooks/useScheduling";
+import { API_BASE_URL } from "@/lib/api";
+import { trackActivationMilestone } from "@/lib/activation-analytics";
 
 const MAX_AVATAR_SIZE = 1024 * 1024;
 
@@ -46,6 +49,7 @@ const emptyProfile: ProfileFormValues = {
 export default function ProfilePage() {
   const { data: profile, isLoading } = useMyProfile();
   const update = useUpdateProfile();
+  const meetingTypesQuery = useMeetingTypes();
   const form = useForm<ProfileFormValues>({ resolver: zodResolver(profileSchema), defaultValues: emptyProfile });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
@@ -58,6 +62,18 @@ export default function ProfilePage() {
 
   const values = useWatch({ control: form.control }) as ProfileFormValues;
   const savedPublicUrl = typeof window === "undefined" || !profile?.isPublished || !profile.slug ? "" : `${window.location.origin}/p/${profile.slug}`;
+  const savedBookingUrl = savedPublicUrl ? `${window.location.origin}/book/${profile?.slug}` : "";
+  const hasActiveMeetingType = Boolean(meetingTypesQuery.data?.some((meetingType) => meetingType.isActive));
+
+  function copyShareUrl(url: string) {
+    if (!url) return;
+    const copy = navigator.clipboard?.writeText(url);
+    if (!copy) return;
+    void copy.then(
+      () => void trackActivationMilestone("activation_share_opened"),
+      () => undefined,
+    );
+  }
 
   async function onSubmit(input: ProfileFormValues) {
     await update.mutateAsync(input);
@@ -94,7 +110,7 @@ export default function ProfilePage() {
         description="Make it easy for people to understand your work, get in touch, and book time with you."
         actions={<>
           {savedPublicUrl ? <Button size="sm" variant="outline" asChild><a href={savedPublicUrl} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />Preview page</a></Button> : <Button size="sm" variant="outline" type="button" onClick={publishProfile} isLoading={update.isPending}>Publish page</Button>}
-          {savedPublicUrl && <Button size="sm" type="button" onClick={() => void navigator.clipboard?.writeText(savedPublicUrl)?.catch(() => undefined)}><Copy className="h-4 w-4" />Copy link</Button>}
+          {savedPublicUrl && <Button size="sm" type="button" onClick={() => copyShareUrl(savedPublicUrl)}><Copy className="h-4 w-4" />Copy link</Button>}
         </>}
       />
 
@@ -137,7 +153,7 @@ export default function ProfilePage() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Contact and links</CardTitle><CardDescription>Choose the details people can use to continue the conversation.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>Contact and links</CardTitle><CardDescription>These are the actions your visitors can use. Empty fields are never shown publicly.</CardDescription></CardHeader>
           <CardContent className="space-y-6">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Contact email" error={form.formState.errors.email?.message}><Input id="email" type="email" {...form.register("email")} /></Field>
@@ -151,13 +167,13 @@ export default function ProfilePage() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Publish and share</CardTitle><CardDescription>Publishing makes your page visible. You can return to edit it at any time.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>Publish and share</CardTitle><CardDescription>Publishing makes your saved details visible. Sharing controls appear only after the public page is live.</CardDescription></CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-surface p-4">
               <div><Label htmlFor="isPublished" className="cursor-pointer font-medium text-foreground">Publish My Page</Label><p className="mt-1 text-sm text-muted">Allow people with your page link to view your details.</p></div>
               <Switch id="isPublished" {...form.register("isPublished")} />
             </div>
-            {savedPublicUrl && <div className="flex flex-col gap-4 rounded-xl border border-border bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="text-sm font-semibold text-foreground">Your public page is ready</p><p className="mt-1 truncate text-sm text-foreground/75">{savedPublicUrl}</p></div><div className="flex items-center gap-3"><div className="rounded-lg bg-white p-2"><QRCode value={savedPublicUrl} size={64} /></div><Button size="sm" variant="outline" asChild><Link href="/dashboard/scheduling"><QrCode className="h-4 w-4" />Booking setup</Link></Button></div></div>}
+            {savedPublicUrl ? <div className="space-y-4 rounded-xl border border-border bg-secondary p-4"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="text-sm font-semibold text-foreground">Your public page is ready</p><p className="mt-1 truncate text-sm text-foreground/75">{savedPublicUrl}</p></div><div className="rounded-lg bg-white p-2"><QRCode value={savedPublicUrl} size={64} /></div></div><div className="grid gap-2 sm:grid-cols-2"><Button size="sm" variant="outline" type="button" onClick={() => copyShareUrl(savedPublicUrl)}><Link2 className="h-4 w-4" />Copy public link</Button><Button size="sm" variant="outline" asChild><a href={`${API_BASE_URL}/v2/profiles/${profile?.slug ?? ""}/vcard`} download={`${profile?.slug ?? "profile"}.vcf`}><Download className="h-4 w-4" />Download vCard</a></Button>{hasActiveMeetingType ? <Button size="sm" variant="outline" type="button" onClick={() => copyShareUrl(savedBookingUrl)}><Calendar className="h-4 w-4" />Copy booking link</Button> : <Button size="sm" variant="outline" asChild><Link href="/dashboard/scheduling/meeting-types"><Calendar className="h-4 w-4" />Add booking option</Link></Button>}<Button size="sm" variant="outline" asChild><a href={savedPublicUrl} target="_blank" rel="noreferrer" onClick={() => void trackActivationMilestone("activation_share_opened")}><ExternalLink className="h-4 w-4" />Open public page</a></Button></div></div> : <div className="rounded-xl border border-dashed border-border bg-surface p-4 text-sm text-muted">Save the required details and publish your page to unlock its public link, QR code, vCard, and booking link.</div>}
           </CardContent>
         </Card>
 

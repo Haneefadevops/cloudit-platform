@@ -1,13 +1,19 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { ArrowRight, Eye, QrCode } from "lucide-react";
 import { ActivationChecklist } from "@/components/activation/activation-checklist";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { trackActivationMilestone } from "@/lib/activation-analytics";
 
 export default function GetStartedPage() {
+  useEffect(() => {
+    void trackActivationMilestone("activation_started");
+  }, []);
+
   return (
     <div className="space-y-8 p-6 md:p-8">
       <PageHeader

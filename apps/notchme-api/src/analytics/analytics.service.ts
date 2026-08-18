@@ -33,6 +33,19 @@ export class AnalyticsService {
     );
   }
 
+  async trackActivationEvent(userId: string, eventType: AnalyticsEventType): Promise<void> {
+    await this.databaseService.query(
+      `INSERT INTO analytics_events (profile_id, event_type)
+       SELECT p.id, $2
+       FROM profiles p
+       WHERE p.user_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM analytics_events e WHERE e.profile_id = p.id AND e.event_type = $2
+         )`,
+      [userId, eventType],
+    );
+  }
+
   async getProfileMetrics(profileId: string): Promise<ProfileMetrics> {
     const [eventsResult, ratingsResult] = await Promise.all([
       this.databaseService.query(

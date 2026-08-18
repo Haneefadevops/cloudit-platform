@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Post, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { AnalyticsService } from "./analytics.service";
 import { DatabaseService } from "../database/database.service";
@@ -9,6 +9,17 @@ import { RequireAnalyticsGuard } from "../common/guards/require-analytics.guard"
 import { RequireModule } from "../common/decorators/require-module.decorator";
 import { PlanService } from "../common/services/plan.service";
 import type { AuthContext } from "../auth/types";
+import { z } from "zod";
+
+const activationEventSchema = z.object({
+  eventType: z.enum([
+    "activation_started",
+    "activation_profile_completed",
+    "activation_booking_configured",
+    "activation_page_published",
+    "activation_share_opened",
+  ]),
+});
 
 @Controller("v2/analytics")
 @RequireModule("notchme", "analytics")
@@ -23,6 +34,23 @@ export class AnalyticsController {
   @Post("events")
   @Public()
   track(@Res({ passthrough: true }) res: Response) {
+    res.status(204);
+    return;
+  }
+
+  @Post("activation")
+  async trackActivation(
+    @AuthUser() user: AuthContext,
+    @Body() body: unknown,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const input = activationEventSchema.safeParse(body);
+    if (!input.success) {
+      res.status(400);
+      return { ok: false, error: "Invalid activation event." };
+    }
+
+    await this.analyticsService.trackActivationEvent(user.id, input.data.eventType);
     res.status(204);
     return;
   }

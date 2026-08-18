@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { Check, Circle, ExternalLink, Sparkles } from "lucide-react";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useMeetingTypes } from "@/hooks/useScheduling";
 import { deriveActivationChecklistState } from "@/lib/activation";
+import { trackActivationMilestone } from "@/lib/activation-analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,6 +25,12 @@ export function useActivationChecklist() {
   const profileQuery = useMyProfile();
   const meetingTypesQuery = useMeetingTypes();
   const { profileComplete, publicPageReady, bookingConfigured, shareReady } = deriveActivationChecklistState(profileQuery.data, meetingTypesQuery.data);
+
+  useEffect(() => {
+    if (profileQuery.isSuccess && profileComplete) void trackActivationMilestone("activation_profile_completed");
+    if (meetingTypesQuery.isSuccess && bookingConfigured) void trackActivationMilestone("activation_booking_configured");
+    if (profileQuery.isSuccess && shareReady) void trackActivationMilestone("activation_page_published");
+  }, [bookingConfigured, meetingTypesQuery.isSuccess, profileComplete, profileQuery.isSuccess, shareReady]);
 
   const items: ChecklistItem[] = [
     {

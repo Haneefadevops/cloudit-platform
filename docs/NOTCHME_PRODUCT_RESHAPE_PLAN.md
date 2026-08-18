@@ -812,6 +812,15 @@ Exit criteria:
 - NotchMe Web lint, TypeScript no-emit, and production build pass after the marketing update.
 - The required in-app browser still has no available instance. Screenshot capture and rendered validation at `1280px`, `768px`, and `375px` remain manual-review work before marketing approval; no rendered visual result is claimed.
 
+#### Phase 2B activation refinement and sharing — 2026-08-18
+
+- Audited authentication and account-recovery support. The current API provides registration, login, logout, invite acceptance, and secure sessions, but has no verification-token, password-reset, recovery-token, or transactional-email capability. No unsupported recovery UI or production email identity was invented; these remain a backend/operational prerequisite for launch.
+- Added an authenticated, allow-listed activation-milestone endpoint backed by the existing analytics event store. The server derives the profile from the authenticated user, accepts only activation-started, profile-complete, booking-configured, page-published, and share-opened events, and stores no profile fields, contact content, URLs, referrers, user agents, or visitor identifiers. Milestones are deduplicated per profile and event type.
+- Connected activation events to the first-run route, saved-data-derived checklist milestones, and explicit public-link/booking-link/public-page sharing actions. The activation checklist itself remains entirely data-derived and does not use analytics or local completion flags.
+- Refined My Page sharing feedback: unpublished pages clearly explain why sharing controls are unavailable; published pages offer safe public-link, QR, vCard, and active-booking-link actions. Empty contact fields remain hidden from public visitors, and booking sharing remains unavailable until an active meeting type exists.
+- Appearance persistence is not present in the current profile contract. The editor retains its safe live preview and existing profile-driven presentation rather than adding a non-persistent theme or layout control. Persisted themes, contact ordering, and featured links require a future approved profile contract and are not implied by this phase.
+- Deferred Phase 1 rendered tablet/mobile/dark-theme/keyboard/reduced-motion/overflow QA remains required before launch and does not block this functional phase.
+
 ### Phase 3: People and Today
 
 - Rename and reshape Customers into People
