@@ -26,9 +26,9 @@ test.describe('Admin expenses functional workflows', () => {
     await expect(page.getByText(/Category added/i)).toBeVisible({ timeout: 15000 })
     await expect(page.getByText(category)).toBeVisible({ timeout: 15000 })
 
-    const card = page.locator('div').filter({ hasText: category }).first()
+    const card = page.getByRole('heading', { name: category, exact: true }).locator('..')
     await card.hover()
-    await card.locator('button').click()
+    await card.getByRole('button').click()
     await expect(page.getByText(/Edit Category/i)).toBeVisible()
     await page.getByPlaceholder(/Travel|Business Meals/i).fill(edited)
     await page.getByRole('button', { name: /save changes/i }).click()

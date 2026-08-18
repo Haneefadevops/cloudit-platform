@@ -6,7 +6,7 @@ Enable the CloudIT Platform team to fully onboard a client from the Platform adm
 - Create a product super admin user (no Platform access required).
 - Send the super admin an email with a secure link to set their password.
 - Enable product modules during onboarding.
-- Let the super admin log directly into the product (TouchOrbit, OrbitOne, etc.) and manage their own admins / RBAC inside that product.
+- Let the super admin log directly into the product (TouchOrbit, NotchMe, etc.) and manage their own admins / RBAC inside that product.
 
 Pricing/contract management is intentionally **out of scope** for onboarding and will live in a separate Billing/Contracts module later.
 
@@ -14,8 +14,8 @@ Pricing/contract management is intentionally **out of scope** for onboarding and
 
 ## Team Split
 
-- **Codex** — all backend work (Platform API + product APIs).
-- **Kimi** — all frontend work (Platform web + product frontends).
+- **Codex** â€” all backend work (Platform API + product APIs).
+- **Kimi** â€” all frontend work (Platform web + product frontends).
 
 This means:
 - Codex designs the data models, internal provisioning endpoints, email payload contracts, and API responses.
@@ -36,7 +36,7 @@ This means:
 
 ## Internal Provisioning Contract
 
-### Platform → Product
+### Platform â†’ Product
 
 ```http
 POST /api/internal/provision-tenant
@@ -53,7 +53,7 @@ Content-Type: application/json
 }
 ```
 
-### Product → Platform response
+### Product â†’ Platform response
 
 ```http
 200 OK
@@ -73,7 +73,7 @@ Platform then stores the mapping and sends the email using its email service.
 
 ### Platform API (Codex)
 
-1. **`OrganizationProvisioning` table** — maps a Platform org to product tenants and tracks onboarding status.
+1. **`OrganizationProvisioning` table** â€” maps a Platform org to product tenants and tracks onboarding status.
 
 ```prisma
 model OrganizationProvisioning {
@@ -97,7 +97,7 @@ model OrganizationProvisioning {
 }
 ```
 
-2. **`OrganizationCustomField` table** — defines custom fields per org/entity.
+2. **`OrganizationCustomField` table** â€” defines custom fields per org/entity.
 
 ```prisma
 model OrganizationCustomField {
@@ -119,7 +119,7 @@ model OrganizationCustomField {
 }
 ```
 
-3. **`OrganizationFeatureFlag` table** — per-org behavior toggles.
+3. **`OrganizationFeatureFlag` table** â€” per-org behavior toggles.
 
 ```prisma
 model OrganizationFeatureFlag {
@@ -141,7 +141,7 @@ model OrganizationFeatureFlag {
 Each product must create or reuse a table to store the invite/set-password token for the provisioned super admin.
 
 - **TouchOrbit:** new `user_invite_tokens` or reuse password-reset token logic.
-- **OrbitOne:** existing `organization_invites` table can be reused.
+- **NotchMe:** existing `organization_invites` table can be reused.
 
 Each product must also expose a set-password/accept-invite public page (consumed by Kimi).
 
@@ -149,20 +149,20 @@ Each product must also expose a set-password/accept-invite public page (consumed
 
 ## Phase-by-Phase Build Plan
 
-### Phase 0 — Backend Foundation (Codex)
+### Phase 0 â€” Backend Foundation (Codex)
 
 | # | Task | Files / Areas | Acceptance Criteria |
 |---|------|---------------|---------------------|
 | 0.1 | Add `OrganizationProvisioning`, `OrganizationCustomField`, and `OrganizationFeatureFlag` Prisma models and generate migration. | `apps/platform-api/prisma/schema.prisma`, migration files | Tables exist in DB. |
 | 0.2 | Add internal provisioning endpoint to TouchOrbit API. | `apps/touchorbit-api/src/internal/internal.controller.ts` or `provisioning.controller.ts` | `POST /api/internal/provision-tenant` creates org + owner user + invite token and returns `tenantId`, `userId`, `inviteToken`, `setPasswordUrl`. |
-| 0.3 | Add internal provisioning endpoint to OrbitOne API (reuse existing org + invite flow). | `apps/orbitone-api/src/organizations/organizations.controller.ts` or new `provisioning.controller.ts` | `POST /api/internal/provision-tenant` creates org + admin invite and returns token + URL. |
+| 0.3 | Add internal provisioning endpoint to NotchMe API (reuse existing org + invite flow). | `apps/notchme-api/src/organizations/organizations.controller.ts` or new `provisioning.controller.ts` | `POST /api/internal/provision-tenant` creates org + admin invite and returns token + URL. |
 | 0.4 | Confirm internal auth tokens and `ModuleGuard` already work between Platform and products. | `apps/platform-api/src/common/guards/internal-auth.guard.ts`, product `ModuleGuard` | Platform can call product internal endpoints and products can read enabled modules from Platform. |
 
 **Frontend dependency:** Kimi cannot build product set-password pages until these endpoints exist.
 
 ---
 
-### Phase 1 — Platform Onboarding Backend (Codex)
+### Phase 1 â€” Platform Onboarding Backend (Codex)
 
 | # | Task | Files / Areas | Acceptance Criteria |
 |---|------|---------------|---------------------|
@@ -175,39 +175,39 @@ Each product must also expose a set-password/accept-invite public page (consumed
 
 ---
 
-### Phase 2 — Product Set-Password Backend (Codex)
+### Phase 2 â€” Product Set-Password Backend (Codex)
 
 | # | Task | Files / Areas | Acceptance Criteria |
 |---|------|---------------|---------------------|
 | 2.1 | Build TouchOrbit set-password API endpoint. | `apps/touchorbit-api/src/auth/auth.controller.ts`, token storage | `POST /api/auth/set-password` validates token, sets password, activates user, returns session/cookie. |
-| 2.2 | Ensure OrbitOne `/v2/auth/accept-invite` works with Platform-provisioned invites. | `apps/orbitone-api/src/auth/auth.controller.ts`, `organizations.service.ts` | Provisioned super admin can accept invite and set password. |
+| 2.2 | Ensure NotchMe `/v2/auth/accept-invite` works with Platform-provisioned invites. | `apps/notchme-api/src/auth/auth.controller.ts`, `organizations.service.ts` | Provisioned super admin can accept invite and set password. |
 | 2.3 | Ensure provisioned super admin has full RBAC in each product. | Product role assignment during provisioning | Super admin can create admins, managers, staff inside the product. |
 | 2.4 | Add product-side activation callback or event so Platform knows invite was accepted. | Product auth service calls Platform internal event endpoint | `OrganizationProvisioning.status` updates to `activated`. |
 
 ---
 
-### Phase 3 — Platform Admin Onboarding UI (Kimi)
+### Phase 3 â€” Platform Admin Onboarding UI (Kimi)
 
 | # | Task | Files / Areas | Acceptance Criteria |
 |---|------|---------------|---------------------|
-| 3.1 | Build step-by-step onboarding wizard page. | `apps/platform-web/app/dashboard/onboarding/page.tsx` | Steps: product selection → org details → super admin → modules → review. |
+| 3.1 | Build step-by-step onboarding wizard page. | `apps/platform-web/app/dashboard/onboarding/page.tsx` | Steps: product selection â†’ org details â†’ super admin â†’ modules â†’ review. |
 | 3.2 | Build onboarding list/status page. | `apps/platform-web/app/dashboard/onboarding/list/page.tsx` | Shows all onboarded clients, status, resend/revoke actions. |
 | 3.3 | Add sidebar navigation links for onboarding. | `apps/platform-web/components/layout/sidebar.tsx`, `mobile-nav.tsx` | Onboarding links appear for Platform admins. |
 | 3.4 | Wire onboarding API to UI. | `apps/platform-web/lib/onboarding.ts` or extend `api-client.ts` | Form submits successfully and shows status. |
 
 ---
 
-### Phase 4 — Product Set-Password Frontend (Kimi)
+### Phase 4 â€” Product Set-Password Frontend (Kimi)
 
 | # | Task | Files / Areas | Acceptance Criteria |
 |---|------|---------------|---------------------|
 | 4.1 | Build TouchOrbit set-password page. | `apps/touchorbit-admin-web/src/app/set-password/page.tsx` | User can visit link, set password, and be logged in as super admin. |
-| 4.2 | Ensure OrbitOne `/accept-invite` page works with Platform-provisioned invites. | `apps/orbitone-web/src/app/accept-invite/page.tsx` | Provisioned super admin can accept invite and set password. |
+| 4.2 | Ensure NotchMe `/accept-invite` page works with Platform-provisioned invites. | `apps/notchme-web/src/app/accept-invite/page.tsx` | Provisioned super admin can accept invite and set password. |
 | 4.3 | Add error states for expired/invalid invite tokens on both pages. | Product set-password/accept-invite pages | Clear UI for invalid/expired links. |
 
 ---
 
-### Phase 5 — Customization Engine Backend (Codex)
+### Phase 5 â€” Customization Engine Backend (Codex)
 
 | # | Task | Files / Areas | Acceptance Criteria |
 |---|------|---------------|---------------------|
@@ -218,7 +218,7 @@ Each product must also expose a set-password/accept-invite public page (consumed
 
 ---
 
-### Phase 6 — Customization Engine Frontend (Kimi)
+### Phase 6 â€” Customization Engine Frontend (Kimi)
 
 | # | Task | Files / Areas | Acceptance Criteria |
 |---|------|---------------|---------------------|
@@ -231,13 +231,13 @@ Each product must also expose a set-password/accept-invite public page (consumed
 
 ---
 
-### Phase 7 — Polish & Operations (Mixed)
+### Phase 7 â€” Polish & Operations (Mixed)
 
 | # | Task | Owner | Files / Areas | Acceptance Criteria |
 |---|------|-------|---------------|---------------------|
 | 7.1 | Add welcome email after activation. | Codex | Email service + template | Super admin receives welcome email after setting password. |
 | 7.2 | Add retry and failure handling for provisioning calls. | Codex | Onboarding service | Failed provisioning is recorded and can be retried. |
-| 7.3 | Add end-to-end onboarding tests. | Codex + Kimi | API tests + basic UI smoke tests | Happy path onboarding works for TouchOrbit and OrbitOne. |
+| 7.3 | Add end-to-end onboarding tests. | Codex + Kimi | API tests + basic UI smoke tests | Happy path onboarding works for TouchOrbit and NotchMe. |
 
 ---
 
@@ -251,13 +251,13 @@ Each product must also expose a set-password/accept-invite public page (consumed
 
 ## Suggested Start Order
 
-1. **Phase 0** — Codex: Platform DB migrations + TouchOrbit/OrbitOne internal provisioning endpoints.
-2. **Phase 1** — Codex: Platform onboarding service + email service.
-3. **Phase 2** — Codex: Product set-password / accept-invite backend.
-4. **Phase 3** — Kimi: Platform onboarding wizard UI.
-5. **Phase 4** — Kimi: Product set-password / accept-invite frontend.
-6. **Phase 5** — Codex: Custom fields + feature flags backend.
-7. **Phase 6** — Kimi: Customization frontend.
-8. **Phase 7** — Mixed: Polish and tests.
+1. **Phase 0** â€” Codex: Platform DB migrations + TouchOrbit/NotchMe internal provisioning endpoints.
+2. **Phase 1** â€” Codex: Platform onboarding service + email service.
+3. **Phase 2** â€” Codex: Product set-password / accept-invite backend.
+4. **Phase 3** â€” Kimi: Platform onboarding wizard UI.
+5. **Phase 4** â€” Kimi: Product set-password / accept-invite frontend.
+6. **Phase 5** â€” Codex: Custom fields + feature flags backend.
+7. **Phase 6** â€” Kimi: Customization frontend.
+8. **Phase 7** â€” Mixed: Polish and tests.
 
 This order lets us verify end-to-end onboarding before investing heavily in customization.
