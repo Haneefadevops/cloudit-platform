@@ -21,7 +21,7 @@ import { SocialCommentsModule } from '../social-comments/social-comments.module'
     AiModule,
     forwardRef(() => ConversationsModule),
     CustomersModule,
-    ClientsModule,
+    forwardRef(() => ClientsModule),
     WhatsAppSenderModule,
     forwardRef(() => ChatwootModule),
     KnowledgeBaseModule,
