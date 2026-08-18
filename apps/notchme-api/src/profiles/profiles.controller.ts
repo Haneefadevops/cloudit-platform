@@ -6,10 +6,16 @@ import {
   Param,
   Res,
   UseGuards,
+  Post,
+  HttpCode,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import type { Response } from "express";
 import { ProfilesService } from "./profiles.service";
-import { profileInputSchema } from "./profiles.schemas";
+import {
+  profileInputSchema,
+  publicContactCaptureSchema,
+} from "./profiles.schemas";
 import { AuthUser } from "../common/decorators/auth-user.decorator";
 import { Public } from "../common/decorators/public.decorator";
 import { SessionAuthGuard } from "../common/guards/session-auth.guard";
@@ -59,6 +65,33 @@ export class ProfilesController {
       }
       throw error;
     }
+  }
+
+  @Post(":slug/contact")
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @HttpCode(201)
+  async capturePublicContact(
+    @Param("slug") slug: string,
+    @Body() body: unknown,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const input = publicContactCaptureSchema.safeParse(body);
+    if (!input.success) {
+      res.status(400);
+      return { ok: false, error: "Please check your details and try again." };
+    }
+    // Honeypot submissions receive the same generic acknowledgement without storage.
+    if (input.data.website) return { ok: true, data: { accepted: true } };
+    const accepted = await this.profilesService.capturePublicContact(
+      slug,
+      input.data,
+    );
+    if (!accepted) {
+      res.status(404);
+      return { ok: false, error: "Profile not found." };
+    }
+    return { ok: true, data: { accepted: true } };
   }
 
   @Get(":slug")

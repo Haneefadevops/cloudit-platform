@@ -23,3 +23,40 @@ export const profileInputSchema = z.object({
 });
 
 export type ProfileInput = z.infer<typeof profileInputSchema>;
+
+const normalizedPhoneSchema = z
+  .string()
+  .trim()
+  .transform((value) => value.replace(/[\s().-]/g, ""))
+  .refine((value) => /^\+?[1-9]\d{6,19}$/.test(value), "Invalid phone number");
+
+export const publicContactCaptureSchema = z
+  .object({
+    fullName: z.string().trim().min(1).max(120),
+    email: z
+      .string()
+      .trim()
+      .email()
+      .max(254)
+      .transform((value) => value.toLowerCase())
+      .optional()
+      .or(z.literal("")),
+    phone: normalizedPhoneSchema.optional().or(z.literal("")),
+    company: z.string().trim().max(120).optional().or(z.literal("")),
+    message: z.string().trim().max(1000).optional().or(z.literal("")),
+    acknowledgement: z.literal(true),
+    website: z.string().trim().max(200).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (!value.email && !value.phone) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Email or phone is required",
+      });
+    }
+  });
+
+export type PublicContactCaptureInput = z.infer<
+  typeof publicContactCaptureSchema
+>;

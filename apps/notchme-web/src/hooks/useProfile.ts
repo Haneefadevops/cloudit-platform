@@ -42,3 +42,26 @@ export function usePublicProfile(slug: string) {
     },
   });
 }
+
+export type PublicContactCaptureInput = {
+  fullName: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  message?: string;
+  acknowledgement: true;
+  website?: string;
+};
+
+export function usePublicContactCapture(slug: string) {
+  return useMutation<{ accepted: true }, Error, PublicContactCaptureInput>({
+    mutationFn: async (input) => {
+      const result = await apiFetch<{ accepted: true }>(`/v2/profiles/${slug}/contact`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      if (!result.ok) throw new Error(result.error);
+      return result.data;
+    },
+  });
+}

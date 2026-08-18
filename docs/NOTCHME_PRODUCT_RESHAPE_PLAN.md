@@ -874,6 +874,17 @@ Exit criteria:
 
 **Phase 3 complete:** People, Person, and Today now share the same authenticated relationship and next-action foundations. Recommended Phase 4 scope is reciprocal contact capture, introduction context, and booking-continuity work (confirmation, reschedule, cancellation, timezone, add-to-calendar, and timeline handoff) without disrupting this workflow.
 
+#### Phase 4A Reciprocal contact capture and introduction context — 2026-08-18
+
+- Published public profiles now offer a focused **Share your details** form alongside the existing profile and booking actions. It requires a name, at least one contact method, and a clear acknowledgement that details will be shared with the profile owner for professional follow-up. It contains no marketing consent or subscription behavior.
+- Added public `POST /v2/profiles/:slug/contact`. The target profile, owner, and organization are resolved exclusively from the published slug; visitor-supplied tenant/user fields are rejected. Missing or unpublished profiles are rejected safely, while successful new and existing-person captures receive the same generic acknowledgement.
+- Inputs are strictly validated, length limited, XSS-sanitized, and normalized for email and phone matching. A hidden honeypot receives a generic acknowledgement without storage. The existing global public-endpoint throttler is explicitly tightened to five requests per minute for this capture route; request logging records no submitted fields or message content.
+- Contact matching occurs only by normalized email or phone within the resolved organization (or the profile owner’s personal scope). Name and company never cause a match. Existing populated contact/company fields are not overwritten; missing basics may be filled. A new person is otherwise created with the resolved public-profile source.
+- Customer creation/matching and a factual `Public page introduction` activity are one database transaction. The activity records the public-page source, persisted timestamp, and visitor-provided message when present, so it appears truthfully in the existing Person timeline and People queries. No automatic follow-up, analytics payload, outbound message, or notification is created.
+- The public form provides validation, pending, retryable error, success, duplicate-safe, booking-option, and return-to-profile states while retaining safe client-only browser behavior. Final legal and privacy-policy review remains a required pre-launch task; no legal/GDPR compliance claim is made here.
+
+**Phase 4B remaining:** booking continuity—confirmation, reschedule/cancellation flows, explicit timezone treatment, add-to-calendar behavior, and the booking-to-person timeline handoff. Reminders and outbound notifications remain deferred.
+
 Exit criteria:
 
 - A user can capture a person and set a next action in under one minute

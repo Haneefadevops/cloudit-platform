@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { API_BASE_URL } from "@/lib/api";
-import { usePublicProfile } from "@/hooks/useProfile";
+import { usePublicContactCapture, usePublicProfile } from "@/hooks/useProfile";
 import { usePublicBookingProfile } from "@/hooks/usePublicBooking";
 import {
   Mail,
@@ -30,6 +31,7 @@ import {
   Copy,
   QrCode,
   Briefcase,
+  UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -189,6 +191,8 @@ export default function PublicProfilePage() {
           </Card>
         )}
 
+        <ContactCapture slug={slug} hasBookingOptions={activeMeetingTypes.length > 0} />
+
         {/* Book a meeting */}
         {activeMeetingTypes.length > 0 && (
           <Card>
@@ -260,6 +264,34 @@ export default function PublicProfilePage() {
       </div>
     </div>
   );
+}
+
+function ContactCapture({ slug, hasBookingOptions }: { slug: string; hasBookingOptions: boolean }) {
+  const capture = usePublicContactCapture(slug);
+  const [submitted, setSubmitted] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const fullName = String(values.get("fullName") || "").trim();
+    const email = String(values.get("email") || "").trim();
+    const phone = String(values.get("phone") || "").trim();
+    if (!fullName || (!email && !phone) || values.get("acknowledgement") !== "on") {
+      setFormError("Add your name, an email or phone number, and confirm that you agree to share your details.");
+      return;
+    }
+    setFormError(null);
+    try {
+      await capture.mutateAsync({ fullName, email: email || undefined, phone: phone || undefined, company: String(values.get("company") || "").trim() || undefined, message: String(values.get("message") || "").trim() || undefined, acknowledgement: true, website: String(values.get("website") || "") });
+      setSubmitted(true);
+    } catch {
+      setFormError("We could not share your details right now. Please try again.");
+    }
+  };
+  return <Card>
+    <CardHeader><CardTitle className="flex items-center gap-2 text-base"><UserPlus className="h-5 w-5 text-primary" />Share your details</CardTitle><p className="text-sm text-muted">Share your details with this profile owner for professional follow-up. This does not subscribe you to anything.</p></CardHeader>
+    <CardContent>{submitted ? <div className="rounded-xl bg-success-subtle p-4" role="status"><p className="font-medium text-foreground">Your details have been shared.</p><p className="mt-1 text-sm text-muted">You can continue exploring this profile or book a meeting if options are available.</p><div className="mt-4 flex flex-wrap gap-2">{hasBookingOptions && <Button size="sm" asChild><Link href={`/book/${slug}`}>View booking options</Link></Button>}<Button size="sm" variant="outline" onClick={() => setSubmitted(false)}>Return to profile</Button></div></div> : <form onSubmit={submit} className="space-y-4"><div className="hidden" aria-hidden="true"><label htmlFor="website">Website</label><input id="website" name="website" tabIndex={-1} autoComplete="off" /></div><div><label className="text-sm font-medium text-foreground" htmlFor="capture-name">Full name</label><Input id="capture-name" name="fullName" required maxLength={120} /></div><div className="grid gap-4 sm:grid-cols-2"><div><label className="text-sm font-medium text-foreground" htmlFor="capture-email">Email</label><Input id="capture-email" name="email" type="email" maxLength={254} /></div><div><label className="text-sm font-medium text-foreground" htmlFor="capture-phone">Phone</label><Input id="capture-phone" name="phone" type="tel" maxLength={40} /></div></div><div><label className="text-sm font-medium text-foreground" htmlFor="capture-company">Company or organization</label><Input id="capture-company" name="company" maxLength={120} /></div><div><label className="text-sm font-medium text-foreground" htmlFor="capture-message">Introduction context (optional)</label><textarea id="capture-message" name="message" maxLength={1000} rows={4} className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" /></div><label className="flex items-start gap-3 text-sm text-foreground"><input name="acknowledgement" type="checkbox" required className="mt-1 h-4 w-4" />I agree to share these details with the profile owner for professional follow-up.</label>{formError && <p className="text-sm text-error" role="alert">{formError}</p>}<Button type="submit" className="w-full" size="lg" isLoading={capture.isPending}>Share details</Button></form>}</CardContent>
+  </Card>;
 }
 
 function ActionButton({

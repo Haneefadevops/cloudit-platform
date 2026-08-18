@@ -3,6 +3,8 @@ import { DatabaseService } from "../database/database.service";
 import { mapProfile, mapPublicProfile } from "../common/lib/mappers";
 import { generateVCard } from "./vcard.helper";
 import type { ProfileInput } from "./profiles.schemas";
+import type { PublicContactCaptureInput } from "./profiles.schemas";
+import { filterXSS } from "xss";
 
 @Injectable()
 export class ProfilesService {
@@ -97,5 +99,90 @@ export class ProfilesService {
     );
 
     return generateVCard(profile);
+  }
+
+  /** Captures a voluntary public-page introduction without accepting tenant identity from the visitor. */
+  async capturePublicContact(
+    slug: string,
+    input: PublicContactCaptureInput,
+  ): Promise<boolean> {
+    const client = await this.databaseService.connect();
+    try {
+      await client.query("BEGIN");
+      const target = await client.query(
+        `SELECT p.id AS profile_id, p.user_id, u.organization_id
+         FROM profiles p JOIN users u ON u.id = p.user_id
+         WHERE p.slug = $1 AND p.is_published = true FOR UPDATE`,
+        [slug],
+      );
+      if (target.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+      const profile = target.rows[0] as Record<string, string | null>;
+      const organizationId = profile.organization_id;
+      const ownerUserId = profile.user_id!;
+      const scope = organizationId
+        ? "organization_id = $1"
+        : "assigned_to_user_id = $1";
+      const scopeValue = organizationId ?? ownerUserId;
+      const existing = await client.query(
+        `SELECT id FROM customers WHERE ${scope} AND (email = $2 OR phone = $3)
+         ORDER BY CASE WHEN email = $2 THEN 0 ELSE 1 END, id ASC LIMIT 1 FOR UPDATE`,
+        [scopeValue, input.email || null, input.phone || null],
+      );
+      let customerId: string;
+      if (existing.rowCount) {
+        customerId = existing.rows[0].id as string;
+        await client.query(
+          `UPDATE customers SET email = COALESCE(email, $1), phone = COALESCE(phone, $2),
+           company = COALESCE(company, $3), last_contacted_at = now(), updated_at = now() WHERE id = $4`,
+          [
+            input.email || null,
+            input.phone || null,
+            input.company || null,
+            customerId,
+          ],
+        );
+      } else {
+        const created = await client.query(
+          `INSERT INTO customers (organization_id, assigned_to_user_id, full_name, email, phone, company, source, source_profile_id, source_user_id, lifecycle_stage)
+           VALUES ($1, $2, $3, $4, $5, $6, 'manual', $7, $8, 'new') RETURNING id`,
+          [
+            organizationId,
+            organizationId ? null : ownerUserId,
+            input.fullName,
+            input.email || null,
+            input.phone || null,
+            input.company || null,
+            profile.profile_id,
+            ownerUserId,
+          ],
+        );
+        customerId = created.rows[0].id as string;
+      }
+      const safeMessage = input.message
+        ? filterXSS(input.message, {
+            whiteList: {},
+            stripIgnoreTag: true,
+            stripIgnoreTagBody: ["script"],
+          })
+        : "";
+      const body = safeMessage
+        ? `Introduced via public page. Message: ${safeMessage}`
+        : "Introduced via public page.";
+      await client.query(
+        `INSERT INTO customer_activities (customer_id, created_by_user_id, type, title, body, occurred_at)
+         VALUES ($1, $2, 'note', 'Public page introduction', $3, now())`,
+        [customerId, ownerUserId, body],
+      );
+      await client.query("COMMIT");
+      return true;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
