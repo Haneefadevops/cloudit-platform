@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +31,7 @@ import {
   useActivityTypes,
   useTemplates,
 } from "@/hooks/useCRM";
+import { useBookings } from "@/hooks/useScheduling";
 import { useOrganizationMembers } from "@/hooks/useOrganizations";
 import { DocumentsTab } from "./documents-tab";
 import { FeedbackTab } from "./feedback-tab";
@@ -42,6 +43,7 @@ import type {
   CustomerFollowUp,
   CustomerOutcome,
   CustomFieldDefinition,
+  Booking,
 } from "@/lib/contracts";
 import {
   ArrowLeft,
@@ -59,6 +61,7 @@ import {
   UserCircle,
   FileText,
   MessageSquare,
+  ExternalLink,
 } from "lucide-react";
 
 const lifecycleVariant: Record<LifecycleStage, BadgeProps["variant"]> = {
@@ -112,6 +115,18 @@ function outcomeLabel(outcome: CustomerOutcome) {
   return outcome.replace(/_/g, " ");
 }
 
+function resolveTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+function formatInTimezone(value: string, timezone: string) {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: timezone }).format(new Date(value));
+}
+
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -119,9 +134,13 @@ export default function CustomerDetailPage() {
   const { data: activities = [], isLoading: activitiesLoading } = useCustomerActivities(id);
   const { data: followUps = [], isLoading: followUpsLoading } = useCustomerFollowUps(id);
   const { data: history = [], isLoading: historyLoading } = useCustomerStageHistory(id);
+  const { data: bookings = [] } = useBookings();
   const update = useUpdateCustomer(id);
   const deleteCustomer = useDeleteCustomer();
-  const [activeTab, setActiveTab] = useState<"cycle" | "details" | "timeline" | "documents" | "feedback">("cycle");
+  const [activeTab, setActiveTab] = useState<"overview" | "cycle" | "details" | "timeline" | "documents" | "feedback">("overview");
+  const [timezone, setTimezone] = useState("UTC");
+
+  useEffect(() => setTimezone(resolveTimezone()), []);
 
   const onUpdate = async (patch: Partial<Customer>) => {
     await update.mutateAsync(patch);
@@ -146,16 +165,16 @@ export default function CustomerDetailPage() {
   if (!customer) {
     return (
       <div className="p-6">
-        <p className="text-muted">Customer not found.</p>
+        <p className="text-muted">Person not found, unavailable, or you do not have permission to view them.</p>
         <Button className="mt-4" asChild>
-          <Link href="/dashboard/customers">Back to customers</Link>
+          <Link href="/dashboard/customers">Back to People</Link>
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
+    <div className="min-w-0 p-4 sm:p-6">
       <div className="flex items-center gap-4">
         <Button variant="outline" size="sm" asChild>
           <Link href="/dashboard/customers">
@@ -177,12 +196,14 @@ export default function CustomerDetailPage() {
         </div>
         <Button variant="outline" onClick={onDelete} disabled={deleteCustomer.isPending}>
           <Trash2 className="mr-2 h-4 w-4" />
-          Delete
+          Delete person
         </Button>
       </div>
 
-      <div className="mt-6 flex gap-2 border-b border-border pb-2">
+      <div className="mt-6 -mx-4 overflow-x-auto border-b border-border px-4 pb-2 sm:mx-0 sm:px-0" role="tablist" aria-label="Person sections">
+        <div className="flex min-w-max gap-2">
         {[
+          { key: "overview", label: "Person", icon: UserCircle },
           { key: "cycle", label: "Cycle", icon: RotateCcw },
           { key: "details", label: "Details", icon: UserCircle },
           { key: "timeline", label: "Timeline", icon: History },
@@ -193,14 +214,18 @@ export default function CustomerDetailPage() {
             key={tab.key}
             variant={activeTab === tab.key ? "secondary" : "ghost"}
             size="sm"
+            role="tab"
+            aria-selected={activeTab === tab.key}
             onClick={() => setActiveTab(tab.key as typeof activeTab)}
           >
             <tab.icon className="mr-2 h-4 w-4" />
             {tab.label}
           </Button>
         ))}
+        </div>
       </div>
 
+      {activeTab === "overview" && <PersonOverview customer={customer} activities={activities} followUps={followUps} bookings={bookings} timezone={timezone} />}
       {activeTab === "cycle" && (
         <CycleTab
           customer={customer}
@@ -223,6 +248,115 @@ export default function CustomerDetailPage() {
       {activeTab === "feedback" && id && <FeedbackTab customerId={id} />}
     </div>
   );
+}
+
+function PersonOverview({
+  customer,
+  activities,
+  followUps,
+  bookings,
+  timezone,
+}: {
+  customer: Customer;
+  activities: import("@/lib/contracts").CustomerActivity[];
+  followUps: CustomerFollowUp[];
+  bookings: Booking[];
+  timezone: string;
+}) {
+  const nextFollowUp = followUps.filter((followUp) => !followUp.completedAt).sort((a, b) => a.dueAt.localeCompare(b.dueAt))[0];
+  const upcomingBooking = bookings
+    .filter((booking) => booking.customerId === customer.id && booking.status !== "cancelled" && new Date(booking.startAt) > new Date())
+    .sort((a, b) => a.startAt.localeCompare(b.startAt))[0];
+  const recentActivities = [...activities].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, 4);
+
+  return <div className="mt-6 grid min-w-0 gap-5 lg:grid-cols-3">
+    <div className="min-w-0 space-y-5 lg:col-span-2">
+      <NextActionCard customerId={customer.id} followUp={nextFollowUp} timezone={timezone} />
+      <Card>
+        <CardHeader><CardTitle>Relationship</CardTitle></CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div><p className="text-xs font-medium uppercase tracking-wide text-muted">Status</p><p className="mt-1 capitalize text-foreground">{lifecycleLabel(customer.lifecycleStage)}</p></div>
+          <div><p className="text-xs font-medium uppercase tracking-wide text-muted">Last interaction</p><p className="mt-1 text-foreground">{customer.lastContactedAt ? formatInTimezone(customer.lastContactedAt, timezone) : "No interaction recorded"}</p></div>
+          <div className="sm:col-span-2"><p className="text-xs font-medium uppercase tracking-wide text-muted">Relationship context</p><p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{customer.notes || "No relationship context saved."}</p></div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>Recent activity</CardTitle></CardHeader>
+        <CardContent>{recentActivities.length === 0 ? <p className="text-sm text-muted">No activity recorded yet.</p> : <ul className="space-y-3">{recentActivities.map((activity) => <li key={activity.id} className="border-l-2 border-border pl-3"><p className="font-medium text-foreground">{activity.title}</p><p className="text-xs text-muted">{activityTypeLabels[activity.type]} · {formatInTimezone(activity.occurredAt, timezone)}</p></li>)}</ul>}</CardContent>
+      </Card>
+    </div>
+    <aside className="min-w-0 space-y-5">
+      <Card>
+        <CardHeader><CardTitle>Contact</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {customer.company && <p className="text-sm text-muted">{customer.company}</p>}
+          {customer.email ? <Button className="w-full justify-start" variant="outline" asChild><a href={`mailto:${encodeURIComponent(customer.email)}`}><Mail className="h-4 w-4" />Email</a></Button> : null}
+          {customer.phone ? <Button className="w-full justify-start" variant="outline" asChild><a href={`tel:${customer.phone.replace(/[^+\d]/g, "")}`}><Phone className="h-4 w-4" />Call</a></Button> : null}
+          {!customer.email && !customer.phone && <p className="text-sm text-muted">No contact method saved.</p>}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>Upcoming booking</CardTitle></CardHeader>
+        <CardContent>{upcomingBooking ? <><p className="text-sm text-foreground">{formatInTimezone(upcomingBooking.startAt, timezone)}</p><Button className="mt-3 w-full justify-start" size="sm" variant="outline" asChild><Link href="/dashboard/scheduling/bookings"><Calendar className="h-4 w-4" />View booking details<ExternalLink className="ml-auto h-3.5 w-3.5" /></Link></Button></> : <p className="text-sm text-muted">No upcoming booking.</p>}</CardContent>
+      </Card>
+    </aside>
+  </div>;
+}
+
+function NextActionCard({ customerId, followUp, timezone }: { customerId: string; followUp?: CustomerFollowUp; timezone: string }) {
+  const complete = useCompleteCustomerFollowUp(customerId);
+  const remove = useDeleteCustomerFollowUp(customerId);
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const overdue = followUp ? new Date(followUp.dueAt) < new Date() : false;
+  const markComplete = async () => {
+    if (!followUp) return;
+    setMessage(null);
+    try {
+      await complete.mutateAsync({ followUpId: followUp.id, completed: true });
+      setMessage("Next action completed.");
+    } catch {
+      setMessage("Unable to complete this next action. Please try again.");
+    }
+  };
+  const cancel = async () => {
+    if (!followUp || !confirm("Cancel this next action?")) return;
+    setMessage(null);
+    try {
+      await remove.mutateAsync(followUp.id);
+      setMessage("Next action cancelled.");
+    } catch {
+      setMessage("Unable to cancel this next action. Please try again.");
+    }
+  };
+  return <Card className={overdue ? "border-error/50" : "border-primary/30"}>
+    <CardHeader className="flex flex-row items-center justify-between gap-3"><div><CardTitle>Next action</CardTitle><p className="mt-1 text-sm text-muted">Every action is saved to this person&apos;s follow-ups.</p></div><Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />New action</Button></CardHeader>
+    <CardContent>{followUp ? <div className="rounded-lg bg-surface-elevated p-4"><p className="font-medium text-foreground">{followUp.title}</p><p className={overdue ? "mt-1 text-sm text-error" : "mt-1 text-sm text-muted"}>{overdue ? "Overdue" : "Due"} {formatInTimezone(followUp.dueAt, timezone)}</p><div className="mt-4 flex flex-wrap gap-2"><Button onClick={markComplete} disabled={complete.isPending} isLoading={complete.isPending}><Check className="h-4 w-4" />Complete</Button><Button variant="outline" onClick={cancel} disabled={remove.isPending}>Cancel action</Button></div></div> : <p className="text-sm text-muted">No next action set. Add one to keep this relationship moving.</p>}{message && <p className="mt-3 text-sm text-muted" role="status">{message}</p>}</CardContent>
+    <NewNextActionDialog customerId={customerId} open={open} onOpenChange={setOpen} />
+  </Card>;
+}
+
+function NewNextActionDialog({ customerId, open, onOpenChange }: { customerId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const create = useCreateCustomerFollowUp(customerId);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const title = String(form.get("title") || "").trim();
+    const date = String(form.get("dueDate") || "");
+    const time = String(form.get("dueTime") || "09:00");
+    const dueAt = new Date(`${date}T${time}`);
+    if (!title || Number.isNaN(dueAt.getTime()) || dueAt <= new Date()) { setError("Enter a title and a future due date and time."); return; }
+    setError(null);
+    try {
+      await create.mutateAsync({ title, dueAt: dueAt.toISOString() });
+      onOpenChange(false);
+      event.currentTarget.reset();
+    } catch {
+      setError("Unable to save this next action. Please try again.");
+    }
+  };
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>New next action</DialogTitle></DialogHeader><form onSubmit={submit} className="space-y-4 pt-2"><p className="text-sm text-muted">Due date and time use your browser timezone.</p><div><Label htmlFor="next-action-title">What needs to happen?</Label><Input id="next-action-title" name="title" required /></div><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="next-action-date">Due date</Label><Input id="next-action-date" name="dueDate" type="date" required /></div><div><Label htmlFor="next-action-time">Due time</Label><Input id="next-action-time" name="dueTime" type="time" defaultValue="09:00" required /></div></div>{error && <p className="text-sm text-error" role="alert">{error}</p>}<Button type="submit" className="w-full" isLoading={create.isPending}>Save next action</Button></form></DialogContent></Dialog>;
 }
 
 function CycleTab({

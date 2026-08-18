@@ -853,6 +853,16 @@ Exit criteria:
 
 **Phase 3B remaining:** redesign the Person detail and Today experiences, make next-action creation more prominent across those flows, and add reminder/one-click communication work after their product contracts are approved.
 
+#### Phase 3B1 Person detail and next-action workflow — 2026-08-18
+
+- Reshaped the primary `/dashboard/customers/[id]` tab into a Person overview without changing its route or removing existing Cycle, Details, Timeline, Documents, or Feedback sections. The overview prioritizes identity, company, contact actions, relationship status/context, last interaction, next action, upcoming booking, and recent factual activity.
+- Promoted the earliest incomplete follow-up to a persistent Next action card. Users can create a validated future action, complete it after backend confirmation, or cancel it through the existing authorized follow-up delete endpoint. There is no local-only follow-up state or unsupported edit operation; title/due-date editing remains unavailable because the existing API does not provide it.
+- Follow-up create, completion, and delete mutations now invalidate the person, follow-up, and People workspace query families so detail data and authorized smart-view counts refresh after a successful server mutation. Pending, success, and failure feedback is explicit.
+- Contact actions only expose safe `mailto:` and `tel:` links when saved contact data exists. A booking link is shown only for a linked future non-cancelled booking and leads to the existing scheduling booking surface. No outbound message, communication tracking, public-profile, or unavailable-link behavior was added.
+- Existing documents, feedback, ratings, custom fields, lifecycle/pipeline, ownership, activity, and other advanced CRM capabilities remain available in their existing secondary tabs and controls. Browser timezone discovery safely falls back to UTC; displayed dates use it and next-action entry clearly uses the browser timezone before persistence.
+
+**Phase 3B2 remaining:** build Today as the cross-person daily workflow for overdue, due-today, upcoming, and missing-action states. Reminder delivery, background jobs, and one-click outbound communication remain out of scope.
+
 Exit criteria:
 
 - A user can capture a person and set a next action in under one minute

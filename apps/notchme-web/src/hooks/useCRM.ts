@@ -225,7 +225,11 @@ export function useCreateCustomerFollowUp(customerId: string | undefined) {
       if (!result.ok) throw new Error(result.error);
       return result.data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["customers", customerId, "follow-ups"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["customers", customerId, "follow-ups"] });
+      qc.invalidateQueries({ queryKey: ["customers", customerId] });
+      qc.invalidateQueries({ queryKey: ["people"] });
+    },
   });
 }
 
@@ -240,7 +244,11 @@ export function useCompleteCustomerFollowUp(customerId: string | undefined) {
       if (!result.ok) throw new Error(result.error);
       return result.data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["customers", customerId, "follow-ups"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["customers", customerId, "follow-ups"] });
+      qc.invalidateQueries({ queryKey: ["customers", customerId] });
+      qc.invalidateQueries({ queryKey: ["people"] });
+    },
   });
 }
 
@@ -253,7 +261,11 @@ export function useDeleteCustomerFollowUp(customerId: string | undefined) {
       });
       if (!result.ok) throw new Error(result.error);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["customers", customerId, "follow-ups"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["customers", customerId, "follow-ups"] });
+      qc.invalidateQueries({ queryKey: ["customers", customerId] });
+      qc.invalidateQueries({ queryKey: ["people"] });
+    },
   });
 }
 
