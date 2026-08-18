@@ -863,6 +863,17 @@ Exit criteria:
 
 **Phase 3B2 remaining:** build Today as the cross-person daily workflow for overdue, due-today, upcoming, and missing-action states. Reminder delivery, background jobs, and one-click outbound communication remain out of scope.
 
+#### Phase 3B2 Today workspace — 2026-08-18
+
+- Replaced the CRM-metric-first `/dashboard` presentation with Today, a next-action-led workspace ordered as activation, needs attention, upcoming work, relationship context, then secondary metrics. The saved-data activation checklist appears only while incomplete through its existing behavior and becomes secondary to relationship work.
+- Today reuses three Phase 3A People queries (`overdue`, `due_today`, and `upcoming`) with the browser IANA timezone and a UTC server-rendered/discovery fallback. Server-provided smart-view counts are displayed; no organization-wide count is inferred from a page of people.
+- Overdue actions render before due-today actions. The People API supplies its deterministic due ordering; the UI keeps people out of the Upcoming list when they already have an attention action. Future items use the endpoint's nearest-supported-action ordering, while unmatched future bookings reuse the existing scheduling query and are sorted by time then booking ID.
+- Today actions use the existing follow-up completion mutation and wait for server confirmation. The Phase 3B1 invalidation behavior refreshes person, follow-up, and People workspace queries/counts after success; pending, success, and retryable failure feedback is visible.
+- Loading, background-update, empty-day, partial secondary failure, full retryable error, and permission-safe states are explicit. One unavailable query does not hide other saved work. Meeting labels are factual and never claim confirmation beyond existing booking data.
+- Generic profile/CRM counters are demoted to a compact secondary metrics card. No productivity score, recommendation, reminder, background job, or outbound-message delivery was added.
+
+**Phase 3 complete:** People, Person, and Today now share the same authenticated relationship and next-action foundations. Recommended Phase 4 scope is reciprocal contact capture, introduction context, and booking-continuity work (confirmation, reschedule, cancellation, timezone, add-to-calendar, and timeline handoff) without disrupting this workflow.
+
 Exit criteria:
 
 - A user can capture a person and set a next action in under one minute

@@ -1,424 +1,102 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Calendar, Check, ChevronRight, CircleAlert, Clock3, Users } from "lucide-react";
+import { ActivationChecklist } from "@/components/activation/activation-checklist";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui/page-header";
-import { ActivationChecklist } from "@/components/activation/activation-checklist";
-import { useAuth } from "@/hooks/useAuth";
-import { useMyProfile } from "@/hooks/useProfile";
 import { useDashboardSummary } from "@/hooks/useDashboard";
-import {
-  ExternalLink,
-  User,
-  QrCode,
-  Calendar,
-  TrendingUp,
-  Users,
-  Zap,
-  Copy,
-  ArrowRight,
-  Kanban,
-  Share2,
-} from "lucide-react";
-import QRCode from "react-qr-code";
+import { type PersonListItem, usePeople } from "@/hooks/usePeople";
+import { useBookings } from "@/hooks/useScheduling";
+import { useCompleteCustomerFollowUp } from "@/hooks/useCRM";
 import { cn } from "@/lib/utils";
 
+const PAGE_SIZE = 100;
+
+function resolveTimezone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+}
+
+function formatDate(value: string, timezone: string) {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: timezone }).format(new Date(value));
+}
+
 export default function DashboardHomePage() {
-  const { state } = useAuth();
-  const { data: profile, isLoading: profileLoading } = useMyProfile();
-  const { data: summary, isLoading: summaryLoading } = useDashboardSummary();
+  const [timezone, setTimezone] = useState("UTC");
+  useEffect(() => setTimezone(resolveTimezone()), []);
+  const overdue = usePeople({ view: "overdue", page: 1, pageSize: PAGE_SIZE, timezone });
+  const dueToday = usePeople({ view: "due_today", page: 1, pageSize: PAGE_SIZE, timezone });
+  const upcoming = usePeople({ view: "upcoming", page: 1, pageSize: PAGE_SIZE, timezone });
+  const bookings = useBookings();
+  const summary = useDashboardSummary();
+  const actionQueries = [overdue, dueToday, upcoming];
+  const actionLoading = actionQueries.every((query) => query.isLoading);
+  const allActionErrors = actionQueries.every((query) => query.isError);
+  const partialFailure = actionQueries.some((query) => query.isError) || bookings.isError;
+  const refresh = () => {
+    void overdue.refetch(); void dueToday.refetch(); void upcoming.refetch(); void bookings.refetch(); void summary.refetch();
+  };
+  const overdueItems = overdue.data?.items ?? [];
+  const dueItems = dueToday.data?.items ?? [];
+  const attentionIds = new Set([...overdueItems, ...dueItems].map((person) => person.id));
+  const upcomingPeople = (upcoming.data?.items ?? []).filter((person) => !attentionIds.has(person.id));
+  const bookingIdsInPeople = new Set(upcomingPeople.flatMap((person) => person.nextBooking ? [person.nextBooking.id] : []));
+  const standaloneBookings = (bookings.data ?? [])
+    .filter((booking) => booking.status !== "cancelled" && new Date(booking.startAt) > new Date() && !bookingIdsInPeople.has(booking.id))
+    .sort((a, b) => a.startAt.localeCompare(b.startAt) || a.id.localeCompare(b.id))
+    .slice(0, 6);
 
-  const user = state.status === "authenticated" ? state.user : null;
-  const publicUrl = profile ? `${window.location.origin}/p/${profile.slug}` : "";
-  const isLoading = profileLoading || summaryLoading;
-  const plan = user?.plan ?? "free";
-  const isPro = plan === "pro_individual" || plan.startsWith("pro_business");
-  const hasCRM = user?.organizationId !== null || plan.startsWith("pro_business");
+  if (actionLoading) return <TodaySkeleton />;
+  if (allActionErrors) return <FullError onRetry={refresh} />;
 
-  if (isLoading) {
-    return <DashboardSkeleton />;
-  }
+  const counts = overdue.data?.counts ?? dueToday.data?.counts ?? upcoming.data?.counts;
+  const noAttention = overdueItems.length === 0 && dueItems.length === 0;
 
-  if (!profile) {
-    return (
-      <div className="p-6 md:p-8">
-        <Card className="text-center">
-          <CardHeader>
-            <CardTitle>Welcome to NotchMe</CardTitle>
-            <CardDescription>Create your profile to start sharing and booking.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild>
-              <Link href="/dashboard/profile">Create profile</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  return <div className="min-w-0 p-4 sm:p-6 md:p-8">
+    <PageHeader eyebrow="Today" title="Your next actions" description="See who needs attention, what is due, and what is coming up." actions={<Button variant="outline" size="sm" asChild><Link href="/dashboard/customers">Open People</Link></Button>} />
 
-  const crmEmpty =
-    hasCRM &&
-    summary?.crmSummary &&
-    summary.crmSummary.totalCustomers === 0;
+    <ActivationChecklist className="mt-6" />
+    {partialFailure && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4 text-sm text-muted"><span>Some Today information is temporarily unavailable. Other saved actions are still shown.</span><Button size="sm" variant="outline" onClick={refresh}>Retry</Button></div>}
 
-  return (
-    <div className="p-6 md:p-8">
-      {/* Header */}
-      <PageHeader
-        eyebrow="Your relationship workspace"
-        title={`Good ${getGreeting()}, ${firstName(user?.fullName)}`}
-        description="Keep introductions moving with a clear next step."
-        actions={<Button size="sm" asChild><Link href="/dashboard/profile">Share my page</Link></Button>}
-      />
+    <section className="mt-7" aria-labelledby="needs-attention-title">
+      <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 id="needs-attention-title" className="text-lg font-semibold text-foreground">Needs attention</h2><p className="mt-1 text-sm text-muted">Overdue actions first, then actions due today.</p></div>{counts && <span className="rounded-full bg-surface-elevated px-3 py-1 text-sm text-muted">{counts.needs_attention} needing attention</span>}</div>
+      {noAttention ? <Card className="mt-4"><CardContent className="p-7 text-center"><Check className="mx-auto h-8 w-8 text-success" /><p className="mt-3 font-medium text-foreground">Nothing needs attention right now.</p><p className="mt-1 text-sm text-muted">Keep the momentum with an upcoming action or meeting.</p></CardContent></Card> : <div className="mt-4 grid gap-3 xl:grid-cols-2"><ActionGroup label="Overdue" tone="overdue" people={overdueItems} timezone={timezone} /><ActionGroup label="Due today" tone="today" people={dueItems} timezone={timezone} /></div>}
+    </section>
 
-      <ActivationChecklist className="mt-6" />
+    <section className="mt-8" aria-labelledby="upcoming-title"><div><h2 id="upcoming-title" className="text-lg font-semibold text-foreground">Upcoming</h2><p className="mt-1 text-sm text-muted">Future follow-ups and meetings, ordered by the nearest supported action.</p></div><div className="mt-4 grid gap-3 xl:grid-cols-2"><UpcomingPeople people={upcomingPeople} timezone={timezone} />{standaloneBookings.map((booking) => <Card key={booking.id}><CardContent className="flex min-w-0 items-center gap-3 p-4"><Calendar className="h-5 w-5 shrink-0 text-secondary" /><div className="min-w-0 flex-1"><p className="font-medium text-foreground">{booking.guest?.name ?? "Upcoming meeting"}</p><p className="truncate text-sm text-muted">{booking.meetingType?.title ?? "Meeting"} · {formatDate(booking.startAt, timezone)}</p></div><Button variant="outline" size="sm" asChild><Link href="/dashboard/scheduling/bookings">Bookings</Link></Button></CardContent></Card>)}</div>{upcomingPeople.length === 0 && standaloneBookings.length === 0 && <Card className="mt-4"><CardContent className="p-6 text-center text-sm text-muted">No upcoming meetings or future actions.</CardContent></Card>}</section>
 
-      {/* Primary stats */}
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Profile views"
-          value={summary?.profileMetrics.profileViews ?? 0}
-          icon={<TrendingUp className="h-5 w-5" />}
-          size="large"
-        />
-        <StatCard
-          label="Bookings"
-          value={summary?.profileMetrics.bookingsCreated ?? 0}
-          icon={<Calendar className="h-5 w-5" />}
-          size="large"
-        />
-        <StatCard
-          label="QR scans"
-          value={summary?.profileMetrics.qrScans ?? 0}
-          icon={<QrCode className="h-5 w-5" />}
-          size="small"
-        />
-        <UsageCard
-          used={summary?.usage.bookingsThisWeek ?? 0}
-          limit={isPro ? undefined : (summary?.usage.bookingsWeekLimit ?? 3)}
-          isPro={isPro}
-        />
-      </div>
-
-      {/* Main grid */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        {/* Profile + QR share block */}
-        <Card className="lg:col-span-2">
-          <CardContent className="p-6">
-            <div className="flex flex-col gap-6 md:flex-row">
-              {/* Profile info */}
-              <div className="flex flex-1 items-start gap-4">
-                <Avatar src={profile.avatarUrl} fallback={profile.fullName} size="lg" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="truncate text-xl font-semibold text-foreground">{profile.fullName}</h2>
-                    <Badge variant={profile.isPublished ? "success" : "warning"}>
-                      {profile.isPublished ? "Published" : "Draft"}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted">{profile.headline ?? "Your public profile"}</p>
-                  <p className="mt-1 text-sm font-medium text-secondary">/{profile.slug}</p>
-
-                  {profile.isPublished && (
-                    <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-surface p-2">
-                      <span className="min-w-0 flex-1 truncate text-xs text-muted">{publicUrl}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 px-0 shrink-0"
-                        onClick={() => navigator.clipboard.writeText(publicUrl)}
-                        aria-label="Copy profile link"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  )}
-
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <Button size="sm" asChild>
-                      <Link href="/dashboard/profile">Edit profile</Link>
-                    </Button>
-                    {profile.isPublished && (
-                      <Button size="sm" variant="outline" asChild>
-                        <a href={publicUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2">
-                          <ExternalLink className="h-4 w-4" />
-                          View public page
-                        </a>
-                      </Button>
-                    )}
-                    {profile.isPublished && (
-                      <Button size="sm" variant="outline" asChild>
-                        <Link href="/dashboard/settings">
-                          <Share2 className="mr-2 h-4 w-4" />
-                          Share QR
-                        </Link>
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* QR code */}
-              {profile.isPublished && (
-                <div className="flex shrink-0 flex-col items-center justify-center rounded-2xl border border-border bg-surface-elevated p-5">
-                  <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                    <QrCode className="h-3.5 w-3.5" />
-                    Scan to connect
-                  </h3>
-                  <div className="rounded-xl bg-white p-3">
-                    <QRCode value={publicUrl} size={128} />
-                  </div>
-                  <p className="mt-3 text-center text-xs text-muted">Scan to view your public profile</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Analytics mini-card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-muted">
-              <TrendingUp className="h-4 w-4" />
-              Analytics
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-3xl font-semibold tracking-tight text-foreground">
-                  {summary?.profileMetrics.profileViews ?? 0}
-                </p>
-                <p className="text-xs text-muted">Views</p>
-              </div>
-              <div>
-                <p className="text-3xl font-semibold tracking-tight text-foreground">
-                  {summary?.profileMetrics.bookingsCreated ?? 0}
-                </p>
-                <p className="text-xs text-muted">Bookings</p>
-              </div>
-            </div>
-            <Button variant="outline" className="mt-6 w-full" size="sm" asChild>
-              <Link href="/dashboard/analytics">View analytics</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Upcoming bookings */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-muted">
-              <Calendar className="h-4 w-4" />
-              Upcoming bookings
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {summary && summary.upcomingBookings.length > 0 ? (
-              <ul className="space-y-3">
-                {summary.upcomingBookings.slice(0, 4).map((booking) => (
-                  <li
-                    key={booking.id}
-                    className="flex items-center justify-between rounded-xl border border-border bg-surface p-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/10 text-secondary">
-                        <User className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">{booking.guest?.name}</p>
-                        <p className="text-xs text-muted">{booking.meetingType?.title}</p>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted">
-                      {new Date(booking.startAt).toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        timeZone: booking.timezone,
-                      })}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="rounded-xl border border-dashed border-border bg-surface/50 p-8 text-center">
-                <p className="text-muted">No upcoming bookings.</p>
-                <Button size="sm" variant="outline" className="mt-3" asChild>
-                  <Link href="/dashboard/scheduling">Set up meetings</Link>
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* CRM snapshot */}
-        {hasCRM && summary?.crmSummary && (
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-muted">
-                  <Users className="h-4 w-4" />
-                  CRM snapshot
-                </CardTitle>
-                <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs" asChild>
-                  <Link href="/dashboard/customers/pipeline">
-                    <Kanban className="h-3.5 w-3.5" />
-                    Pipeline
-                  </Link>
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {crmEmpty ? (
-                <div className="text-center">
-                  <p className="text-muted">No customers yet.</p>
-                  <p className="mt-1 text-xs text-muted">Add your first contact to start tracking deals.</p>
-                  <Button size="sm" className="mt-4 w-full" asChild>
-                    <Link href="/dashboard/customers">Add your first customer</Link>
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <MetricBox value={summary.crmSummary.totalCustomers} label="Customers" />
-                    <MetricBox value={summary.crmSummary.openFollowUps} label="Follow-ups" />
-                    <MetricBox
-                      value={formatCurrency(summary.crmSummary.forecastValue, summary.crmSummary.forecastCurrency)}
-                      label="Forecast"
-                    />
-                    <MetricBox
-                      value={`${summary.crmSummary.wonCount}:${summary.crmSummary.lostCount}`}
-                      label="Won : Lost"
-                    />
-                  </div>
-                  <div className="mt-4 grid gap-3">
-                    <Button variant="outline" size="sm" className="w-full" asChild>
-                      <Link href="/dashboard/customers">View customers</Link>
-                    </Button>
-                    <Button size="sm" className="w-full" asChild>
-                      <Link href="/dashboard/customers/pipeline">
-                        Open pipeline
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
-  );
+    <section className="mt-8 grid gap-5 lg:grid-cols-3"><Card className="lg:col-span-2"><CardHeader><CardTitle>Relationship context</CardTitle></CardHeader><CardContent><p className="text-sm text-muted">Recent factual relationship activity remains available on each Person&apos;s timeline. Choose a person to add an activity, review context, or set a next action.</p><Button className="mt-4" variant="outline" asChild><Link href="/dashboard/customers">Browse People<ChevronRight className="h-4 w-4" /></Link></Button></CardContent></Card><Metrics summary={summary.data} loading={summary.isLoading} /></section>
+  </div>;
 }
 
-function StatCard({
-  label,
-  value,
-  icon,
-  size = "small",
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ReactNode;
-  size?: "small" | "large";
-}) {
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">{label}</span>
-          <div className="text-secondary">{icon}</div>
-        </div>
-        <div className="mt-4">
-          <div className={cn("font-semibold tracking-tight text-foreground", size === "large" ? "text-4xl" : "text-3xl")}>
-            {value}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+function ActionGroup({ label, tone, people, timezone }: { label: string; tone: "overdue" | "today"; people: PersonListItem[]; timezone: string }) {
+  if (people.length === 0) return null;
+  return <Card className={tone === "overdue" ? "border-error/30" : "border-secondary/30"}><CardHeader className="pb-2"><CardTitle className="text-base">{label}</CardTitle></CardHeader><CardContent className="space-y-3">{people.map((person) => <TodayAction key={person.id} person={person} timezone={timezone} tone={tone} />)}</CardContent></Card>;
 }
 
-function UsageCard({ used, limit, isPro }: { used: number; limit?: number; isPro: boolean }) {
-  const total = isPro ? Math.max(used, 1) : (limit ?? 3);
-  const percentage = isPro ? 0 : Math.min((used / total) * 100, 100);
-
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">This week</span>
-          <Zap className="h-5 w-5 text-secondary" />
-        </div>
-        <div className="mt-4">
-          <div className="text-3xl font-semibold tracking-tight text-foreground">
-            {used}
-            {!isPro && <span className="text-lg text-muted"> / {total}</span>}
-          </div>
-          <p className="mt-1 text-xs text-muted">{isPro ? "Unlimited bookings on Pro" : "Free plan weekly limit"}</p>
-          {!isPro && (
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-border">
-              <div
-                className="h-full rounded-full bg-secondary transition-all"
-                style={{ width: `${percentage}%` }}
-              />
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
+function TodayAction({ person, timezone, tone }: { person: PersonListItem; timezone: string; tone: "overdue" | "today" }) {
+  const complete = useCompleteCustomerFollowUp(person.id);
+  const [message, setMessage] = useState<string | null>(null);
+  const action = person.nextFollowUp;
+  const markComplete = async () => {
+    if (!action) return;
+    setMessage(null);
+    try { await complete.mutateAsync({ followUpId: action.id, completed: true }); setMessage("Completed."); } catch { setMessage("Could not complete this action. Try again."); }
+  };
+  return <div className="rounded-lg border border-border bg-surface p-3"><div className="flex min-w-0 items-start gap-3"><CircleAlert className={cn("mt-0.5 h-4 w-4 shrink-0", tone === "overdue" ? "text-error" : "text-secondary")} /><div className="min-w-0 flex-1"><Link href={`/dashboard/customers/${person.id}`} className="font-medium text-primary hover:underline">{person.displayName}</Link><p className="mt-1 break-words text-sm text-foreground">{action?.title ?? "Follow-up due"}</p><p className={cn("mt-1 text-xs", tone === "overdue" ? "text-error" : "text-muted")}>{tone === "overdue" ? "Overdue" : "Due today"} · {action ? formatDate(action.dueAt, timezone) : ""}</p></div></div><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" onClick={markComplete} disabled={!action || complete.isPending} isLoading={complete.isPending}><Check className="h-4 w-4" />Complete</Button><Button size="sm" variant="outline" asChild><Link href={`/dashboard/customers/${person.id}`}>Open Person</Link></Button></div>{message && <p className="mt-2 text-xs text-muted" role="status">{message}</p>}</div>;
 }
 
-function MetricBox({ value, label }: { value: string | number; label: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-surface p-3">
-      <p className="text-2xl font-semibold text-foreground">{value}</p>
-      <p className="text-xs text-muted">{label}</p>
-    </div>
-  );
+function UpcomingPeople({ people, timezone }: { people: PersonListItem[]; timezone: string }) {
+  return <>{people.slice(0, 8).map((person) => { const event = person.nextFollowUp && person.nextBooking ? (new Date(person.nextFollowUp.dueAt) <= new Date(person.nextBooking.startAt) ? { label: person.nextFollowUp.title, at: person.nextFollowUp.dueAt, icon: Clock3 } : { label: "Upcoming meeting", at: person.nextBooking.startAt, icon: Calendar }) : person.nextFollowUp ? { label: person.nextFollowUp.title, at: person.nextFollowUp.dueAt, icon: Clock3 } : person.nextBooking ? { label: "Upcoming meeting", at: person.nextBooking.startAt, icon: Calendar } : null; if (!event) return null; const Icon = event.icon; return <Card key={person.id}><CardContent className="flex min-w-0 items-center gap-3 p-4"><Icon className="h-5 w-5 shrink-0 text-secondary" /><div className="min-w-0 flex-1"><Link href={`/dashboard/customers/${person.id}`} className="font-medium text-primary hover:underline">{person.displayName}</Link><p className="truncate text-sm text-muted">{event.label} · {formatDate(event.at, timezone)}</p></div><Button size="sm" variant="outline" asChild><Link href={`/dashboard/customers/${person.id}`}>Open</Link></Button></CardContent></Card>; })}</>;
 }
 
-function formatCurrency(value: number, currency: string) {
-  if (value === 0) return "0";
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-    notation: "compact",
-  }).format(value);
+function Metrics({ summary, loading }: { summary: import("@/lib/contracts").DashboardSummary | undefined; loading: boolean }) {
+  return <Card><CardHeader><CardTitle className="text-base">Workspace metrics</CardTitle></CardHeader><CardContent>{loading ? <Skeleton className="h-20 w-full" /> : <div className="grid grid-cols-2 gap-3"><Metric value={summary?.profileMetrics.bookingsCreated ?? 0} label="Bookings" /><Metric value={summary?.crmSummary?.totalCustomers ?? 0} label="People" /></div>}<Button className="mt-4 w-full" size="sm" variant="outline" asChild><Link href="/dashboard/analytics">View analytics</Link></Button></CardContent></Card>;
 }
 
-function DashboardSkeleton() {
-  return (
-    <div className="p-6 md:p-8">
-      <Skeleton className="h-10 w-64" />
-      <Skeleton className="mt-2 h-5 w-48" />
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-32 rounded-2xl" />
-        ))}
-      </div>
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <Skeleton className="h-64 rounded-2xl lg:col-span-2" />
-        <Skeleton className="h-64 rounded-2xl" />
-      </div>
-    </div>
-  );
-}
-
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return "morning";
-  if (hour < 18) return "afternoon";
-  return "evening";
-}
-
-function firstName(name?: string) {
-  return name?.trim().split(/\s+/)[0] || "there";
-}
+function Metric({ value, label }: { value: number; label: string }) { return <div className="rounded-lg bg-surface-elevated p-3"><p className="text-2xl font-semibold text-foreground">{value}</p><p className="text-xs text-muted">{label}</p></div>; }
+function TodaySkeleton() { return <div className="p-4 sm:p-6"><Skeleton className="h-24 w-full" /><div className="mt-6 grid gap-4 lg:grid-cols-2"><Skeleton className="h-64 w-full" /><Skeleton className="h-64 w-full" /></div></div>; }
+function FullError({ onRetry }: { onRetry: () => void }) { return <div className="p-4 sm:p-6"><Card><CardContent className="p-8 text-center"><CircleAlert className="mx-auto h-8 w-8 text-muted" /><p className="mt-3 font-medium text-foreground">Today is temporarily unavailable.</p><p className="mt-1 text-sm text-muted">Your saved actions have not changed. Try again shortly.</p><Button className="mt-4" onClick={onRetry}>Try again</Button></CardContent></Card></div>; }
