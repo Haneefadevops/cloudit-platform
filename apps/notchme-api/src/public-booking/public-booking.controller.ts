@@ -32,6 +32,10 @@ const publicBookingInputSchema = z.object({
   timezone: z.string().min(1).max(80),
   source: z.enum(["profile", "connection", "event", "direct"]).optional(),
 });
+export const guestRescheduleSchema = z.object({
+  startAt: z.string().datetime({ offset: false }),
+  timezone: z.string().min(1).max(80),
+});
 
 @Public()
 @Controller("v2/book")
@@ -40,6 +44,63 @@ export class PublicBookingController {
     private readonly schedulingService: SchedulingService,
     private readonly analyticsService: AnalyticsService,
   ) {}
+
+  @Get("manage/:token")
+  async manage(
+    @Param("token") token: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const booking = await this.schedulingService.getGuestManagedBooking(token);
+    if (!booking) {
+      res.status(404);
+      return { ok: false, error: "Booking management link is unavailable." };
+    }
+    return { ok: true, data: booking };
+  }
+
+  @Post("manage/:token/cancel")
+  async guestCancel(
+    @Param("token") token: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    try {
+      return {
+        ok: true,
+        data: await this.schedulingService.cancelGuestBooking(token),
+      };
+    } catch (error) {
+      const bookingError = error as BookingError;
+      res.status(bookingError.statusCode ?? 400);
+      return { ok: false, error: "Booking cannot be cancelled." };
+    }
+  }
+
+  @Post("manage/:token/reschedule")
+  async guestReschedule(
+    @Param("token") token: string,
+    @Body() body: unknown,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const input = guestRescheduleSchema.safeParse(body);
+    if (!input.success) {
+      res.status(400);
+      return { ok: false, error: "Invalid reschedule details." };
+    }
+    try {
+      return {
+        ok: true,
+        data: await this.schedulingService.rescheduleGuestBooking(
+          token,
+          input.data.startAt,
+          input.data.timezone,
+        ),
+      };
+    } catch (error) {
+      const bookingError = error as BookingError;
+      res.status(bookingError.statusCode ?? 400);
+      return { ok: false, error: "Booking cannot be rescheduled." };
+    }
+  }
 
   @Get(":profileSlug")
   async getProfile(@Param("profileSlug") profileSlug: string) {

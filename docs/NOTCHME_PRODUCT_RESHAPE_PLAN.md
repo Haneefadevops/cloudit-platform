@@ -885,6 +885,15 @@ Exit criteria:
 
 **Phase 4B remaining:** booking continuity—confirmation, reschedule/cancellation flows, explicit timezone treatment, add-to-calendar behavior, and the booking-to-person timeline handoff. Reminders and outbound notifications remain deferred.
 
+#### Phase 4B1 Booking-continuity API — 2026-08-18
+
+- Added opaque guest-token management lookup, cancellation, and rescheduling under the existing public booking API. Tokens are hashed for lookup, must be unexpired and unused, and never expose their hash, customer IDs, organization IDs, or owner IDs in responses.
+- Supported transitions are `pending|confirmed → cancelled` and `pending|confirmed → rescheduled time`; cancelled and past bookings cannot be managed. Guest cancellation is idempotent. Rescheduling takes the same per-host transaction lock as public booking, reruns the shared availability-slot generator with the current booking excluded, then rechecks active booking conflicts before changing the old instant.
+- Management responses contain only the meeting title, start/end UTC timestamps, display timezone, status, host display name, and allowed operations. Invalid or expired management links receive a generic unavailable result; request and exception logging redact management-token path segments.
+- Creation remains linked to the existing customer matching flow. Guest cancellation and rescheduling create factual booking audit and Person timeline activity rows in the same transaction. Rescheduling persists UTC instants plus a validated IANA display timezone; the API accepts canonical ISO UTC instants only, so an impossible or ambiguous unqualified local DST time is rejected rather than guessed. No automatic follow-up, outbound message, or notification is created.
+
+**Phase 4B2 remaining:** build the guest management UI, add-to-calendar output, and explicit local-time selection/ambiguity handling on top of this API; reminder delivery remains deferred.
+
 Exit criteria:
 
 - A user can capture a person and set a next action in under one minute

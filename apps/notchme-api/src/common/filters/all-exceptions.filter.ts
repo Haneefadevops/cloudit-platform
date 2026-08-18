@@ -13,6 +13,10 @@ import { RequestWithId } from "../middleware/request-id.middleware";
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
+  private safePath(path: string) {
+    return path.replace(/(\/v2\/book\/manage\/)[^/?]+/, "$1[redacted]");
+  }
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -35,7 +39,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       {
         requestId: request.requestId,
         method: request.method,
-        path: request.url,
+        path: this.safePath(request.url),
         statusCode: status,
         message:
           exception instanceof Error ? exception.message : "Unknown error",

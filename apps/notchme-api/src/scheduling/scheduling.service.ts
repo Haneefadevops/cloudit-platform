@@ -431,6 +431,7 @@ export class SchedulingService {
     from: Date;
     to: Date;
     timezone: string;
+    excludeBookingId?: string;
   }) {
     const durationMinutes = Number(options.meetingType.duration_minutes);
     const bufferBeforeMinutes = Number(
@@ -479,8 +480,14 @@ export class SchedulingService {
          WHERE owner_user_id = $1
            AND status IN ('pending', 'confirmed')
            AND start_at < $2
-           AND end_at > $3`,
-        [options.ownerUserId, to.toISOString(), from.toISOString()],
+           AND end_at > $3
+           AND ($4::uuid IS NULL OR id <> $4::uuid)`,
+        [
+          options.ownerUserId,
+          to.toISOString(),
+          from.toISOString(),
+          options.excludeBookingId ?? null,
+        ],
       ),
     ]);
 
@@ -904,6 +911,161 @@ export class SchedulingService {
 
   private hashGuestToken(token: string) {
     return createHash("sha256").update(token).digest("hex");
+  }
+
+  private async guestTokenBooking(
+    token: string,
+    type?: "cancel" | "reschedule",
+  ) {
+    const result = await this.databaseService.query(
+      `SELECT b.id, b.owner_user_id, b.customer_id, b.status, b.start_at, b.end_at, b.timezone,
+              mt.title AS meeting_type_title, mt.duration_minutes, mt.buffer_before_minutes, mt.buffer_after_minutes, mt.min_notice_minutes, mt.booking_window_days, mt.max_bookings_per_day, p.full_name AS host_name, gt.type
+       FROM booking_guest_tokens gt JOIN bookings b ON b.id = gt.booking_id
+       JOIN meeting_types mt ON mt.id = b.meeting_type_id JOIN profiles p ON p.user_id = b.owner_user_id
+       WHERE gt.token_hash = $1 AND gt.expires_at > now() AND gt.used_at IS NULL ${type ? "AND gt.type = $2" : ""}`,
+      type ? [this.hashGuestToken(token), type] : [this.hashGuestToken(token)],
+    );
+    return result.rows[0] as Record<string, unknown> | undefined;
+  }
+
+  private guestSafeBooking(row: Record<string, unknown>) {
+    const startAt = (row.start_at as Date).toISOString();
+    const endAt = (row.end_at as Date).toISOString();
+    const future = new Date(startAt) > new Date();
+    const status = row.status as string;
+    return {
+      meetingTypeTitle: row.meeting_type_title as string,
+      startAt,
+      endAt,
+      timezone: row.timezone as string,
+      status,
+      hostName: row.host_name as string,
+      cancellationAllowed: future && status !== "cancelled",
+      reschedulingAllowed: future && status !== "cancelled",
+    };
+  }
+
+  async getGuestManagedBooking(token: string) {
+    const row = await this.guestTokenBooking(token);
+    return row ? this.guestSafeBooking(row) : null;
+  }
+
+  async cancelGuestBooking(token: string) {
+    const row = await this.guestTokenBooking(token, "cancel");
+    if (!row)
+      throw new BookingError("Booking management link is unavailable.", 404);
+    const safe = this.guestSafeBooking(row);
+    if (!safe.cancellationAllowed && safe.status !== "cancelled")
+      throw new BookingError("Booking cannot be cancelled.", 400);
+    if (safe.status === "cancelled") return safe;
+    const client = await this.databaseService.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "UPDATE bookings SET status = 'cancelled', cancellation_reason = 'Cancelled by guest', updated_at = now() WHERE id = $1 AND status <> 'cancelled'",
+        [row.id],
+      );
+      await client.query(
+        "INSERT INTO booking_audit_events (booking_id, owner_user_id, event_type, metadata) VALUES ($1, $2, 'guest_cancelled', $3)",
+        [row.id, row.owner_user_id, JSON.stringify({})],
+      );
+      if (row.customer_id)
+        await client.query(
+          "INSERT INTO customer_activities (customer_id, created_by_user_id, type, title, body, occurred_at) VALUES ($1, $2, 'meeting', 'Booking cancelled', 'Guest cancelled this booking.', now())",
+          [row.customer_id, row.owner_user_id],
+        );
+      await client.query("COMMIT");
+      return {
+        ...safe,
+        status: "cancelled",
+        cancellationAllowed: false,
+        reschedulingAllowed: false,
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async rescheduleGuestBooking(
+    token: string,
+    startAt: string,
+    timezone: string,
+  ) {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: timezone });
+    } catch {
+      throw new BookingError("Invalid timezone.", 400);
+    }
+    const row = await this.guestTokenBooking(token, "reschedule");
+    if (!row)
+      throw new BookingError("Booking management link is unavailable.", 404);
+    const safe = this.guestSafeBooking(row);
+    if (!safe.reschedulingAllowed)
+      throw new BookingError("Booking cannot be rescheduled.", 400);
+    const nextStart = new Date(startAt);
+    if (Number.isNaN(nextStart.getTime()) || nextStart <= new Date())
+      throw new BookingError("Invalid booking time.", 400);
+    const duration =
+      new Date(safe.endAt).getTime() - new Date(safe.startAt).getTime();
+    const nextEnd = new Date(nextStart.getTime() + duration);
+    const client = await this.databaseService.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        row.owner_user_id,
+      ]);
+      const availableSlots = await this.generateBookingSlots({
+        ownerUserId: row.owner_user_id as string,
+        meetingType: row,
+        from: new Date(nextStart.getTime() - 86400000),
+        to: new Date(nextEnd.getTime() + 86400000),
+        timezone,
+        excludeBookingId: row.id as string,
+      });
+      if (
+        !availableSlots.some((slot) => slot.startAt === nextStart.toISOString())
+      )
+        throw new BookingError("This time is no longer available.", 409);
+      const conflict = await client.query(
+        "SELECT id FROM bookings WHERE owner_user_id = $1 AND status IN ('pending','confirmed') AND id <> $2 AND start_at < $3 AND end_at > $4 LIMIT 1",
+        [
+          row.owner_user_id,
+          row.id,
+          nextEnd.toISOString(),
+          nextStart.toISOString(),
+        ],
+      );
+      if (conflict.rowCount)
+        throw new BookingError("This time is no longer available.", 409);
+      await client.query(
+        "UPDATE bookings SET start_at = $1, end_at = $2, timezone = $3, updated_at = now() WHERE id = $4",
+        [nextStart.toISOString(), nextEnd.toISOString(), timezone, row.id],
+      );
+      await client.query(
+        "INSERT INTO booking_audit_events (booking_id, owner_user_id, event_type, metadata) VALUES ($1, $2, 'guest_rescheduled', $3)",
+        [row.id, row.owner_user_id, JSON.stringify({})],
+      );
+      if (row.customer_id)
+        await client.query(
+          "INSERT INTO customer_activities (customer_id, created_by_user_id, type, title, body, occurred_at) VALUES ($1, $2, 'meeting', 'Booking rescheduled', 'Guest rescheduled this booking.', $3)",
+          [row.customer_id, row.owner_user_id, nextStart.toISOString()],
+        );
+      await client.query("COMMIT");
+      return {
+        ...safe,
+        startAt: nextStart.toISOString(),
+        endAt: nextEnd.toISOString(),
+        timezone,
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
 
