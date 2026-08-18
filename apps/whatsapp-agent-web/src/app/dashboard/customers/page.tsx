@@ -8,8 +8,9 @@ import { apiFetch } from '@/lib/api';
 interface Client { id: string; name: string }
 interface Category { id: string; name: string; description?: string | null; color?: string | null }
 interface Customer {
-  id: string; phoneNumber: string; name?: string | null; email?: string | null;
-  leadSource?: string | null; categoryId?: string | null; category?: Category | null; createdAt: string;
+  id: string; phoneNumber?: string | null; name?: string | null; email?: string | null;
+  leadSource?: string | null; channel?: string | null; channelSourceId?: string | null;
+  categoryId?: string | null; category?: Category | null; createdAt: string;
 }
 
 export default function CustomersPage() {
@@ -129,14 +130,22 @@ export default function CustomersPage() {
           <option value="">All</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
         </Select></div>
         {customers.length === 0 ? <EmptyState title="No customers yet" hint="Customers will appear here when they message a client." /> :
-          <Table><THead><TR><TH>Name</TH><TH>Phone</TH><TH>Category</TH><TH>Lead source</TH><TH>Created</TH></TR></THead>
+          <Table><THead><TR><TH>Name</TH><TH>Phone</TH><TH>Channel</TH><TH>Source ID</TH><TH>Category</TH><TH>Lead source</TH><TH>Created</TH></TR></THead>
             <tbody>{customers.map((customer) => <TR key={customer.id}>
               <TD>{customer.name || '—'}{customer.email && <div className="text-xs text-muted">{customer.email}</div>}</TD>
-              <TD>{customer.phoneNumber}</TD>
+              <TD>{customer.phoneNumber || '—'}</TD>
+              <TD>{customer.channel ? <Badge tone={customer.channel === 'whatsapp' ? 'teal' : customer.channel === 'messenger' ? 'blue' : 'amber'}>{customer.channel}</Badge> : <span className="text-muted">—</span>}</TD>
+              <TD><span className="text-xs text-muted">{customer.channelSourceId || '—'}</span></TD>
               <TD><Select value={customer.categoryId || ''} onChange={(e) => assignCategory(customer.id, e.target.value)} className="min-w-[150px]">
                 <option value="">—</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
               </Select></TD>
-              <TD>{customer.leadSource === 'ctwa_ad' ? <Badge tone="teal">WhatsApp ad</Badge> : <span className="text-muted">Organic/unknown</span>}</TD>
+              <TD>{(() => {
+                const lead = customer.leadSource?.toLowerCase();
+                if (lead === 'ctwa_ad') return <Badge tone="teal">WhatsApp ad</Badge>;
+                if (customer.channel === 'messenger') return <Badge tone="blue">Messenger</Badge>;
+                if (customer.channel === 'instagram') return <Badge tone="amber">Instagram</Badge>;
+                return <span className="text-muted">Organic/unknown</span>;
+              })()}</TD>
               <TD>{new Date(customer.createdAt).toLocaleDateString()}</TD>
             </TR>)}</tbody>
           </Table>}

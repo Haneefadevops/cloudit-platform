@@ -415,7 +415,7 @@ export class ConversationsService {
           : {}),
       },
       include: {
-        customer: { select: { name: true, phoneNumber: true } },
+        customer: { select: { name: true, phoneNumber: true, channel: true, channelSourceId: true } },
         assignedTo: { select: { id: true, name: true } },
         handoffLogs: { orderBy: { createdAt: 'desc' as const }, take: 1 },
         _count: { select: { messages: true } },
@@ -432,7 +432,7 @@ export class ConversationsService {
     return this.prisma.conversation.findFirst({
       where: { id, clientId },
       include: {
-        customer: { select: { name: true, phoneNumber: true } },
+        customer: { select: { name: true, phoneNumber: true, channel: true, channelSourceId: true } },
         assignedTo: { select: { id: true, name: true } },
         handoffLogs: { orderBy: { createdAt: 'desc' as const } },
         messages: {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { getStoredUser, isPortalUser } from '../portal';
 import { apiFetch } from '@/lib/api';
 import {
+  Badge,
   Card,
   EmptyState,
   Input,
@@ -36,6 +37,7 @@ interface HandoffLog {
 interface Ticket {
   id: string;
   status: string;
+  channel: string | null;
   ticketRef: string | null;
   handoffReason: string | null;
   summary: string | null;
@@ -44,7 +46,7 @@ interface Ticket {
   resolvedAt: string | null;
   csatRating: number | null;
   csatFeedback: string | null;
-  customer: { name: string | null; phoneNumber: string } | null;
+  customer: { name: string | null; phoneNumber?: string | null; channel?: string | null; channelSourceId?: string | null } | null;
   assignedTo: { id: string; name: string } | null;
   handoffLogs: HandoffLog[];
   _count: { messages: number };
@@ -294,6 +296,7 @@ export default function SupportHistoryPage() {
                   <tr>
                     <TH>Ticket</TH>
                     <TH>Customer</TH>
+                    <TH>Channel</TH>
                     <TH>Reason</TH>
                     <TH>Opened</TH>
                     <TH>Resolved</TH>
@@ -313,8 +316,18 @@ export default function SupportHistoryPage() {
                           {t.customer?.name || '—'}
                         </div>
                         <div className="text-xs text-muted">
-                          {t.customer?.phoneNumber || ''}
+                          {t.customer?.phoneNumber || '—'}
+                          {t.customer?.channelSourceId ? ` • ${t.customer.channelSourceId}` : ''}
                         </div>
+                      </TD>
+                      <TD>
+                        {t.channel ? (
+                          <Badge tone={t.channel === 'whatsapp' ? 'teal' : t.channel === 'messenger' ? 'blue' : 'amber'}>
+                            {t.channel}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
                       </TD>
                       <TD className="max-w-[220px]">
                         <span className="block truncate text-[13px]">
@@ -358,8 +371,15 @@ export default function SupportHistoryPage() {
                 {detail.customer?.name || '—'}
                 {detail.customer?.phoneNumber
                   ? ` • ${detail.customer.phoneNumber}`
-                  : ''}
+                  : detail.customer?.channelSourceId
+                    ? ` • ${detail.customer.channelSourceId}`
+                    : ''}
               </span>
+              {detail.customer?.channel && (
+                <Badge tone={detail.customer.channel === 'whatsapp' ? 'teal' : detail.customer.channel === 'messenger' ? 'blue' : 'amber'}>
+                  {detail.customer.channel}
+                </Badge>
+              )}
               <StatusBadge status={statusLabel(detail.status)} />
               {detail.csatRating && (
                 <span className="text-amber-500">
