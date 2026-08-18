@@ -35,6 +35,7 @@ import {
   bulkActionInputSchema,
   customerMergeInputSchema,
   customerImportInputSchema,
+  peopleQuerySchema,
 } from "./customers.schemas";
 
 @ApiTags("customers")
@@ -47,6 +48,16 @@ export class CustomersController {
     private readonly customersService: CustomersService,
     private readonly bulkService: BulkService,
   ) {}
+
+  @Get("people")
+  @ApiOperation({ summary: "List People workspace smart views" })
+  async people(@AuthUser() user: AuthContext, @Query() rawQuery: unknown) {
+    const query = peopleQuerySchema.safeParse(rawQuery);
+    if (!query.success) {
+      throw new BadRequestException("Invalid People query.");
+    }
+    return this.customersService.listPeople(user, query.data);
+  }
 
   @Get("summary")
   @ApiOperation({ summary: "Get CRM summary" })

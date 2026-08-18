@@ -15,6 +15,47 @@ const prioritySchema = z.enum(["low", "medium", "high"]);
 const sourceSchema = z.enum(["scan", "booking", "manual", "import"]);
 const outcomeSchema = z.enum(["in_progress", "won", "lost", "nurture"]);
 
+export const peopleViewSchema = z.enum([
+  "all",
+  "needs_attention",
+  "due_today",
+  "overdue",
+  "upcoming",
+  "recent",
+]);
+
+const ianaTimezoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .superRefine((timezone, context) => {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: timezone });
+    } catch {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Invalid timezone",
+      });
+    }
+  });
+
+export const peopleQuerySchema = z.object({
+  view: peopleViewSchema.default("all"),
+  search: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .transform((value) => value || undefined),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  timezone: ianaTimezoneSchema.optional().default("UTC"),
+});
+
+export type PeopleQuery = z.infer<typeof peopleQuerySchema>;
+export type PeopleView = z.infer<typeof peopleViewSchema>;
+
 export const customerInputSchema = z.object({
   fullName: z.string().trim().min(1).max(120),
   email: z

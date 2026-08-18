@@ -829,6 +829,18 @@ Exit criteria:
 - Build Today with overdue, due, upcoming, and missing-action states
 - Add email reminders and one-click communication actions
 
+#### Phase 3A1 People workspace backend â€” 2026-08-18
+
+- Added authenticated `GET /v2/customers/people`. It preserves the existing customer-list endpoint and is registered before the dynamic `/:id` route.
+- The endpoint returns `{ items, page, pageSize, total, totalPages, counts }`. Each item includes the customer ID, display name, company, permitted email and phone, lifecycle stage, last interaction, next incomplete follow-up, and nearest future non-cancelled booking.
+- Supported `view` values are `all`, `needs_attention`, `due_today`, `overdue`, `upcoming`, and `recent`; `search` is optional, `page` defaults to 1, and `pageSize` defaults to 20 with a maximum of 100.
+- The API accepts a validated IANA `timezone` query parameter and uses UTC when it is absent. Invalid timezone, view, paging, page-size, or search input receives a safe HTTP 400 response. No user, organization, or timezone profile field was added.
+- Smart-view definitions are database predicates over the same authorized, search-filtered dataset: `overdue` has an incomplete follow-up before the selected local day; `due_today` falls within that day; `needs_attention` is their union; `upcoming` has an incomplete follow-up from the next local day onward or a future non-cancelled booking, ordered by its nearest qualifying future action; `recent` means **Recently added** (created within the prior 30 days), not recently met.
+- Counts are calculated across the complete authorized dataset, never from a page. Rows are paginated in PostgreSQL, completed follow-ups and cancelled bookings are excluded, queries are set-based (no per-person queries), and deterministic customer-ID secondary sorting is applied.
+- Focused unit coverage includes organization isolation, an empty organization, validation and UTC fallback, complete-dataset counts, pagination, search, selected-timezone boundaries, overdue/due-today/needs-attention predicates, completed/cancelled exclusions, future follow-ups, the 30-day boundary, and deterministic ordering.
+
+**Phase 3A2 remaining:** build the People workspace UI on `/dashboard/customers` and `/dashboard/customers/[id]`, use the People endpoint and its `Recently added` label, present smart-view counts and pagination, and complete the requested person-detail/Today frontend work. No frontend route or behavior changed in Phase 3A1.
+
 Exit criteria:
 
 - A user can capture a person and set a next action in under one minute

@@ -27,6 +27,7 @@ import type {
   CRMContext,
   CustomerPipelineStageHistory,
 } from "../common/contracts/notchme.v2";
+import type { PeopleQuery, PeopleView } from "./customers.schemas";
 
 export type CustomerListFilters = {
   search?: string;
@@ -41,6 +42,27 @@ export type CustomerListFilters = {
 };
 
 export type CustomerContext = CRMContext;
+
+export type PeopleItem = {
+  id: string;
+  displayName: string;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  lifecycleStage: LifecycleStage;
+  lastInteractionAt: Date | null;
+  nextFollowUp: { id: string; title: string; dueAt: Date } | null;
+  nextBooking: { id: string; startAt: Date } | null;
+};
+
+export type PeopleResponse = {
+  items: PeopleItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  counts: Record<PeopleView, number>;
+};
 
 @Injectable()
 export class CustomersService {
@@ -169,6 +191,144 @@ export class CustomersService {
     const column = columnMap[filters.sortBy ?? "createdAt"] ?? "created_at";
     const order = filters.sortOrder === "asc" ? "ASC" : "DESC";
     return `${column} ${order}`;
+  }
+
+  /**
+   * Returns the organization (or personal-owner) scoped People dataset. The
+   * timezone is validated at the HTTP boundary before it is used in SQL.
+   */
+  async listPeople(
+    user: AuthContext,
+    query: PeopleQuery,
+  ): Promise<PeopleResponse> {
+    const context = this.toCRMContext(user);
+    const scopeColumn = context.organizationId
+      ? "c.organization_id"
+      : "c.assigned_to_user_id";
+    const values: unknown[] = [
+      context.organizationId ?? context.userId,
+      query.timezone,
+    ];
+    const searchCondition = query.search
+      ? (() => {
+          values.push(`%${query.search}%`);
+          return `AND (c.full_name ILIKE $${values.length} OR c.company ILIKE $${values.length} OR c.email ILIKE $${values.length} OR c.phone ILIKE $${values.length})`;
+        })()
+      : "";
+    const baseQuery = `
+      WITH scoped AS (
+        SELECT
+          c.id, c.full_name, c.company, c.email, c.phone, c.lifecycle_stage,
+          c.created_at,
+          GREATEST(c.last_contacted_at, last_activity.occurred_at) AS last_interaction_at,
+          follow_up.id AS next_follow_up_id,
+          follow_up.title AS next_follow_up_title,
+          follow_up.due_at AS next_follow_up_due_at,
+          booking.id AS next_booking_id,
+          booking.start_at AS next_booking_start_at,
+          date_trunc('day', now() AT TIME ZONE $2) AT TIME ZONE $2 AS day_start,
+          (date_trunc('day', now() AT TIME ZONE $2) + interval '1 day') AT TIME ZONE $2 AS day_end
+        FROM customers c
+        LEFT JOIN LATERAL (
+          SELECT MAX(ca.occurred_at) AS occurred_at
+          FROM customer_activities ca
+          WHERE ca.customer_id = c.id
+        ) last_activity ON true
+        LEFT JOIN LATERAL (
+          SELECT cf.id, cf.title, cf.due_at
+          FROM customer_follow_ups cf
+          WHERE cf.customer_id = c.id AND cf.completed_at IS NULL
+          ORDER BY cf.due_at ASC, cf.id ASC
+          LIMIT 1
+        ) follow_up ON true
+        LEFT JOIN LATERAL (
+          SELECT b.id, b.start_at
+          FROM bookings b
+          WHERE b.customer_id = c.id AND b.status <> 'cancelled' AND b.start_at > now()
+          ORDER BY b.start_at ASC, b.id ASC
+          LIMIT 1
+        ) booking ON true
+        WHERE ${scopeColumn} = $1 ${searchCondition}
+      ), classified AS (
+        SELECT *,
+          next_follow_up_due_at < day_start AS is_overdue,
+          next_follow_up_due_at >= day_start AND next_follow_up_due_at < day_end AS is_due_today,
+          (next_follow_up_due_at >= day_end OR next_booking_start_at IS NOT NULL) AS is_upcoming,
+          created_at >= now() - interval '30 days' AS is_recent
+        FROM scoped
+      )`;
+    const viewPredicate: Record<PeopleView, string> = {
+      all: "true",
+      overdue: "is_overdue",
+      due_today: "is_due_today",
+      needs_attention: "is_overdue OR is_due_today",
+      upcoming: "is_upcoming",
+      recent: "is_recent",
+    };
+    const countsQuery = `${baseQuery}
+      SELECT
+        COUNT(*)::int AS all,
+        COUNT(*) FILTER (WHERE is_overdue OR is_due_today)::int AS needs_attention,
+        COUNT(*) FILTER (WHERE is_due_today)::int AS due_today,
+        COUNT(*) FILTER (WHERE is_overdue)::int AS overdue,
+        COUNT(*) FILTER (WHERE is_upcoming)::int AS upcoming,
+        COUNT(*) FILTER (WHERE is_recent)::int AS recent
+      FROM classified`;
+    const pageValues = [
+      ...values,
+      query.pageSize,
+      (query.page - 1) * query.pageSize,
+    ];
+    const itemsQuery = `${baseQuery}
+      SELECT * FROM classified
+      WHERE ${viewPredicate[query.view]}
+      ORDER BY
+        CASE WHEN ${query.view === "upcoming" ? "true" : "false"} THEN LEAST(COALESCE(CASE WHEN next_follow_up_due_at >= day_end THEN next_follow_up_due_at END, 'infinity'::timestamptz), COALESCE(next_booking_start_at, 'infinity'::timestamptz)) END ASC NULLS LAST,
+        full_name ASC,
+        id ASC
+      LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
+    const [countsResult, itemsResult] = await Promise.all([
+      this.databaseService.query(countsQuery, values),
+      this.databaseService.query(itemsQuery, pageValues),
+    ]);
+    const countsRow = countsResult.rows[0] ?? {};
+    const counts: Record<PeopleView, number> = {
+      all: Number(countsRow.all ?? 0),
+      needs_attention: Number(countsRow.needs_attention ?? 0),
+      due_today: Number(countsRow.due_today ?? 0),
+      overdue: Number(countsRow.overdue ?? 0),
+      upcoming: Number(countsRow.upcoming ?? 0),
+      recent: Number(countsRow.recent ?? 0),
+    };
+    return {
+      items: itemsResult.rows.map((row) => ({
+        id: row.id as string,
+        displayName: row.full_name as string,
+        company: (row.company as string | null) ?? null,
+        email: (row.email as string | null) ?? null,
+        phone: (row.phone as string | null) ?? null,
+        lifecycleStage: row.lifecycle_stage as LifecycleStage,
+        lastInteractionAt: (row.last_interaction_at as Date | null) ?? null,
+        nextFollowUp: row.next_follow_up_id
+          ? {
+              id: row.next_follow_up_id as string,
+              title: row.next_follow_up_title as string,
+              dueAt: row.next_follow_up_due_at as Date,
+            }
+          : null,
+        nextBooking: row.next_booking_id
+          ? {
+              id: row.next_booking_id as string,
+              startAt: row.next_booking_start_at as Date,
+            }
+          : null,
+      })),
+      page: query.page,
+      pageSize: query.pageSize,
+      total: counts[query.view],
+      totalPages: Math.ceil(counts[query.view] / query.pageSize),
+      counts,
+    };
   }
 
   async listCustomers(
