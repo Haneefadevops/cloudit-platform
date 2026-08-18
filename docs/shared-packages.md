@@ -1,4 +1,4 @@
-# CloudIT Platform — Shared Package Usage
+# CloudIT Platform â€” Shared Package Usage
 
 This document explains how the monorepo shares code through `packages/*` and how each app consumes those packages.
 
@@ -70,7 +70,7 @@ import { Button, Card, ToastProvider } from "@cloudit/ui";
 
 ### 5. Build in Docker
 
-Because `@cloudit/ui` is not published to npm, Docker must build it inside the image and copy the artifacts into the app workspace. See `infra/orbitone-web/Dockerfile` for the working pattern:
+Because `@cloudit/ui` is not published to npm, Docker must build it inside the image and copy the artifacts into the app workspace. See `infra/notchme-web/Dockerfile` for the working pattern:
 
 ```dockerfile
 RUN npm run build --workspace=@cloudit/ui
@@ -116,7 +116,7 @@ Currently each API has its **own Prisma schema and generated client** to avoid c
 |-----|---------------|----------|
 | `platform-api` | `@prisma/client-platform` | `platform` |
 | `hospitality-api` | `@prisma/client-hospitality` | `hospitality` |
-| `orbitone-api` | `@prisma/client-orbitone` | `orbitone` |
+| `notchme-api` | `@prisma/client-notchme` | `orbitone` (intentionally retained database) |
 | `touchorbit-api` | `@prisma/client-touchorbit` | `touchorbit` |
 
 If a shared `@cloudit/database` package is created later, it would export:

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# CloudIT Platform — maintenance mode toggle.
+# CloudIT Platform â€” maintenance mode toggle.
 # Usage: ./infra/scripts/maintenance.sh on|off
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,7 +18,7 @@ if [[ "$mode" != "on" && "$mode" != "off" ]]; then
   exit 1
 fi
 
-app_services=(platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web)
+app_services=(platform-api hospitality-api notchme-api touchorbit-api platform-web hospitality-web notchme-web touchorbit-web)
 
 if [[ "$mode" == "on" ]]; then
   log "Stopping app services..."

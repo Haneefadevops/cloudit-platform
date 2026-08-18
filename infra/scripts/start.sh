@@ -13,14 +13,14 @@ log() {
   echo "[start] $1"
 }
 
-log "CloudIT Platform — starting services..."
+log "CloudIT Platform â€” starting services..."
 
 # 1. Ensure .env files exist
 for service in traefik postgres redis n8n uptime-kuma; do
     ENV_FILE="${PROJECT_ROOT}/infra/${service}/.env"
     EXAMPLE_FILE="${PROJECT_ROOT}/infra/${service}/.env.example"
     if [[ ! -f "$ENV_FILE" && -f "$EXAMPLE_FILE" ]]; then
-        log "WARNING: ${service}/.env missing — copying from .env.example"
+        log "WARNING: ${service}/.env missing â€” copying from .env.example"
         cp "$EXAMPLE_FILE" "$ENV_FILE"
     fi
 done
@@ -46,16 +46,16 @@ log "Starting n8n + Uptime Kuma..."
 docker-compose -f "${PROJECT_ROOT}/infra/n8n/docker-compose.yml" up -d
 docker-compose -f "${PROJECT_ROOT}/infra/uptime-kuma/docker-compose.yml" up -d
 
-# 6. Optionally start platform/hospitality/orbitone/touchorbit apps
+# 6. Optionally start platform/hospitality/notchme/touchorbit apps
 if [[ "$START_APPS" == "true" ]]; then
     log "Starting application services..."
     docker-compose -f "${PROJECT_ROOT}/infra/platform-api/docker-compose.yml" up -d
     docker-compose -f "${PROJECT_ROOT}/infra/hospitality-api/docker-compose.yml" up -d
-    docker-compose -f "${PROJECT_ROOT}/infra/orbitone-api/docker-compose.yml" up -d
+    docker-compose -f "${PROJECT_ROOT}/infra/notchme-api/docker-compose.yml" up -d
     docker-compose -f "${PROJECT_ROOT}/infra/touchorbit-api/docker-compose.yml" up -d
     docker-compose -f "${PROJECT_ROOT}/infra/platform-web/docker-compose.yml" up -d
     docker-compose -f "${PROJECT_ROOT}/infra/hospitality-web/docker-compose.yml" up -d
-    docker-compose -f "${PROJECT_ROOT}/infra/orbitone-web/docker-compose.yml" up -d
+    docker-compose -f "${PROJECT_ROOT}/infra/notchme-web/docker-compose.yml" up -d
     docker-compose -f "${PROJECT_ROOT}/infra/touchorbit-web/docker-compose.yml" up -d
 fi
 
@@ -77,8 +77,8 @@ if [[ "$START_APPS" == "true" ]]; then
     echo "  Platform API      : https://api-platform.<your-domain>"
     echo "  Hospitality Web   : https://hospitality.<your-domain>"
     echo "  Hospitality API   : https://api-hospitality.<your-domain>"
-    echo "  OrbitOne Web      : https://orbitone.<your-domain>"
-    echo "  OrbitOne API      : https://api-orbitone.<your-domain>"
+    echo "  NotchMe Web      : https://notchme.<your-domain>"
+    echo "  NotchMe API      : https://api-notchme.<your-domain>"
     echo "  TouchOrbit HR Web : https://touchorbit.<your-domain>"
     echo "  TouchOrbit HR API : https://api-touchorbit.<your-domain>"
 fi

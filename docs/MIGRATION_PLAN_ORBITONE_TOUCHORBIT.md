@@ -1,5 +1,7 @@
 # Migration Plan: OrbitOne & TouchOrbit into cloudit-platform
 
+> Historical notice: OrbitOne was renamed to NotchMe. Historical identifiers in this document are intentionally preserved.
+
 > Status: **IN PROGRESS** — Phases 1, 2, and 3 complete; Phase 4 not started.  
 > Branch: `migration/orbitone-touchorbit` (to be created).  
 > Approved by: product owner.

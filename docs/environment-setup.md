@@ -1,4 +1,4 @@
-# CloudIT Platform — Environment Setup
+# CloudIT Platform â€” Environment Setup
 
 This document provides a template for environment variables in new apps and explains how to manage secrets in development and production.
 
@@ -126,8 +126,8 @@ Only needed for apps that publish events to n8n.
 1. App `.env` files live next to their `docker-compose.yml` files. For example:
 
    ```
-   /opt/cloudit/cloudit-platform/apps/orbitone-api/.env
-   /opt/cloudit/cloudit-platform/apps/orbitone-web/.env
+   /opt/cloudit/cloudit-platform/apps/notchme-api/.env
+   /opt/cloudit/cloudit-platform/apps/notchme-web/.env
    ```
 
 2. The deploy script (`infra/scripts/deploy.sh`) picks up these files via `env_file` in Docker Compose.
@@ -166,7 +166,7 @@ The workflow passes `DOMAIN` to the server before running `deploy.sh`.
 1. Copy all example env files:
 
    ```bash
-   for svc in traefik postgres redis n8n uptime-kuma platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web; do
+   for svc in traefik postgres redis n8n uptime-kuma platform-api hospitality-api notchme-api touchorbit-api platform-web hospitality-web notchme-web touchorbit-web; do
      cp infra/$svc/.env.example infra/$svc/.env 2>/dev/null || cp apps/$svc/.env.example apps/$svc/.env 2>/dev/null
    done
    ```

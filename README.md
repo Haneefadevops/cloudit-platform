@@ -32,8 +32,8 @@ Built with **Docker + Docker Compose**, **NestJS**, **Next.js**, **Tailwind CSS*
 | **Platform Web** | Platform dashboard | Yes |
 | **Hospitality API** | Hospitality OS backend | Yes |
 | **Hospitality Web** | Hospitality dashboard | Yes |
-| **OrbitOne API** | Digital business cards backend | Yes |
-| **OrbitOne Web** | Digital business cards dashboard | Yes |
+| **NotchMe API** | Digital business cards backend | Yes |
+| **NotchMe Web** | Digital business cards dashboard | Yes |
 | **TouchOrbit HR API** | HR management backend | Yes |
 | **TouchOrbit HR Web** | HR management dashboard | Yes |
 
@@ -44,7 +44,7 @@ git clone https://github.com/YOUR_ORG/cloudit-platform.git
 cd cloudit-platform
 
 # Copy example env files (edit with real values before deploying)
-for svc in traefik postgres redis n8n uptime-kuma platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web; do
+for svc in traefik postgres redis n8n uptime-kuma platform-api hospitality-api notchme-api touchorbit-api platform-web hospitality-web notchme-web touchorbit-web; do
   cp infra/$svc/.env.example infra/$svc/.env 2>/dev/null || cp apps/$svc/.env.example apps/$svc/.env 2>/dev/null
 done
 
@@ -53,13 +53,13 @@ done
 ```
 
 Services will be available (add to `/etc/hosts` for local dev):
-- `http://traefik.localhost:8080` — Traefik dashboard
-- `https://n8n.localhost` — n8n
-- `https://status.localhost` — Uptime Kuma
-- `https://app.localhost` — Platform Web
-- `https://hospitality.localhost` — Hospitality Web
-- `https://orbitone.localhost` — OrbitOne Web
-- `https://touchorbit.localhost` — TouchOrbit HR Web
+- `http://traefik.localhost:8080` â€” Traefik dashboard
+- `https://n8n.localhost` â€” n8n
+- `https://status.localhost` â€” Uptime Kuma
+- `https://app.localhost` â€” Platform Web
+- `https://hospitality.localhost` â€” Hospitality Web
+- `https://notchme.localhost` â€” NotchMe Web
+- `https://touchorbit.localhost` â€” TouchOrbit HR Web
 
 ## How to Deploy
 
@@ -168,54 +168,54 @@ cd infra/n8n && docker compose restart
 
 ```
 cloudit-platform/
-├── .github/workflows/
-│   ├── deploy.yml              # Production CI/CD
-│   └── pr-checks.yml           # PR checks
-├── apps/
-│   ├── hospitality-api/        # Hospitality OS API
-│   ├── hospitality-web/        # Hospitality OS dashboard
-│   ├── orbitone-api/           # OrbitOne API
-│   ├── orbitone-web/           # OrbitOne dashboard
-│   ├── platform-api/           # Core platform API
-│   ├── platform-web/           # Platform dashboard
-│   ├── touchorbit-api/         # TouchOrbit HR API
-│   └── touchorbit-web/         # TouchOrbit HR dashboard
-├── docs/
-│   ├── architecture.md             # Architecture overview
-│   ├── backup-restore.md           # Backup procedures
-│   ├── deployment-guide.md         # Deployment procedures
-│   ├── disk-management.md          # Cleanup and monitoring
-│   ├── environment-setup.md        # Environment variable templates
-│   ├── incident-recovery.md        # Incident runbook
-│   ├── new-app-guide.md            # Quick checklist for adding an app
-│   ├── new-saas-product-guide.md   # Full SaaS onboarding guide
-│   ├── routing-examples.md         # Traefik routing patterns
-│   ├── security.md                 # Application security
-│   ├── server-hardening.md         # Server setup guide
-│   └── shared-packages.md          # Shared package usage
-├── infra/
-│   ├── backups/                # Backup scripts
-│   ├── docker-compose.network.yml
-│   ├── hospitality-api/        # Hospitality API compose
-│   ├── hospitality-web/        # Hospitality Web compose
-│   ├── orbitone-api/           # OrbitOne API compose
-│   ├── orbitone-web/           # OrbitOne Web compose
-│   ├── maintenance/            # Maintenance page compose
-│   ├── touchorbit-api/         # TouchOrbit HR API compose
-│   └── touchorbit-web/         # TouchOrbit HR Web compose
-│   ├── n8n/
-│   ├── platform-api/           # Platform API compose
-│   ├── platform-web/           # Platform Web compose
-│   ├── postgres/
-│   ├── redis/
-│   ├── scripts/                # deploy.sh, rollback.sh, etc.
-│   ├── traefik/
-│   └── uptime-kuma/
-├── packages/
-│   └── ui/                     # Shared UI components
-├── .gitignore
-├── README.md
-└── package.json
+â”œâ”€â”€ .github/workflows/
+â”‚   â”œâ”€â”€ deploy.yml              # Production CI/CD
+â”‚   â””â”€â”€ pr-checks.yml           # PR checks
+â”œâ”€â”€ apps/
+â”‚   â”œâ”€â”€ hospitality-api/        # Hospitality OS API
+â”‚   â”œâ”€â”€ hospitality-web/        # Hospitality OS dashboard
+â”‚   â”œâ”€â”€ notchme-api/           # NotchMe API
+â”‚   â”œâ”€â”€ notchme-web/           # NotchMe dashboard
+â”‚   â”œâ”€â”€ platform-api/           # Core platform API
+â”‚   â”œâ”€â”€ platform-web/           # Platform dashboard
+â”‚   â”œâ”€â”€ touchorbit-api/         # TouchOrbit HR API
+â”‚   â””â”€â”€ touchorbit-web/         # TouchOrbit HR dashboard
+â”œâ”€â”€ docs/
+â”‚   â”œâ”€â”€ architecture.md             # Architecture overview
+â”‚   â”œâ”€â”€ backup-restore.md           # Backup procedures
+â”‚   â”œâ”€â”€ deployment-guide.md         # Deployment procedures
+â”‚   â”œâ”€â”€ disk-management.md          # Cleanup and monitoring
+â”‚   â”œâ”€â”€ environment-setup.md        # Environment variable templates
+â”‚   â”œâ”€â”€ incident-recovery.md        # Incident runbook
+â”‚   â”œâ”€â”€ new-app-guide.md            # Quick checklist for adding an app
+â”‚   â”œâ”€â”€ new-saas-product-guide.md   # Full SaaS onboarding guide
+â”‚   â”œâ”€â”€ routing-examples.md         # Traefik routing patterns
+â”‚   â”œâ”€â”€ security.md                 # Application security
+â”‚   â”œâ”€â”€ server-hardening.md         # Server setup guide
+â”‚   â””â”€â”€ shared-packages.md          # Shared package usage
+â”œâ”€â”€ infra/
+â”‚   â”œâ”€â”€ backups/                # Backup scripts
+â”‚   â”œâ”€â”€ docker-compose.network.yml
+â”‚   â”œâ”€â”€ hospitality-api/        # Hospitality API compose
+â”‚   â”œâ”€â”€ hospitality-web/        # Hospitality Web compose
+â”‚   â”œâ”€â”€ notchme-api/           # NotchMe API compose
+â”‚   â”œâ”€â”€ notchme-web/           # NotchMe Web compose
+â”‚   â”œâ”€â”€ maintenance/            # Maintenance page compose
+â”‚   â”œâ”€â”€ touchorbit-api/         # TouchOrbit HR API compose
+â”‚   â””â”€â”€ touchorbit-web/         # TouchOrbit HR Web compose
+â”‚   â”œâ”€â”€ n8n/
+â”‚   â”œâ”€â”€ platform-api/           # Platform API compose
+â”‚   â”œâ”€â”€ platform-web/           # Platform Web compose
+â”‚   â”œâ”€â”€ postgres/
+â”‚   â”œâ”€â”€ redis/
+â”‚   â”œâ”€â”€ scripts/                # deploy.sh, rollback.sh, etc.
+â”‚   â”œâ”€â”€ traefik/
+â”‚   â””â”€â”€ uptime-kuma/
+â”œâ”€â”€ packages/
+â”‚   â””â”€â”€ ui/                     # Shared UI components
+â”œâ”€â”€ .gitignore
+â”œâ”€â”€ README.md
+â””â”€â”€ package.json
 ```
 
 ## Architecture
@@ -225,7 +225,7 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture descr
 High-level flow:
 
 ```
-Internet → Cloudflare → Traefik → App services → PostgreSQL / Redis
+Internet â†’ Cloudflare â†’ Traefik â†’ App services â†’ PostgreSQL / Redis
 ```
 
 ## Documentation
@@ -249,11 +249,11 @@ Internet → Cloudflare → Traefik → App services → PostgreSQL / Redis
 
 | Sprint | Status |
 |--------|--------|
-| Sprint 3 — Shared Frontend Foundation | ✅ Complete |
-| Sprint 4 — Hospitality OS MVP | ✅ Complete |
-| Sprint 5 — Platform Admin & Multi-tenancy | ✅ Complete |
-| Sprint 6 — DevOps, Security & Reliability | ✅ Complete |
-| Sprint 7 — Future Product Readiness | ✅ Complete |
+| Sprint 3 â€” Shared Frontend Foundation | âœ… Complete |
+| Sprint 4 â€” Hospitality OS MVP | âœ… Complete |
+| Sprint 5 â€” Platform Admin & Multi-tenancy | âœ… Complete |
+| Sprint 6 â€” DevOps, Security & Reliability | âœ… Complete |
+| Sprint 7 â€” Future Product Readiness | âœ… Complete |
 
 > **All sprints complete.** The platform is ready for further product development and deployment.
 
@@ -269,4 +269,4 @@ See [docs/new-saas-product-guide.md](docs/new-saas-product-guide.md) for adding 
 
 ## License
 
-MIT — see [LICENSE](LICENSE) (placeholder; add a `LICENSE` file when distributing).
+MIT â€” see [LICENSE](LICENSE) (placeholder; add a `LICENSE` file when distributing).

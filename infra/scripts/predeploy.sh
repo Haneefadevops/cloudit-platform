@@ -29,7 +29,7 @@ tag_previous_image() {
 
 cd "$PROJECT_ROOT"
 
-api_services=(touchorbit-api platform-api hospitality-api orbitone-api)
+api_services=(touchorbit-api platform-api hospitality-api notchme-api)
 
 for svc in "${api_services[@]}"; do
   tag_previous_image "$svc"

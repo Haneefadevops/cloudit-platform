@@ -1,4 +1,4 @@
-# CloudIT Platform — Routing Examples
+# CloudIT Platform â€” Routing Examples
 
 This document shows how the platform routes public traffic to individual apps using **Traefik** inside Docker Compose.
 
@@ -19,10 +19,10 @@ labels:
   - "traefik.http.services.<service-name>.loadbalancer.server.port=<container-port>"
 ```
 
-- `Host(...)` — matches the request hostname.
-- `entrypoints=websecure` — listens on HTTPS (port 443).
-- `tls.certresolver=cloudflare` — requests/renews an SSL certificate via Cloudflare DNS.
-- `loadbalancer.server.port` — the internal container port Traefik forwards to.
+- `Host(...)` â€” matches the request hostname.
+- `entrypoints=websecure` â€” listens on HTTPS (port 443).
+- `tls.certresolver=cloudflare` â€” requests/renews an SSL certificate via Cloudflare DNS.
+- `loadbalancer.server.port` â€” the internal container port Traefik forwards to.
 
 ---
 
@@ -30,47 +30,47 @@ labels:
 
 This is the pattern used by every CloudIT app.
 
-### Example: OrbitOne Web
+### Example: NotchMe Web
 
 ```yaml
-# infra/orbitone-web/docker-compose.yml
+# infra/notchme-web/docker-compose.yml
 labels:
   - "traefik.enable=true"
-  - "traefik.http.routers.orbitone-web.rule=Host(`orbitone.${DOMAIN:-cloudit.lk}`)"
-  - "traefik.http.routers.orbitone-web.entrypoints=websecure"
-  - "traefik.http.routers.orbitone-web.tls.certresolver=cloudflare"
-  - "traefik.http.routers.orbitone-web.tls.domains[0].main=${DOMAIN:-cloudit.lk}"
-  - "traefik.http.routers.orbitone-web.tls.domains[0].sans=*.${DOMAIN:-cloudit.lk}"
-  - "traefik.http.services.orbitone-web.loadbalancer.server.port=3005"
+  - "traefik.http.routers.notchme-web.rule=Host(`notchme.${DOMAIN:-cloudit.lk}`)"
+  - "traefik.http.routers.notchme-web.entrypoints=websecure"
+  - "traefik.http.routers.notchme-web.tls.certresolver=cloudflare"
+  - "traefik.http.routers.notchme-web.tls.domains[0].main=${DOMAIN:-cloudit.lk}"
+  - "traefik.http.routers.notchme-web.tls.domains[0].sans=*.${DOMAIN:-cloudit.lk}"
+  - "traefik.http.services.notchme-web.loadbalancer.server.port=3005"
 ```
 
 Public URL:
 
 ```
-https://orbitone.cloudit.lk
+https://notchme.cloudit.lk
 ```
 
 Internal target:
 
 ```
-http://orbitone-web:3005
+http://notchme-web:3005
 ```
 
-### Example: OrbitOne API
+### Example: NotchMe API
 
 ```yaml
 labels:
   - "traefik.enable=true"
-  - "traefik.http.routers.orbitone-api.rule=Host(`api-orbitone.${DOMAIN:-cloudit.lk}`)"
-  - "traefik.http.routers.orbitone-api.entrypoints=websecure"
-  - "traefik.http.routers.orbitone-api.tls.certresolver=cloudflare"
-  - "traefik.http.services.orbitone-api.loadbalancer.server.port=3004"
+  - "traefik.http.routers.notchme-api.rule=Host(`api-notchme.${DOMAIN:-cloudit.lk}`)"
+  - "traefik.http.routers.notchme-api.entrypoints=websecure"
+  - "traefik.http.routers.notchme-api.tls.certresolver=cloudflare"
+  - "traefik.http.services.notchme-api.loadbalancer.server.port=3004"
 ```
 
 Public URL:
 
 ```
-https://api-orbitone.cloudit.lk
+https://api-notchme.cloudit.lk
 ```
 
 ---
@@ -182,7 +182,7 @@ Middlewares are defined in `infra/traefik/dynamic/middlewares.yml` and reference
 
 ```yaml
 labels:
-  - "traefik.http.routers.orbitone-web.middlewares=security-headers@file"
+  - "traefik.http.routers.notchme-web.middlewares=security-headers@file"
 ```
 
 ### Basic Auth (Dashboards)
@@ -202,7 +202,7 @@ Application-level rate limiting is handled by `@nestjs/throttler` inside each AP
 labels:
   - "traefik.http.middlewares.public-ratelimit.ratelimit.average=100"
   - "traefik.http.middlewares.public-ratelimit.ratelimit.burst=50"
-  - "traefik.http.routers.orbitone-api.middlewares=public-ratelimit"
+  - "traefik.http.routers.notchme-api.middlewares=public-ratelimit"
 ```
 
 ---
@@ -230,6 +230,6 @@ Apps should use internal container names (e.g. `http://postgres:5432`) for datab
 
 ## See Also
 
-- `infra/traefik/traefik.yml` — static Traefik configuration
-- `infra/traefik/dynamic/middlewares.yml` — middleware definitions
-- `docs/new-app-guide.md` — full checklist for adding an app
+- `infra/traefik/traefik.yml` â€” static Traefik configuration
+- `infra/traefik/dynamic/middlewares.yml` â€” middleware definitions
+- `docs/new-app-guide.md` â€” full checklist for adding an app

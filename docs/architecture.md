@@ -1,4 +1,4 @@
-# CloudIT Platform — Architecture
+# CloudIT Platform â€” Architecture
 
 ## Overview
 
@@ -52,11 +52,11 @@ CloudIT Platform is a lightweight, self-hosted multi-tenant SaaS platform runnin
 | Uptime Kuma | Monitoring & status pages | Yes | 512 MB |
 | Platform API | Auth, users, organizations, events | Yes | 1 GB |
 | Hospitality API | Hospitality OS backend | Yes | 1 GB |
-| OrbitOne API | Digital business cards backend | Yes | 1 GB |
+| NotchMe API | Digital business cards backend | Yes | 1 GB |
 | TouchOrbit HR API | HR management backend | Yes | 1 GB |
 | Platform Web | Platform dashboard | Yes | 512 MB |
 | Hospitality Web | Hospitality dashboard | Yes | 512 MB |
-| OrbitOne Web | Digital business cards dashboard | Yes | 512 MB |
+| NotchMe Web | Digital business cards dashboard | Yes | 512 MB |
 | TouchOrbit HR Web | HR management dashboard | Yes | 512 MB |
 
 ## Resource Allocation
@@ -72,11 +72,11 @@ Total reserved memory for Docker services is kept under ~6.5 GB to leave room fo
 | uptime-kuma | 512 MB | 128 MB |
 | platform-api | 1 GB | 256 MB |
 | hospitality-api | 1 GB | 256 MB |
-| orbitone-api | 1 GB | 256 MB |
+| notchme-api | 1 GB | 256 MB |
 | touchorbit-api | 1 GB | 256 MB |
 | platform-web | 512 MB | 128 MB |
 | hospitality-web | 512 MB | 128 MB |
-| orbitone-web | 512 MB | 128 MB |
+| notchme-web | 512 MB | 128 MB |
 | touchorbit-web | 512 MB | 128 MB |
 
 ## Docker Networking
@@ -85,10 +85,10 @@ All services connect to the external `cloudit` bridge network. This allows conta
 
 ## Shared Packages
 
-- `@cloudit/ui` — reusable React + Tailwind components
-- `@cloudit/auth` — planned shared authentication helpers
-- `@cloudit/database` — planned shared Prisma/connection helpers
-- `@cloudit/config` — planned shared environment/configuration utilities
+- `@cloudit/ui` â€” reusable React + Tailwind components
+- `@cloudit/auth` â€” planned shared authentication helpers
+- `@cloudit/database` â€” planned shared Prisma/connection helpers
+- `@cloudit/config` â€” planned shared environment/configuration utilities
 
 ## Domains
 
@@ -101,8 +101,8 @@ All services connect to the external `cloudit` bridge network. This allows conta
 | Platform API | `api-platform.<DOMAIN>` |
 | Hospitality Web | `hospitality.<DOMAIN>` |
 | Hospitality API | `api-hospitality.<DOMAIN>` |
-| OrbitOne Web | `orbitone.<DOMAIN>` |
-| OrbitOne API | `api-orbitone.<DOMAIN>` |
+| NotchMe Web | `notchme.<DOMAIN>` |
+| NotchMe API | `api-notchme.<DOMAIN>` |
 | TouchOrbit HR Web | `touchorbit.<DOMAIN>` |
 | TouchOrbit HR API | `api-touchorbit.<DOMAIN>` |
 

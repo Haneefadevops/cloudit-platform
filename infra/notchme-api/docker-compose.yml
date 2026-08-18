@@ -1,0 +1,44 @@
+services:
+  notchme-api:
+    build:
+      context: ../../apps/notchme-api
+      dockerfile: Dockerfile
+    image: cloudit/notchme-api:latest
+    container_name: notchme-api
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file:
+      - ../../apps/notchme-api/.env
+    environment:
+      - NODE_ENV=production
+      - PORT=3004
+    networks:
+      - cloudit
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.notchme-api.rule=Host(`${NOTCHME_API_HOST:?NOTCHME_API_HOST must be set}`)"
+      - "traefik.http.routers.notchme-api.entrypoints=websecure"
+      - "traefik.http.routers.notchme-api.tls.certresolver=cloudflare"
+      - "traefik.http.services.notchme-api.loadbalancer.server.port=3004"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3004/api/health/live || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+networks:
+  cloudit:
+    external: true

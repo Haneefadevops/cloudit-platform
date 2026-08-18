@@ -226,7 +226,7 @@ log "Ensuring application databases exist..."
 log "Running pre-deployment checks and migrations..."
 "$PROJECT_ROOT/infra/scripts/predeploy.sh"
 
-frontend_services=(platform-web hospitality-web orbitone-web touchorbit-web touchorbit-admin-web touchorbit-employee-web fixifai-web)
+frontend_services=(platform-web hospitality-web notchme-web touchorbit-web touchorbit-admin-web touchorbit-employee-web fixifai-web)
 
 docker compose -f infra/traefik/docker-compose.yml up -d
 wait_for_service traefik
@@ -275,10 +275,10 @@ docker compose -f infra/platform-api/docker-compose.yml up -d platform-api
 wait_for_service platform-api
 
 log "Starting product APIs..."
-for svc in hospitality-api orbitone-api touchorbit-api; do
+for svc in hospitality-api notchme-api touchorbit-api; do
   docker compose -f "infra/${svc}/docker-compose.yml" up -d "$svc"
 done
-for svc in hospitality-api orbitone-api touchorbit-api; do
+for svc in hospitality-api notchme-api touchorbit-api; do
   wait_for_service "$svc"
 done
 

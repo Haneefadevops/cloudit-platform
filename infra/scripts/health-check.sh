@@ -4,7 +4,8 @@ set -euo pipefail
 # CloudIT Platform — post-deployment health checks.
 # Exits non-zero if any public endpoint is unhealthy.
 
-DOMAIN="${DOMAIN:-cloudit.lk}"
+NOTCHME_WEB_URL="${NOTCHME_WEB_URL:-}"
+NOTCHME_API_URL="${NOTCHME_API_URL:-}"
 TIMEOUT_SECONDS="${HEALTH_TIMEOUT:-120}"
 
 log() {
@@ -14,11 +15,9 @@ log() {
 endpoints=(
   "https://api-platform.${DOMAIN}/api/health/live"
   "https://api-hospitality.${DOMAIN}/api/health/live"
-  "https://api-orbitone.${DOMAIN}/api/health/live"
   "https://api-touchorbit.${DOMAIN}/api/health/live"
   "https://platform.${DOMAIN}"
   "https://hospitality.${DOMAIN}"
-  "https://orbitone.${DOMAIN}"
   "https://touchorbit.${DOMAIN}"
   "https://to-admin.${DOMAIN}"
   "https://to-employee.${DOMAIN}"
@@ -28,6 +27,13 @@ endpoints=(
   "https://app.thereplyte.com"
   "https://inbox.thereplyte.com"
 )
+
+if [ -n "$NOTCHME_API_URL" ]; then
+  endpoints+=("${NOTCHME_API_URL%/}/api/health/live")
+fi
+if [ -n "$NOTCHME_WEB_URL" ]; then
+  endpoints+=("${NOTCHME_WEB_URL%/}")
+fi
 
 log "Starting health checks (timeout ${TIMEOUT_SECONDS}s)..."
 
