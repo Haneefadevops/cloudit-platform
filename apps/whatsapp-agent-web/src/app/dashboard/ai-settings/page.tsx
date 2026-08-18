@@ -32,6 +32,7 @@ interface Client {
   outsideHoursMessage?: string | null;
   csatEnabled?: boolean | null;
   csatMessage?: string | null;
+  businessProfile?: Record<string, unknown> | null;
 }
 
 function AiSettingsForm() {
@@ -51,6 +52,10 @@ function AiSettingsForm() {
     aiEnabled: true,
     welcomeMessage: '',
     fallbackMessage: '',
+    welcomeMessageMessenger: '',
+    fallbackMessageMessenger: '',
+    welcomeMessageInstagram: '',
+    fallbackMessageInstagram: '',
     handoffKeywords: '',
     operatingHoursStart: '',
     operatingHoursEnd: '',
@@ -91,6 +96,8 @@ function AiSettingsForm() {
   useEffect(() => {
     const client = clients.find((c) => c.id === selectedId);
     if (!client) return;
+    const channelMessages =
+      (client.businessProfile?.channelMessages as Record<string, { welcomeMessage?: string; fallbackMessage?: string }>) || {};
     setForm({
       systemPrompt: client.systemPrompt || '',
       aiTemperature: client.aiTemperature ?? 1.0,
@@ -100,6 +107,10 @@ function AiSettingsForm() {
       aiEnabled: client.aiEnabled ?? true,
       welcomeMessage: client.welcomeMessage || '',
       fallbackMessage: client.fallbackMessage || '',
+      welcomeMessageMessenger: channelMessages.messenger?.welcomeMessage || '',
+      fallbackMessageMessenger: channelMessages.messenger?.fallbackMessage || '',
+      welcomeMessageInstagram: channelMessages.instagram?.welcomeMessage || '',
+      fallbackMessageInstagram: channelMessages.instagram?.fallbackMessage || '',
       handoffKeywords: client.handoffKeywords || '',
       operatingHoursStart: client.operatingHoursStart || '',
       operatingHoursEnd: client.operatingHoursEnd || '',
@@ -114,6 +125,22 @@ function AiSettingsForm() {
     e.preventDefault();
     if (!selectedId) return;
     setLoading(true);
+
+    const client = clients.find((c) => c.id === selectedId);
+    const existingProfile = client?.businessProfile || {};
+    const channelMessages: Record<string, { welcomeMessage?: string; fallbackMessage?: string }> = {};
+    if (form.welcomeMessageMessenger || form.fallbackMessageMessenger) {
+      channelMessages.messenger = {
+        ...(form.welcomeMessageMessenger ? { welcomeMessage: form.welcomeMessageMessenger } : {}),
+        ...(form.fallbackMessageMessenger ? { fallbackMessage: form.fallbackMessageMessenger } : {}),
+      };
+    }
+    if (form.welcomeMessageInstagram || form.fallbackMessageInstagram) {
+      channelMessages.instagram = {
+        ...(form.welcomeMessageInstagram ? { welcomeMessage: form.welcomeMessageInstagram } : {}),
+        ...(form.fallbackMessageInstagram ? { fallbackMessage: form.fallbackMessageInstagram } : {}),
+      };
+    }
 
     const payload = {
       systemPrompt: form.systemPrompt || null,
@@ -131,6 +158,12 @@ function AiSettingsForm() {
       outsideHoursMessage: form.outsideHoursMessage || null,
       csatEnabled: form.csatEnabled,
       csatMessage: form.csatMessage || null,
+      businessProfile: {
+        ...existingProfile,
+        ...(Object.keys(channelMessages).length > 0
+          ? { channelMessages }
+          : {}),
+      },
     };
 
     try {
@@ -160,7 +193,7 @@ function AiSettingsForm() {
     <div className="flex flex-col gap-4">
       <p className="m-0 text-sm text-muted">
         Configure AI behaviour per client. These settings are used by the
-        WhatsApp message handler.
+        message handler across WhatsApp, Messenger, and Instagram.
       </p>
 
       <Card title="Client">
@@ -285,6 +318,41 @@ function AiSettingsForm() {
                   setForm({ ...form, fallbackMessage: e.target.value })
                 }
               />
+
+              <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                Channel overrides (optional)
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Input
+                  placeholder="Messenger welcome message"
+                  value={form.welcomeMessageMessenger}
+                  onChange={(e) =>
+                    setForm({ ...form, welcomeMessageMessenger: e.target.value })
+                  }
+                />
+                <Input
+                  placeholder="Messenger fallback message"
+                  value={form.fallbackMessageMessenger}
+                  onChange={(e) =>
+                    setForm({ ...form, fallbackMessageMessenger: e.target.value })
+                  }
+                />
+                <Input
+                  placeholder="Instagram welcome message"
+                  value={form.welcomeMessageInstagram}
+                  onChange={(e) =>
+                    setForm({ ...form, welcomeMessageInstagram: e.target.value })
+                  }
+                />
+                <Input
+                  placeholder="Instagram fallback message"
+                  value={form.fallbackMessageInstagram}
+                  onChange={(e) =>
+                    setForm({ ...form, fallbackMessageInstagram: e.target.value })
+                  }
+                />
+              </div>
+
               <Input
                 placeholder="Handoff keywords (comma separated)"
                 value={form.handoffKeywords}

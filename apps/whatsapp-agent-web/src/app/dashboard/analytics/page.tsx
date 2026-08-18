@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { getStoredUser, isPortalUser } from '../portal';
 import { apiFetch } from '@/lib/api';
 import {
+  Badge,
   Button,
   Card,
   EmptyState,
@@ -31,6 +32,10 @@ interface Analytics {
   aiResolutionRate: number | null;
   aiResolvedWithoutHandoff: number;
   totalMessages: number;
+  byChannel?: {
+    conversations: { channel: string; count: number }[];
+    messages: { channel: string; count: number }[];
+  };
   topHandoffReasons: { reason: string; count: number }[];
   dailyVolume: { date: string; count: number }[];
   avgResolutionTimeMinutes: number | null;
@@ -598,6 +603,55 @@ export default function AnalyticsPage() {
                 <div className="text-xs font-semibold">{d.count}</div>
               </div>
             ))}
+          </div>
+        )}
+      </Card>
+
+      <Card title="Channel Breakdown">
+        {!data.byChannel ||
+        (data.byChannel.conversations.length === 0 &&
+          data.byChannel.messages.length === 0) ? (
+          <EmptyState title="No channel data in this period" />
+        ) : (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div>
+              <div className="mb-2 text-sm font-semibold">Conversations</div>
+              <div className="flex flex-wrap gap-2">
+                {data.byChannel.conversations.map((c) => (
+                  <Badge
+                    key={c.channel}
+                    tone={
+                      c.channel === 'whatsapp'
+                        ? 'teal'
+                        : c.channel === 'messenger'
+                          ? 'blue'
+                          : 'amber'
+                    }
+                  >
+                    {c.channel} {c.count}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="mb-2 text-sm font-semibold">Messages</div>
+              <div className="flex flex-wrap gap-2">
+                {data.byChannel.messages.map((c) => (
+                  <Badge
+                    key={c.channel}
+                    tone={
+                      c.channel === 'whatsapp'
+                        ? 'teal'
+                        : c.channel === 'messenger'
+                          ? 'blue'
+                          : 'amber'
+                    }
+                  >
+                    {c.channel} {c.count}
+                  </Badge>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </Card>

@@ -71,6 +71,7 @@ export default function PlaygroundPage() {
   const toast = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
+  const [channel, setChannel] = useState<'whatsapp' | 'messenger' | 'instagram'>('whatsapp');
   const [message, setMessage] = useState('');
   const [historyJson, setHistoryJson] = useState('');
   const [loading, setLoading] = useState(false);
@@ -146,7 +147,7 @@ export default function PlaygroundPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: message.trim(), history }),
+        body: JSON.stringify({ message: message.trim(), channel, history }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -185,6 +186,22 @@ export default function PlaygroundPage() {
           ))}
         </Select>
       </Card>
+
+      {selectedId && (
+        <Card className="max-w-md">
+          <Select
+            label="Channel"
+            value={channel}
+            onChange={(e) =>
+              setChannel(e.target.value as 'whatsapp' | 'messenger' | 'instagram')
+            }
+          >
+            <option value="whatsapp">WhatsApp</option>
+            <option value="messenger">Messenger</option>
+            <option value="instagram">Instagram</option>
+          </Select>
+        </Card>
+      )}
 
       <Card title="Test message" className="max-w-2xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">

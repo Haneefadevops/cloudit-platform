@@ -37,6 +37,8 @@ export class PlaygroundService {
       throw new NotFoundException(`Client ${clientId} not found`);
     }
 
+    const channel = dto.channel || 'whatsapp';
+
     const searchResults = await this.knowledgeBaseService.search(
       clientId,
       dto.message,
@@ -92,7 +94,7 @@ export class PlaygroundService {
     }
 
     // Modules: act on real data via a dedicated playground customer so staff
-    // can test booking/order flows end-to-end without WhatsApp.
+    // can test booking/order flows end-to-end across any channel.
     let bookingContext: Awaited<
       ReturnType<BookingActionsService['buildPromptContext']>
     > | null = null;
@@ -103,19 +105,28 @@ export class PlaygroundService {
       id: string;
       name: string | null;
       phoneNumber: string | null;
+      channel: string;
+      channelSourceId: string | null;
     } | null = null;
     if (client.bookingsEnabled || client.ordersEnabled) {
-      playgroundCustomer = await this.prisma.customer.upsert({
+      const existing = await this.prisma.customer.findFirst({
         where: {
-          clientId_phoneNumber: { clientId, phoneNumber: 'playground' },
-        },
-        update: {},
-        create: {
           clientId,
-          phoneNumber: 'playground',
-          name: 'Playground Tester',
+          channel,
+          channelSourceId: 'playground',
         },
       });
+      playgroundCustomer = existing
+        ? existing
+        : await this.prisma.customer.create({
+            data: {
+              clientId,
+              channel,
+              channelSourceId: 'playground',
+              phoneNumber: channel === 'whatsapp' ? 'playground' : null,
+              name: 'Playground Tester',
+            },
+          });
       if (client.bookingsEnabled) {
         bookingContext = await this.bookingActionsService.buildPromptContext(
           client,

@@ -58,6 +58,7 @@ export class AnalyticsController {
       csat,
       tokenUsage,
       aiResolution,
+      byChannel,
       bookingTotal,
       bookingConfirmed,
       bookingNoShow,
@@ -95,6 +96,7 @@ export class AnalyticsController {
       this.getCsatStats(clientId, since, until),
       this.getTokenUsage(clientId, since, until),
       this.getAiResolution(clientId, since, until),
+      this.getByChannel(clientId, since, until),
       this.prisma.booking.count({
         where: { ...clientFilter, ...periodCreatedAt },
       }),
@@ -158,6 +160,7 @@ export class AnalyticsController {
       aiResolutionRate: aiResolution.rate,
       aiResolvedWithoutHandoff: aiResolution.withoutHandoff,
       totalMessages,
+      byChannel,
       topHandoffReasons,
       dailyVolume,
       avgResolutionTimeMinutes,
@@ -335,6 +338,38 @@ export class AnalyticsController {
     return {
       average: row?.avg == null ? null : Math.round(row.avg * 100) / 100,
       responses: Number(row?.count ?? 0),
+    };
+  }
+
+  private async getByChannel(clientId?: string, since?: Date, until?: Date) {
+    const conversationRows = await this.prisma.conversation.groupBy({
+      by: ['channel'],
+      where: {
+        ...(clientId ? { clientId } : {}),
+        ...(since ? { createdAt: { gte: since, lte: until } } : {}),
+      },
+      _count: { channel: true },
+    });
+    const messageRows = await this.prisma.$queryRaw<
+      { channel: string; count: bigint }[]
+    >`
+      SELECT c.channel, COUNT(*) as count
+      FROM messages m
+      JOIN conversations c ON c.id = m."conversationId"
+      WHERE 1=1
+      ${this.clientCond(clientId, 'c."clientId"')}
+      ${this.dateCond('m."createdAt"', since, until)}
+      GROUP BY c.channel
+    `;
+    return {
+      conversations: conversationRows.map((r) => ({
+        channel: r.channel,
+        count: r._count.channel,
+      })),
+      messages: messageRows.map((r) => ({
+        channel: r.channel,
+        count: Number(r.count),
+      })),
     };
   }
 

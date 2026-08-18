@@ -11,7 +11,14 @@ const PORTAL = {
 
 function setup() {
   const prisma = {
-    conversation: { count: jest.fn().mockResolvedValue(10) },
+    conversation: {
+      count: jest.fn().mockResolvedValue(10),
+      groupBy: jest.fn().mockResolvedValue([
+        { channel: 'whatsapp', _count: { channel: 6 } },
+        { channel: 'messenger', _count: { channel: 3 } },
+        { channel: 'instagram', _count: { channel: 1 } },
+      ]),
+    },
     message: { count: jest.fn().mockResolvedValue(50) },
     booking: { count: jest.fn().mockResolvedValue(4) },
     order: {
@@ -24,7 +31,19 @@ function setup() {
         ]),
       aggregate: jest.fn().mockResolvedValue({ _sum: { total: 9750 } }),
     },
-    $queryRaw: jest.fn().mockResolvedValue([{ count: 3, total: 8, without_handoff: 6, avg: 4.5, reason: 'test', date: '2026-07-24', prompt: 100, completion: 50 }]),
+    $queryRaw: jest.fn().mockImplementation((query: any) => {
+      const sql = typeof query === 'string' ? query : query?.strings?.join('') || '';
+      if (sql.includes('c.channel')) {
+        return Promise.resolve([
+          { channel: 'whatsapp', count: BigInt(40) },
+          { channel: 'messenger', count: BigInt(8) },
+          { channel: 'instagram', count: BigInt(2) },
+        ]);
+      }
+      return Promise.resolve([
+        { count: 3, total: 8, without_handoff: 6, avg: 4.5, reason: 'test', date: '2026-07-24', prompt: 100, completion: 50 },
+      ]);
+    }),
   };
   const config = { get: (_k: string, def?: unknown) => def };
   const controller = new AnalyticsController(prisma as never, config as never);
@@ -167,5 +186,27 @@ describe('AnalyticsController date range + new metrics', () => {
     expect(result.aiResolutionRate).toBe(0.75);
     // handoff count 3 / conversations 10
     expect(result.handoffRate).toBeCloseTo(0.3);
+  });
+
+  it('returns a channel breakdown for conversations and messages', async () => {
+    const { controller } = setup();
+    const result = (await controller.overview(STAFF, 'client-1')) as Record<
+      string,
+      any
+    >;
+
+    expect(result.byChannel).toBeDefined();
+    expect(result.byChannel.conversations).toEqual([
+      { channel: 'whatsapp', count: 6 },
+      { channel: 'messenger', count: 3 },
+      { channel: 'instagram', count: 1 },
+    ]);
+    expect(result.byChannel.messages).toBeDefined();
+    expect(Array.isArray(result.byChannel.messages)).toBe(true);
+    result.byChannel.messages.forEach((m: any) => {
+      expect(m).toHaveProperty('channel');
+      expect(m).toHaveProperty('count');
+      expect(typeof m.count).toBe('number');
+    });
   });
 });

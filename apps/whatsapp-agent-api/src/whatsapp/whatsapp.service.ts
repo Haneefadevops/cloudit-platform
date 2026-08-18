@@ -18,6 +18,15 @@ import { UsageService } from '../usage/usage.service';
 import { StaffAlertsService } from '../staff-alerts/staff-alerts.service';
 import { WorkflowRuntimeService } from '../workflows/workflow-runtime.service';
 
+function channelMessage(
+  client: { businessProfile?: any; welcomeMessage?: string | null; fallbackMessage?: string | null },
+  channel: string,
+  kind: 'welcomeMessage' | 'fallbackMessage',
+): string | null | undefined {
+  const overrides = client.businessProfile?.channelMessages?.[channel]?.[kind];
+  return overrides || client[kind];
+}
+
 /** Max AI replies per conversation before handing off to the human team. */
 export const AI_REPLY_LIMIT = 50;
 
@@ -287,12 +296,13 @@ export class WhatsAppService {
         });
       }
 
-      if (previousConversations === 0 && client.welcomeMessage) {
+      const welcomeMessage = channelMessage(client, channel, 'welcomeMessage');
+      if (previousConversations === 0 && welcomeMessage) {
         await this.prisma.message.create({
           data: {
             conversationId: conversation.id,
             senderType: 'bot',
-            content: client.welcomeMessage,
+            content: welcomeMessage,
           },
         });
         await this.sendToCustomer({
@@ -300,7 +310,7 @@ export class WhatsAppService {
           channel,
           to: from,
           chatwootConversationId: conversation.chatwootConversationId,
-          message: client.welcomeMessage,
+          message: welcomeMessage,
         });
       }
     }
@@ -558,7 +568,7 @@ export class WhatsAppService {
         aiTemperature: client.aiTemperature,
         aiModel: client.aiModel,
         maxTokens: client.maxTokens,
-        fallbackMessage: client.fallbackMessage || undefined,
+        fallbackMessage: channelMessage(client, channel, 'fallbackMessage') || undefined,
         language: client.language,
         timezone: client.timezone,
         ...(bookingContext

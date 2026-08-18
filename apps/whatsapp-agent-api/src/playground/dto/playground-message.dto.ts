@@ -14,6 +14,10 @@ export class PlaygroundMessageDto {
   message: string;
 
   @IsOptional()
+  @IsString()
+  channel?: 'whatsapp' | 'messenger' | 'instagram';
+
+  @IsOptional()
   @ValidateNested({ each: true })
   @Type(() => PlaygroundHistoryItemDto)
   history?: PlaygroundHistoryItemDto[];
