@@ -26,6 +26,16 @@ export type MeetingRecapDraft = {
   proposedFollowUpDueAt?: string | null;
 };
 
+export type AiRecapAvailability = {
+  enabled: boolean;
+  monthlyUsed: number;
+  monthlyLimit: number;
+  remaining: number;
+  maxAudioBytes: number;
+  acceptedAudioTypes: string[];
+  retention: string;
+};
+
 export function useMeetingRecap(bookingId: string, enabled = true) {
   return useQuery<MeetingRecap | null>({
     queryKey: ["meeting-recap", bookingId],
@@ -33,6 +43,20 @@ export function useMeetingRecap(bookingId: string, enabled = true) {
     queryFn: async () => {
       const result = await apiFetch<MeetingRecap | null>(
         `/v2/scheduling/bookings/${bookingId}/recap`,
+      );
+      if (!result.ok) throw new Error(result.error);
+      return result.data;
+    },
+  });
+}
+
+export function useAiRecapAvailability(bookingId: string, enabled = true) {
+  return useQuery<AiRecapAvailability>({
+    queryKey: ["meeting-recap-ai", bookingId],
+    enabled: enabled && !!bookingId,
+    queryFn: async () => {
+      const result = await apiFetch<AiRecapAvailability>(
+        `/v2/scheduling/bookings/${bookingId}/recap/ai`,
       );
       if (!result.ok) throw new Error(result.error);
       return result.data;
@@ -121,5 +145,41 @@ export function useFinalizeMeetingRecap(
       return result.data;
     },
     onSuccess: invalidate,
+  });
+}
+
+export function useGenerateAiMeetingRecap(
+  bookingId: string,
+  customerId?: string | null,
+) {
+  const invalidate = useRecapInvalidation(bookingId, customerId);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ audio }: { audio: File }) => {
+      const form = new FormData();
+      form.append("audio", audio);
+      form.append("consent", "true");
+      const result = await apiFetch<{
+        recap: MeetingRecap;
+        usage: {
+          monthlyUsed: number;
+          monthlyLimit: number;
+          remaining: number;
+        };
+        audioRetained: false;
+        transcriptRetained: false;
+      }>(`/v2/scheduling/bookings/${bookingId}/recap/ai`, {
+        method: "POST",
+        body: form,
+      });
+      if (!result.ok) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: async () => {
+      await invalidate();
+      await queryClient.invalidateQueries({
+        queryKey: ["meeting-recap-ai", bookingId],
+      });
+    },
   });
 }

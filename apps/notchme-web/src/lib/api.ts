@@ -1,7 +1,6 @@
 import type { ApiResult } from "./contracts";
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 if (
   typeof window === "undefined" &&
@@ -24,7 +23,10 @@ export async function apiFetch<T>(
       ...options,
       credentials: "include",
       headers: {
-        ...(options?.body ? { "Content-Type": "application/json" } : {}),
+        ...(options?.body &&
+        !(typeof FormData !== "undefined" && options.body instanceof FormData)
+          ? { "Content-Type": "application/json" }
+          : {}),
         ...options?.headers,
       },
     });

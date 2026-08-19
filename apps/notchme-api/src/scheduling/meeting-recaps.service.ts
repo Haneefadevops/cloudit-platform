@@ -34,6 +34,22 @@ type MeetingRecapRow = {
   updated_at: Date;
 };
 
+export type MeetingRecap = {
+  id: string;
+  bookingId: string;
+  customerId: string;
+  status: "draft" | "finalized";
+  source: "manual" | "ai_assisted";
+  summary: string;
+  keyPoints: string[];
+  commitments: string[];
+  privateNote: string | null;
+  proposedFollowUpTitle: string | null;
+  proposedFollowUpDueAt: Date | null;
+  finalizedAt: Date | null;
+  updatedAt: Date;
+};
+
 @Injectable()
 export class MeetingRecapsService {
   constructor(private readonly db: DatabaseService) {}
@@ -74,16 +90,34 @@ export class MeetingRecapsService {
     return result.rows[0] ?? null;
   }
 
-  async get(user: AuthContext, id: string): Promise<MeetingRecapRow | null> {
+  async get(user: AuthContext, id: string): Promise<MeetingRecap | null> {
     await this.booking(user, id);
-    return this.recap(this.organizationId(user), id);
+    const recap = await this.recap(this.organizationId(user), id);
+    return recap ? this.serialize(recap) : null;
   }
 
   async save(
     user: AuthContext,
     id: string,
     input: RecapDraftInput,
-  ): Promise<MeetingRecapRow> {
+  ): Promise<MeetingRecap> {
+    return this.saveDraft(user, id, input, "manual");
+  }
+
+  async saveAiDraft(
+    user: AuthContext,
+    id: string,
+    input: RecapDraftInput,
+  ): Promise<MeetingRecap> {
+    return this.saveDraft(user, id, input, "ai_assisted");
+  }
+
+  private async saveDraft(
+    user: AuthContext,
+    id: string,
+    input: RecapDraftInput,
+    source: "manual" | "ai_assisted",
+  ): Promise<MeetingRecap> {
     const organizationId = this.organizationId(user);
     const booking = await this.booking(user, id);
     if (
@@ -99,13 +133,17 @@ export class MeetingRecapsService {
     if (existing?.status === "finalized") {
       throw new ConflictException("Finalized recaps are immutable.");
     }
+    const privateNote =
+      source === "ai_assisted"
+        ? (existing?.private_note ?? null)
+        : input.privateNote || null;
 
     const result = await this.db.query<MeetingRecapRow>(
       `INSERT INTO meeting_recaps (
          organization_id, booking_id, customer_id, author_user_id, summary,
          key_points, commitments, private_note, proposed_follow_up_title,
-         proposed_follow_up_due_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         proposed_follow_up_due_at, source
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (organization_id, booking_id) DO UPDATE SET
          summary = EXCLUDED.summary,
          key_points = EXCLUDED.key_points,
@@ -113,6 +151,10 @@ export class MeetingRecapsService {
          private_note = EXCLUDED.private_note,
          proposed_follow_up_title = EXCLUDED.proposed_follow_up_title,
          proposed_follow_up_due_at = EXCLUDED.proposed_follow_up_due_at,
+         source = CASE
+           WHEN meeting_recaps.source = 'ai_assisted' THEN 'ai_assisted'
+           ELSE EXCLUDED.source
+         END,
          updated_at = now()
        WHERE meeting_recaps.status = 'draft'
        RETURNING *`,
@@ -124,14 +166,15 @@ export class MeetingRecapsService {
         input.summary,
         JSON.stringify(input.keyPoints),
         JSON.stringify(input.commitments),
-        input.privateNote || null,
+        privateNote,
         input.proposedFollowUpTitle || null,
         input.proposedFollowUpDueAt ?? null,
+        source,
       ],
     );
     const recap = result.rows[0];
     if (!recap) throw new ConflictException("Finalized recaps are immutable.");
-    return recap;
+    return this.serialize(recap);
   }
 
   async remove(user: AuthContext, id: string): Promise<void> {
@@ -185,7 +228,7 @@ export class MeetingRecapsService {
       if (recap.status === "finalized") {
         await client.query("COMMIT");
         return {
-          recap,
+          recap: this.serialize(recap),
           alreadyFinalized: true,
           followUpCreated: false,
         };
@@ -217,6 +260,14 @@ export class MeetingRecapsService {
         throw new ConflictException("Recap could not be finalized.");
       }
 
+      if (finalized.source === "ai_assisted") {
+        await client.query(
+          `UPDATE ai_recap_usage SET accepted_at = now()
+           WHERE recap_id = $1 AND status = 'succeeded' AND accepted_at IS NULL`,
+          [finalized.id],
+        );
+      }
+
       await client.query(
         `INSERT INTO customer_activities (
            customer_id, created_by_user_id, type, title, body, occurred_at
@@ -245,7 +296,7 @@ export class MeetingRecapsService {
 
       await client.query("COMMIT");
       return {
-        recap: finalized,
+        recap: this.serialize(finalized),
         alreadyFinalized: false,
         followUpCreated: followUpId !== null,
         followUpId,
@@ -256,5 +307,23 @@ export class MeetingRecapsService {
     } finally {
       client.release();
     }
+  }
+
+  private serialize(row: MeetingRecapRow): MeetingRecap {
+    return {
+      id: row.id,
+      bookingId: row.booking_id,
+      customerId: row.customer_id,
+      status: row.status,
+      source: row.source,
+      summary: row.summary,
+      keyPoints: row.key_points,
+      commitments: row.commitments,
+      privateNote: row.private_note,
+      proposedFollowUpTitle: row.proposed_follow_up_title,
+      proposedFollowUpDueAt: row.proposed_follow_up_due_at,
+      finalizedAt: row.finalized_at,
+      updatedAt: row.updated_at,
+    };
   }
 }

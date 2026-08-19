@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Trash2 } from "lucide-react";
+import { FileAudio, FileText, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useDeleteMeetingRecap,
+  useGenerateAiMeetingRecap,
+  useAiRecapAvailability,
   useFinalizeMeetingRecap,
   useMeetingRecap,
   useSaveMeetingRecap,
@@ -58,6 +60,8 @@ function MeetingRecapDialog({
   const save = useSaveMeetingRecap(bookingId, customerId);
   const remove = useDeleteMeetingRecap(bookingId, customerId);
   const finalize = useFinalizeMeetingRecap(bookingId, customerId);
+  const aiAvailability = useAiRecapAvailability(bookingId, open);
+  const generateAi = useGenerateAiMeetingRecap(bookingId, customerId);
   const [mode, setMode] = useState<"edit" | "review">("edit");
   const [summary, setSummary] = useState("");
   const [keyPoints, setKeyPoints] = useState("");
@@ -67,6 +71,8 @@ function MeetingRecapDialog({
   const [followUpDueAt, setFollowUpDueAt] = useState("");
   const [createFollowUp, setCreateFollowUp] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [audio, setAudio] = useState<File | null>(null);
+  const [aiConsent, setAiConsent] = useState(false);
 
   useEffect(() => {
     const recap = recapQuery.data;
@@ -152,6 +158,28 @@ function MeetingRecapDialog({
     setMessage("Draft deleted.");
   };
 
+  const generateAiDraft = async () => {
+    setMessage(null);
+    if (!audio || !aiConsent) {
+      setMessage("Choose a private voice note and confirm AI processing.");
+      return;
+    }
+    try {
+      await generateAi.mutateAsync({ audio });
+      setAudio(null);
+      setAiConsent(false);
+      setMessage(
+        "AI suggestions added to your private draft. Review and edit every detail before finalizing.",
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to generate AI suggestions.",
+      );
+    }
+  };
+
   const finalized = recapQuery.data?.status === "finalized";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -176,6 +204,73 @@ function MeetingRecapDialog({
           </div>
         ) : mode === "edit" && !finalized ? (
           <div className="space-y-4">
+            {recapQuery.data?.source === "ai_assisted" && (
+              <p className="rounded-xl border border-border bg-surface p-3 text-sm text-muted">
+                This draft contains AI suggestions. Check every fact and date;
+                you remain in control of what is finalized.
+              </p>
+            )}
+            {aiAvailability.data?.enabled && (
+              <section className="rounded-xl border border-border bg-surface p-4">
+                <div className="flex items-start gap-3">
+                  <FileAudio className="mt-0.5 h-5 w-5 text-primary" />
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Create a draft from a private voice note
+                    </p>
+                    <p className="mt-1 text-sm text-muted">
+                      AI suggests a recap only. It cannot finalize, create an
+                      action, or send a message.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-3">
+                  <Input
+                    aria-label="Private voice note"
+                    type="file"
+                    accept={aiAvailability.data.acceptedAudioTypes.join(",")}
+                    onChange={(event) =>
+                      setAudio(event.target.files?.[0] ?? null)
+                    }
+                  />
+                  <label className="flex min-h-11 items-start gap-3 text-sm text-foreground">
+                    <input
+                      className="mt-1"
+                      type="checkbox"
+                      checked={aiConsent}
+                      onChange={(event) => setAiConsent(event.target.checked)}
+                    />
+                    <span>
+                      I agree to send this voice note to the configured AI
+                      provider for this draft. NotchMe does not retain the audio
+                      or transcript.
+                    </span>
+                  </label>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={generateAiDraft}
+                      isLoading={generateAi.isPending}
+                      disabled={!audio || !aiConsent}
+                    >
+                      Generate private draft
+                    </Button>
+                    <span className="text-xs text-muted">
+                      {aiAvailability.data.remaining} of{" "}
+                      {aiAvailability.data.monthlyLimit} AI recaps remaining
+                      this month
+                    </span>
+                  </div>
+                </div>
+              </section>
+            )}
+            {aiAvailability.data && !aiAvailability.data.enabled && (
+              <p className="rounded-xl border border-border bg-surface p-3 text-sm text-muted">
+                AI assistance is optional and is not configured. You can use the
+                private recap normally.
+              </p>
+            )}
             <div>
               <Label htmlFor={`recap-summary-${bookingId}`}>
                 Meeting summary

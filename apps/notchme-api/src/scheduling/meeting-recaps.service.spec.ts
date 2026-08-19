@@ -161,6 +161,27 @@ describe("MeetingRecapsService finalization", () => {
     );
   });
 
+  it("records explicit acceptance when an AI-assisted draft is finalized", async () => {
+    const client = makeClient();
+    db.connect.mockResolvedValue(client);
+    client.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [booking] })
+      .mockResolvedValueOnce({ rows: [{ ...draft, source: "ai_assisted" }] })
+      .mockResolvedValueOnce({
+        rows: [{ ...finalized, source: "ai_assisted" }],
+      })
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({});
+
+    await service.finalize(user, "booking-1", { createFollowUp: false });
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining("accepted_at = now()"),
+      ["recap-1"],
+    );
+  });
+
   it("is idempotent when the recap is already finalized", async () => {
     const client = makeClient();
     db.connect.mockResolvedValue(client);

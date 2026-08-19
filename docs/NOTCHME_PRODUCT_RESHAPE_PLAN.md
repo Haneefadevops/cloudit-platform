@@ -64,13 +64,13 @@ NotchMe connects four activities that are normally fragmented across separate to
 
 Existing products generally specialize in one category:
 
-| Category | Typical strength | Typical weakness |
-|---|---|---|
-| Digital/NFC cards | Identity sharing, QR, wallet and branding | Limited reason to return after sharing |
-| Scheduling tools | Calendar availability and booking | Weak relationship continuity after the meeting |
-| Personal CRM | Notes, reminders and contact history | Weak public identity, reciprocal capture and booking |
-| Sales CRM | Pipelines, reporting and automation | Too complex for many independent professionals |
-| NotchMe | Connects introduction, context, meeting and next action | Must deliver the combined workflow with exceptional simplicity |
+| Category          | Typical strength                                        | Typical weakness                                               |
+| ----------------- | ------------------------------------------------------- | -------------------------------------------------------------- |
+| Digital/NFC cards | Identity sharing, QR, wallet and branding               | Limited reason to return after sharing                         |
+| Scheduling tools  | Calendar availability and booking                       | Weak relationship continuity after the meeting                 |
+| Personal CRM      | Notes, reminders and contact history                    | Weak public identity, reciprocal capture and booking           |
+| Sales CRM         | Pipelines, reporting and automation                     | Too complex for many independent professionals                 |
+| NotchMe           | Connects introduction, context, meeting and next action | Must deliver the combined workflow with exceptional simplicity |
 
 NotchMe will not compete on QR codes or feature count. Its wedge is the post-introduction workflow:
 
@@ -197,14 +197,14 @@ Advanced capabilities such as companies, pipelines, documents, feedback, custom 
 
 ### Terminology
 
-| Current or ambiguous term | Preferred product term |
-|---|---|
-| Customer / Contact / Connection | Person / People |
-| Account | Company |
-| Task | Next action |
-| Lifecycle | Relationship stage |
-| Profile | My Page |
-| CRM dashboard | People workspace |
+| Current or ambiguous term       | Preferred product term |
+| ------------------------------- | ---------------------- |
+| Customer / Contact / Connection | Person / People        |
+| Account                         | Company                |
+| Task                            | Next action            |
+| Lifecycle                       | Relationship stage     |
+| Profile                         | My Page                |
+| CRM dashboard                   | People workspace       |
 
 "Opportunity" is used only when the user is tracking a real commercial outcome.
 
@@ -408,21 +408,21 @@ NotchMe will use a mild, pastel-led visual system called **Quiet Orbit**. The in
 
 #### Light palette
 
-| Role | Token name | Value | Intended use |
-|---|---|---:|---|
-| Main background | Porcelain Mist | `#F8F7FB` | Application and marketing background |
-| Elevated surface | Pure White | `#FFFFFF` | Cards, dialogs and menus |
-| Primary text | Cosmic Ink | `#272536` | Headings and body text |
-| Secondary text | Muted Slate | `#777386` | Metadata and supporting copy |
-| Border | Lavender Grey | `#E7E4ED` | Dividers and component borders |
-| Primary action | Deep Lavender | `#6F63A8` | Primary buttons, links and focus states |
-| Primary hover | Dark Lavender | `#5D528F` | Hover and pressed states |
-| Lavender pastel | Soft Orbit | `#EFEDFA` | Selected navigation and brand highlights |
-| Sage pastel | Calm Connection | `#E7F2EC` | Success and completed actions |
-| Peach pastel | Warm Opportunity | `#FAEAE3` | New introductions and opportunities |
-| Sky pastel | Meeting Blue | `#E8F1F7` | Meetings, bookings and calendar context |
-| Butter pastel | Reminder Yellow | `#FAF1D8` | Reminders and actions due soon |
-| Rose pastel | Gentle Alert | `#F8E7E9` | Overdue and non-destructive warning surfaces |
+| Role             | Token name       |     Value | Intended use                                 |
+| ---------------- | ---------------- | --------: | -------------------------------------------- |
+| Main background  | Porcelain Mist   | `#F8F7FB` | Application and marketing background         |
+| Elevated surface | Pure White       | `#FFFFFF` | Cards, dialogs and menus                     |
+| Primary text     | Cosmic Ink       | `#272536` | Headings and body text                       |
+| Secondary text   | Muted Slate      | `#777386` | Metadata and supporting copy                 |
+| Border           | Lavender Grey    | `#E7E4ED` | Dividers and component borders               |
+| Primary action   | Deep Lavender    | `#6F63A8` | Primary buttons, links and focus states      |
+| Primary hover    | Dark Lavender    | `#5D528F` | Hover and pressed states                     |
+| Lavender pastel  | Soft Orbit       | `#EFEDFA` | Selected navigation and brand highlights     |
+| Sage pastel      | Calm Connection  | `#E7F2EC` | Success and completed actions                |
+| Peach pastel     | Warm Opportunity | `#FAEAE3` | New introductions and opportunities          |
+| Sky pastel       | Meeting Blue     | `#E8F1F7` | Meetings, bookings and calendar context      |
+| Butter pastel    | Reminder Yellow  | `#FAF1D8` | Reminders and actions due soon               |
+| Rose pastel      | Gentle Alert     | `#F8E7E9` | Overdue and non-destructive warning surfaces |
 
 Semantic foreground colors must be defined separately from pastel backgrounds so that status text and icons meet WCAG contrast requirements. Pastel colors must not be used directly for important text.
 
@@ -438,14 +438,14 @@ Lavender is the primary brand family. Sage, peach, sky, butter, and rose communi
 
 #### Semantic application
 
-| Product context | Surface family |
-|---|---|
-| Selected navigation and primary brand moments | Lavender |
-| Completed follow-ups and healthy states | Sage |
-| New introductions and opportunities | Peach |
-| Meetings, bookings and calendar | Sky |
-| Actions due soon and reminders | Butter |
-| Overdue actions and warnings | Rose |
+| Product context                               | Surface family |
+| --------------------------------------------- | -------------- |
+| Selected navigation and primary brand moments | Lavender       |
+| Completed follow-ups and healthy states       | Sage           |
+| New introductions and opportunities           | Peach          |
+| Meetings, bookings and calendar               | Sky            |
+| Actions due soon and reminders                | Butter         |
+| Overdue actions and warnings                  | Rose           |
 
 #### Dark mode
 
@@ -705,16 +705,16 @@ Exit criteria:
 
 The rendered-route audit was completed from the current Next.js route tree and shared components. Browser-based inspection could not run because the local in-app browser was unavailable; desktop/mobile visual QA remains an explicit Phase 1 follow-up.
 
-| Area | Existing routes | Disposition | Findings and follow-up |
-|---|---|---|---|
-| Marketing and authentication | `/`, `/login`, `/register`, `/accept-invite` | Retain and reshape | Landing page still presents digital-card-first copy, LKR pricing, gradients, and generic networking language. Registration remains a basic account flow; activation/verification/recovery are Phase 2. |
-| Today | `/dashboard` | Retain and redesign | It has profile, QR, booking, analytics, and CRM summaries, but does not yet answer “what should I do today?” with overdue/due/missing-next-action states. |
-| People | `/dashboard/customers`, `/dashboard/customers/[id]` | Retain and redesign | Existing customer records, activity, documents, feedback, import, duplicates, and pipeline are functional foundations. Rename and smart views belong in Phase 3; pipeline, duplicates, documents, feedback, import, and CRM administration should stay out of primary navigation. |
-| Calendar | `/dashboard/scheduling/*`, `/book/[slug]` | Retain and redesign | Meeting types, availability, bookings, calendar view, and public booking exist. Booking continuity, clear timezone/reschedule/cancel/add-to-calendar states, and the person/next-action handoff are Phase 4. |
-| My Page and public profile | `/dashboard/profile`, `/p/[slug]`, `/a/[slug]` | Retain and redesign | Profile editing, public profile, QR/vCard/share foundations exist. The editor is a form rather than a visual builder and reciprocal contact capture/context consent is incomplete; both are Phase 2/4. |
-| Insights | `/dashboard/analytics` | Retain and redesign | Existing counters and plan gate exist, but outcome metrics are not yet present. Defer substantive work to Phase 6. |
-| Workspace and settings | `/dashboard/accounts/*`, `/dashboard/organization*`, `/dashboard/settings*`, `/dashboard/upgrade` | Retain but de-emphasize | Companies, teams, plan controls, and advanced CRM configuration are valid secondary surfaces. Development billing placeholders must not be presented as launch billing; payment integration remains deferred. |
-| Deferred public/advanced surfaces | `/directory`, `/feedback/[token]`, `/rate/[slug]`, customers pipeline/duplicates, CRM settings | Defer or hide from primary navigation | Directory/event expansion, ratings, feedback, automation, webhooks, templates, custom fields, and bulk/duplicate flows do not support the initial core loop. Keep functional routes; do not remove them in Phase 1. |
+| Area                              | Existing routes                                                                                   | Disposition                           | Findings and follow-up                                                                                                                                                                                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Marketing and authentication      | `/`, `/login`, `/register`, `/accept-invite`                                                      | Retain and reshape                    | Landing page still presents digital-card-first copy, LKR pricing, gradients, and generic networking language. Registration remains a basic account flow; activation/verification/recovery are Phase 2.                                                                            |
+| Today                             | `/dashboard`                                                                                      | Retain and redesign                   | It has profile, QR, booking, analytics, and CRM summaries, but does not yet answer “what should I do today?” with overdue/due/missing-next-action states.                                                                                                                         |
+| People                            | `/dashboard/customers`, `/dashboard/customers/[id]`                                               | Retain and redesign                   | Existing customer records, activity, documents, feedback, import, duplicates, and pipeline are functional foundations. Rename and smart views belong in Phase 3; pipeline, duplicates, documents, feedback, import, and CRM administration should stay out of primary navigation. |
+| Calendar                          | `/dashboard/scheduling/*`, `/book/[slug]`                                                         | Retain and redesign                   | Meeting types, availability, bookings, calendar view, and public booking exist. Booking continuity, clear timezone/reschedule/cancel/add-to-calendar states, and the person/next-action handoff are Phase 4.                                                                      |
+| My Page and public profile        | `/dashboard/profile`, `/p/[slug]`, `/a/[slug]`                                                    | Retain and redesign                   | Profile editing, public profile, QR/vCard/share foundations exist. The editor is a form rather than a visual builder and reciprocal contact capture/context consent is incomplete; both are Phase 2/4.                                                                            |
+| Insights                          | `/dashboard/analytics`                                                                            | Retain and redesign                   | Existing counters and plan gate exist, but outcome metrics are not yet present. Defer substantive work to Phase 6.                                                                                                                                                                |
+| Workspace and settings            | `/dashboard/accounts/*`, `/dashboard/organization*`, `/dashboard/settings*`, `/dashboard/upgrade` | Retain but de-emphasize               | Companies, teams, plan controls, and advanced CRM configuration are valid secondary surfaces. Development billing placeholders must not be presented as launch billing; payment integration remains deferred.                                                                     |
+| Deferred public/advanced surfaces | `/directory`, `/feedback/[token]`, `/rate/[slug]`, customers pipeline/duplicates, CRM settings    | Defer or hide from primary navigation | Directory/event expansion, ratings, feedback, automation, webhooks, templates, custom fields, and bulk/duplicate flows do not support the initial core loop. Keep functional routes; do not remove them in Phase 1.                                                               |
 
 Usability gaps observed from code and route review: the primary navigation previously exposed CRM-heavy terminology and advanced routes; the dashboard emphasizes counters rather than next actions; marketing and pricing do not match the Malta-first hypothesis; page and booking flows need stronger mobile-first state design; and no consistent page-header or empty-state primitive existed. The initial foundation corrects navigation hierarchy and shared presentation only, preserving route behavior.
 
@@ -922,6 +922,17 @@ Exit criteria:
 - Finalized recaps are read-only in the UI and retain the backend's review-before-save and immutable-history boundaries. Loading, retry, validation, pending, deletion, and completion feedback are provided without claiming AI involvement.
 - Phase 5B remains optional AI assistance: private voice input, transcription, structured suggestions, consent/retention/deletion controls, cost limits, and acceptance instrumentation. AI must populate a reviewable draft only and must never finalize or send actions automatically.
 
+#### Phase 5B implementation checkpoint
+
+- AI assistance is server-side and disabled unless `OPENAI_API_KEY` is configured. The transcription and extraction model identifiers are configurable; their safe defaults are `gpt-4o-mini-transcribe` and `gpt-4o-mini`.
+- An authenticated user may submit one private audio note for a past, non-cancelled booking they own. The endpoint requires explicit per-upload consent, accepts only an audio allow-list, applies a 10 MB hard upload ceiling and endpoint throttling, and returns permission-safe booking errors.
+- Audio and transcript are processed in memory and discarded after the request. NotchMe persists only the structured, editable recap draft. The extraction request uses structured JSON output and disables provider-side response storage with `store: false`.
+- Generated content is always a draft with `source = 'ai_assisted'`. It cannot finalize itself, create a follow-up, or send a message. The existing review-and-confirm workflow remains the only finalization path, and a pre-existing private note is not overwritten by AI generation.
+- `ai_recap_usage` records organization/user/booking/recap identifiers, models, request status, audio byte count, token counts when supplied, timestamps, a bounded failure code, and explicit acceptance time. It never stores audio, transcripts, prompts, recap content, contact fields, URLs, user-agent data, or provider error bodies.
+- The default allowance is ten successful/active attempts per user per calendar month and is atomically reserved under an advisory transaction lock. Both the allowance and upload limit are configurable. Failed attempts remain observable but do not consume the monthly successful/active allowance after failure.
+- Deleting an editable recap removes generated content through the existing draft deletion path. Content-free usage metadata remains for cost, reliability, and acceptance measurement. Finalized recaps retain the immutable-history policy established in Phase 5A.
+- A live provider call remains an environment-level launch check because no OpenAI credential is stored in the repository. Automated tests mock the provider and verify consent, authorization boundaries, file validation, atomic limits, stateless structured extraction, non-retention declarations, failure metadata, and draft-only behavior without sending personal data externally.
+
 Exit criteria:
 
 - A user can capture a person and set a next action in under one minute
@@ -1026,17 +1037,17 @@ Targets should be finalized after baseline observation. The pilot should priorit
 
 ## 15. Key Risks and Mitigations
 
-| Risk | Mitigation |
-|---|---|
-| Competing as another digital card | Position and design around relationship follow-through |
-| Too many existing features | Hide advanced modules and enforce the reduced navigation |
-| Users do not return after creating a page | Make Today and next actions the recurring value loop |
-| Manual data entry is burdensome | Automate booking history and add structured post-meeting recap |
-| AI creates privacy or trust problems | Start with private recaps, require review, document processing and allow deletion |
-| EUR 10 cannot support heavy usage | Limit variable-cost features and monitor unit economics |
-| Europe-first implementation becomes Malta-specific | Keep the core domain locale-, currency-, and country-neutral |
-| Premium redesign becomes cosmetic | Prioritize activation, workflow continuity, trust, speed, and states alongside visuals |
-| Existing backend complexity slows delivery | Reuse stable domains and change contracts only where the new experience requires it |
+| Risk                                               | Mitigation                                                                             |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Competing as another digital card                  | Position and design around relationship follow-through                                 |
+| Too many existing features                         | Hide advanced modules and enforce the reduced navigation                               |
+| Users do not return after creating a page          | Make Today and next actions the recurring value loop                                   |
+| Manual data entry is burdensome                    | Automate booking history and add structured post-meeting recap                         |
+| AI creates privacy or trust problems               | Start with private recaps, require review, document processing and allow deletion      |
+| EUR 10 cannot support heavy usage                  | Limit variable-cost features and monitor unit economics                                |
+| Europe-first implementation becomes Malta-specific | Keep the core domain locale-, currency-, and country-neutral                           |
+| Premium redesign becomes cosmetic                  | Prioritize activation, workflow continuity, trust, speed, and states alongside visuals |
+| Existing backend complexity slows delivery         | Reuse stable domains and change contracts only where the new experience requires it    |
 
 ---
 
