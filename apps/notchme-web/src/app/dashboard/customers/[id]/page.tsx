@@ -32,6 +32,7 @@ import {
   useTemplates,
 } from "@/hooks/useCRM";
 import { useBookings } from "@/hooks/useScheduling";
+import { MeetingRecapButton } from "@/components/recaps/meeting-recap-dialog";
 import { useOrganizationMembers } from "@/hooks/useOrganizations";
 import { DocumentsTab } from "./documents-tab";
 import { FeedbackTab } from "./feedback-tab";
@@ -267,6 +268,9 @@ function PersonOverview({
   const upcomingBooking = bookings
     .filter((booking) => booking.customerId === customer.id && booking.status !== "cancelled" && new Date(booking.startAt) > new Date())
     .sort((a, b) => a.startAt.localeCompare(b.startAt))[0];
+  const latestPastBooking = bookings
+    .filter((booking) => booking.customerId === customer.id && booking.status !== "cancelled" && new Date(booking.startAt) <= new Date())
+    .sort((a, b) => b.startAt.localeCompare(a.startAt))[0];
   const recentActivities = [...activities].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, 4);
 
   return <div className="mt-6 grid min-w-0 gap-5 lg:grid-cols-3">
@@ -299,6 +303,7 @@ function PersonOverview({
         <CardHeader><CardTitle>Upcoming booking</CardTitle></CardHeader>
         <CardContent>{upcomingBooking ? <><p className="text-sm text-foreground">{formatInTimezone(upcomingBooking.startAt, timezone)}</p><Button className="mt-3 w-full justify-start" size="sm" variant="outline" asChild><Link href="/dashboard/scheduling/bookings"><Calendar className="h-4 w-4" />View booking details<ExternalLink className="ml-auto h-3.5 w-3.5" /></Link></Button></> : <p className="text-sm text-muted">No upcoming booking.</p>}</CardContent>
       </Card>
+      {latestPastBooking && <Card><CardHeader><CardTitle>Latest meeting</CardTitle></CardHeader><CardContent><p className="mb-3 text-sm text-muted">{formatInTimezone(latestPastBooking.startAt, timezone)}</p><MeetingRecapButton bookingId={latestPastBooking.id} customerId={customer.id} /></CardContent></Card>}
     </aside>
   </div>;
 }

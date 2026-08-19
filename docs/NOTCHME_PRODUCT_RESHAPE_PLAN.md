@@ -915,6 +915,13 @@ Exit criteria:
 - Repeated and concurrent requests serialize on the recap row. An already-finalized recap returns an idempotent result and never creates another activity or follow-up. Any activity or follow-up failure rolls back the recap state change.
 - Finalized recaps remain immutable. Correction/versioning, the authenticated editor/review UI, audio, transcription, and AI assistance remain deferred to later Phase 5 work.
 
+#### Phase 5A2 Authenticated recap editor
+
+- Past, non-cancelled bookings now expose a private meeting-recap editor from the booking workspace and the linked Person overview. Users can save or delete a draft, capture summary/key points/commitments/private context, and propose a next action without writing to the timeline.
+- A separate review state makes finalization explicit. The user chooses whether the proposed action becomes a persisted follow-up; successful finalization refreshes recap, booking, Person activity, follow-up, People, and Today query families.
+- Finalized recaps are read-only in the UI and retain the backend's review-before-save and immutable-history boundaries. Loading, retry, validation, pending, deletion, and completion feedback are provided without claiming AI involvement.
+- Phase 5B remains optional AI assistance: private voice input, transcription, structured suggestions, consent/retention/deletion controls, cost limits, and acceptance instrumentation. AI must populate a reviewable draft only and must never finalize or send actions automatically.
+
 Exit criteria:
 
 - A user can capture a person and set a next action in under one minute

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { CalendarX } from "lucide-react";
+import { MeetingRecapButton } from "@/components/recaps/meeting-recap-dialog";
 
 import type { Booking } from "@/lib/contracts";
 
@@ -223,6 +224,10 @@ function BookingCard({ booking }: { booking: Booking }) {
               </div>
             )}
           </>
+        )}
+
+        {booking.status !== "cancelled" && start <= new Date() && (
+          <MeetingRecapButton bookingId={booking.id} customerId={booking.customerId} />
         )}
       </CardContent>
     </Card>
