@@ -1,6 +1,6 @@
 # NotchMe Product Reshape Plan
 
-> Status: Phase 1 accepted for progression with deferred rendered QA; Phase 2A activation and My Page foundation implemented (2026-08-18)
+> Status: Phases 1–6 implementation foundation complete; release QA, external production configuration, and Phase 7 live pilot execution remain gated (2026-08-19)
 > Strategy: International product, Europe-first launch, Sri Lanka localization later
 > Initial market: Malta pilot, followed by broader European expansion
 > Product category: Professional identity and relationship follow-up workspace
@@ -1015,6 +1015,14 @@ Exit criteria:
 - The web application includes forgot-password, reset-password, and verify-email routes, a login recovery link, and an authenticated verification gate. The gate is derived from saved account state and does not claim delivery when transactional email is unavailable.
 - Automated coverage verifies migration structure, one-time/expired token handling, generic recovery behavior, session revocation, delivery configuration, link construction, and authenticated verification enforcement. Live email delivery remains a release gate because no production Resend credential or branded sender is stored in the repository.
 
+#### Phase 6E implementation checkpoint: release-quality gate
+
+- Upgraded NotchMe Web from Next `14.2.35` to `15.5.21` and its direct PostCSS line to `8.5.26`; lint, TypeScript no-emit, and the 33-route production build pass on the upgraded framework.
+- Current production-dependency audits were executed per workspace. NotchMe Web reports five high and no critical findings; NotchMe API reports six high, eight moderate, and no critical findings. A partial Nest 11 upgrade was rejected after it demonstrated duplicate Nest 10/11 runtimes caused by shared npm-workspace hoisting. The remaining shared Nest and transitive Next dependency advisories require coordinated dependency work and remain a release blocker; they were not hidden with type casts, forced peer resolution, or an inaccurate waiver. The repository-wide audit also contains critical findings attributable to other shared applications/dependencies and must be handled by their owners before a whole-platform release.
+- The full NotchMe API suite passes with 22 suites and 78 tests, and the API lint/build pass on the restored coherent Nest 10 runtime. Authentication, scope boundaries, booking lifecycle, recaps, AI privacy controls, billing, account control, analytics, and migration structures are represented in that suite.
+- The in-app browser reported no available instance after its prescribed connection recovery. Rendered tablet/mobile/dark-theme/keyboard/reduced-motion/overflow checks and screenshots therefore remain a manual release gate; HTTP and build output are not treated as visual approval.
+- Production PostgreSQL execution for migrations `0020`–`0024`, live Stripe/Resend/OpenAI checks, DNS/TLS, legal approval, backups/restore, monitoring, and incident ownership remain external release gates. The operational sequence is documented in `docs/NOTCHME_RELEASE_AND_PILOT_RUNBOOK.md`.
+
 Exit criteria:
 
 - Real payment and cancellation work end to end
@@ -1029,6 +1037,11 @@ Exit criteria:
 - Validate the standard Pro price
 - Prepare the wider European go-to-market
 - Prioritize languages and integrations from observed demand
+
+#### Phase 7 preparation checkpoint
+
+- Added `docs/NOTCHME_RELEASE_AND_PILOT_RUNBOOK.md` with a bounded Malta cohort, release gates, onboarding exercise, saved-data metric definitions, weekly operating cadence, interview coverage, decision framework, and Europe/Sri Lanka expansion sequence.
+- Phase 7 cannot be marked executed from repository work: it requires real participants, production configuration, approved support/legal identities, observed behavior, interviews, and payment evidence. Results must include denominators and must not be replaced by registrations, clicks, or invented validation.
 
 ---
 
