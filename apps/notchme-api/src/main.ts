@@ -31,6 +31,7 @@ function buildCorsOrigin(raw?: string): CorsOptions["origin"] {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: new JsonLogger(),
+    rawBody: true,
   });
   const configService = app.get(ConfigService);
 

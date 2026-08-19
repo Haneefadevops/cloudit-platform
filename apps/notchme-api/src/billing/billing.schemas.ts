@@ -1,12 +1,10 @@
 import { z } from "zod";
 
-export const upgradePlanSchema = z.object({
-  plan: z.enum([
-    "pro_individual",
-    "pro_business_starter",
-    "pro_business_growth",
-    "pro_business_enterprise",
-  ]),
-});
+export const checkoutSchema = z
+  .object({
+    product: z.enum(["founding_pro", "teams"]),
+    interval: z.enum(["monthly", "annual"]),
+  })
+  .strict();
 
-export type UpgradePlanInput = z.infer<typeof upgradePlanSchema>;
+export type CheckoutInput = z.infer<typeof checkoutSchema>;

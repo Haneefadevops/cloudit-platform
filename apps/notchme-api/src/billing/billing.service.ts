@@ -1,57 +1,167 @@
-import { Injectable } from "@nestjs/common";
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from "@nestjs/common";
+import type { AuthContext } from "../auth/types";
 import { DatabaseService } from "../database/database.service";
-import { mapUser } from "../common/lib/mappers";
-import type { Plan, User } from "../common/contracts/notchme.v2";
+import type { CheckoutInput } from "./billing.schemas";
+import { StripeBillingProvider } from "./stripe-billing.provider";
+
+type SubscriptionRow = {
+  provider_customer_id: string;
+  provider_subscription_id: string | null;
+  product_key: "founding_pro" | "teams";
+  billing_interval: "monthly" | "annual";
+  status: string;
+  current_period_end: Date | null;
+  cancel_at_period_end: boolean;
+};
 
 @Injectable()
 export class BillingService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly provider: StripeBillingProvider,
+  ) {}
 
-  async upgradeUserPlan(userId: string, plan: Plan): Promise<User> {
-    const client = await this.databaseService.connect();
-    try {
-      await client.query("BEGIN");
+  async status(user: AuthContext) {
+    const subscription = await this.subscription(user);
+    const products = {
+      foundingPro: {
+        monthly: this.provider.configured({
+          product: "founding_pro" as const,
+          interval: "monthly" as const,
+        }),
+        annual: this.provider.configured({
+          product: "founding_pro" as const,
+          interval: "annual" as const,
+        }),
+      },
+      teams: {
+        monthly: this.provider.configured({
+          product: "teams" as const,
+          interval: "monthly" as const,
+        }),
+        annual: this.provider.configured({
+          product: "teams" as const,
+          interval: "annual" as const,
+        }),
+      },
+    };
+    return {
+      provider: "stripe" as const,
+      checkoutEnabled: Object.values(products).some((product) =>
+        Object.values(product).some(Boolean),
+      ),
+      products,
+      subscription: subscription ? this.serialize(subscription) : null,
+      taxNotice:
+        "Prices are shown before any location-dependent VAT. The checkout calculates applicable tax and collects supported tax IDs.",
+    };
+  }
 
-      const userResult = await client.query(
-        "UPDATE users SET plan = $1, updated_at = now() WHERE id = $2 RETURNING *",
-        [plan, userId],
+  async checkout(user: AuthContext, selection: CheckoutInput) {
+    this.assertBillingAuthority(user);
+    if (selection.product === "teams" && !user.organizationId) {
+      throw new ConflictException(
+        "Create a team workspace before choosing the Teams plan.",
       );
-
-      if (userResult.rowCount === 0) {
-        throw new BillingError("User not found.", 404);
-      }
-
-      const user = mapUser(userResult.rows[0]);
-      const profileResult = await client.query(
-        "SELECT id FROM profiles WHERE user_id = $1",
-        [userId],
+    }
+    if (!this.provider.configured(selection)) {
+      throw new ServiceUnavailableException(
+        "This billing option is not configured.",
       );
-      const profileId = profileResult.rows[0]?.id;
+    }
+    const existing = await this.subscription(user);
+    if (
+      existing?.provider_subscription_id &&
+      ["trialing", "active", "past_due", "paused"].includes(existing.status)
+    ) {
+      throw new ConflictException(
+        "Manage the existing subscription in the billing portal.",
+      );
+    }
+    const session = await this.provider.createCheckout({
+      selection,
+      userId: user.id,
+      organizationId: user.organizationId,
+      email: user.email,
+      customerId: existing?.provider_customer_id ?? null,
+      trialEligible: !existing,
+    });
+    return { url: this.safeHostedUrl(session.url, "checkout.stripe.com") };
+  }
 
-      if (profileId) {
-        await client.query(
-          "INSERT INTO analytics_events (profile_id, event_type, visitor_id, referrer, user_agent) VALUES ($1, 'plan_upgraded', $2, $3, $4)",
-          [profileId, null, null, null],
-        );
-      }
+  async portal(user: AuthContext) {
+    this.assertBillingAuthority(user);
+    const subscription = await this.subscription(user);
+    if (!subscription?.provider_customer_id) {
+      throw new NotFoundException("No billing account is available yet.");
+    }
+    const session = await this.provider.createPortal(
+      subscription.provider_customer_id,
+    );
+    return { url: this.safeHostedUrl(session.url, "billing.stripe.com") };
+  }
 
-      await client.query("COMMIT");
-      return user;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
+  private assertBillingAuthority(user: AuthContext): void {
+    if (
+      user.organizationId &&
+      user.role !== "admin" &&
+      !user.isBillingContact
+    ) {
+      throw new ForbiddenException(
+        "Only an organization admin or billing contact can manage billing.",
+      );
     }
   }
-}
 
-export class BillingError extends Error {
-  constructor(
-    message: string,
-    public statusCode: number,
-  ) {
-    super(message);
-    this.name = "BillingError";
+  private async subscription(
+    user: AuthContext,
+  ): Promise<SubscriptionRow | null> {
+    const result = user.organizationId
+      ? await this.db.query<SubscriptionRow>(
+          `SELECT * FROM billing_subscriptions
+           WHERE organization_id = $1`,
+          [user.organizationId],
+        )
+      : await this.db.query<SubscriptionRow>(
+          `SELECT * FROM billing_subscriptions
+           WHERE organization_id IS NULL AND owner_user_id = $1`,
+          [user.id],
+        );
+    return result.rows[0] ?? null;
+  }
+
+  private serialize(row: SubscriptionRow) {
+    return {
+      product: row.product_key,
+      interval: row.billing_interval,
+      status: row.status,
+      currentPeriodEnd: row.current_period_end?.toISOString() ?? null,
+      cancelAtPeriodEnd: row.cancel_at_period_end,
+      canManage: Boolean(row.provider_customer_id),
+    };
+  }
+
+  private safeHostedUrl(value: string | null, hostname: string): string {
+    if (!value) {
+      throw new ServiceUnavailableException(
+        "The billing provider returned no redirect.",
+      );
+    }
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "https:" || url.hostname !== hostname)
+        throw new Error();
+      return url.toString();
+    } catch {
+      throw new ServiceUnavailableException(
+        "The billing provider returned an invalid redirect.",
+      );
+    }
   }
 }

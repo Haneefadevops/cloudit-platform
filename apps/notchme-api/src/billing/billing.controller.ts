@@ -1,40 +1,56 @@
-import { Controller, Post, Body, Res, UseGuards } from "@nestjs/common";
-import type { Response } from "express";
-import { BillingService, BillingError } from "./billing.service";
-import { upgradePlanSchema } from "./billing.schemas";
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  Post,
+  Req,
+  type RawBodyRequest,
+} from "@nestjs/common";
+import type { Request } from "express";
 import { AuthUser } from "../common/decorators/auth-user.decorator";
-import { SessionAuthGuard } from "../common/guards/session-auth.guard";
+import { Public } from "../common/decorators/public.decorator";
 import type { AuthContext } from "../auth/types";
+import { BillingService } from "./billing.service";
+import { checkoutSchema } from "./billing.schemas";
+import { StripeWebhookService } from "./stripe-webhook.service";
 
 @Controller("v2/billing")
-@UseGuards(SessionAuthGuard)
 export class BillingController {
-  constructor(private readonly billingService: BillingService) {}
+  constructor(
+    private readonly billing: BillingService,
+    private readonly webhooks: StripeWebhookService,
+  ) {}
 
-  @Post("upgrade")
-  async upgrade(
-    @AuthUser() user: AuthContext,
-    @Body() body: unknown,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const input = upgradePlanSchema.safeParse(body);
+  @Get("status")
+  async status(@AuthUser() user: AuthContext) {
+    return { ok: true, data: await this.billing.status(user) };
+  }
+
+  @Post("checkout")
+  async checkout(@AuthUser() user: AuthContext, @Req() request: Request) {
+    const input = checkoutSchema.safeParse(request.body);
     if (!input.success) {
-      res.status(400);
-      return { ok: false, error: "Invalid plan upgrade request." };
+      throw new BadRequestException("Invalid checkout selection.");
     }
+    return { ok: true, data: await this.billing.checkout(user, input.data) };
+  }
 
-    try {
-      const updatedUser = await this.billingService.upgradeUserPlan(
-        user.id,
-        input.data.plan,
-      );
-      return { ok: true, data: updatedUser };
-    } catch (error) {
-      if (error instanceof BillingError) {
-        res.status(error.statusCode);
-        return { ok: false, error: error.message };
-      }
-      throw error;
-    }
+  @Post("portal")
+  async portal(@AuthUser() user: AuthContext) {
+    return { ok: true, data: await this.billing.portal(user) };
+  }
+
+  @Post("webhook")
+  @Public()
+  @HttpCode(200)
+  async webhook(
+    @Req() request: RawBodyRequest<Request>,
+    @Headers("stripe-signature") signature: string | undefined,
+  ) {
+    const event = this.webhooks.verify(request.rawBody, signature);
+    const result = await this.webhooks.process(event);
+    return { ok: true, data: { received: true, duplicate: result.duplicate } };
   }
 }
