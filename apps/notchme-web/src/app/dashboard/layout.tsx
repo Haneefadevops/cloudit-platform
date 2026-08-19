@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
+import { useRequestVerification } from "@/hooks/useAuthActions";
 import {
   LayoutDashboard,
   User,
@@ -84,8 +85,56 @@ export default function DashboardLayout({
 }) {
   return (
     <ProtectedRoute>
-      <DashboardShell>{children}</DashboardShell>
+      <EmailVerificationGate>
+        <DashboardShell>{children}</DashboardShell>
+      </EmailVerificationGate>
     </ProtectedRoute>
+  );
+}
+
+function EmailVerificationGate({ children }: { children: React.ReactNode }) {
+  const { state, logout } = useAuth();
+  const request = useRequestVerification();
+  if (
+    state.status !== "authenticated" ||
+    !state.emailVerificationRequired ||
+    state.user.emailVerifiedAt
+  ) {
+    return children;
+  }
+  return (
+    <main className="flex min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-6 text-center shadow-sm">
+        <h1 className="text-2xl font-semibold text-foreground">
+          Verify your email
+        </h1>
+        <p className="mt-2 text-muted">
+          Open the verification link sent to {state.user.email}. This protects
+          your professional page and relationship workspace.
+        </p>
+        <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
+          <Button
+            onClick={() => request.mutate()}
+            isLoading={request.isPending}
+          >
+            Send another link
+          </Button>
+          <Button variant="outline" onClick={logout}>
+            Log out
+          </Button>
+        </div>
+        {request.isSuccess && (
+          <p role="status" className="mt-3 text-sm text-muted">
+            If delivery is configured, a new link has been sent.
+          </p>
+        )}
+        {request.isError && (
+          <p role="alert" className="mt-3 text-sm text-error">
+            {request.error.message}
+          </p>
+        )}
+      </div>
+    </main>
   );
 }
 
@@ -110,9 +159,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
       <nav aria-label="Primary navigation" className="space-y-1 p-3">
         {navItems.map((item) => {
-          const isActive = item.to === "/dashboard"
-            ? pathname === item.to
-            : pathname === item.to || pathname.startsWith(`${item.to}/`);
+          const isActive =
+            item.to === "/dashboard"
+              ? pathname === item.to
+              : pathname === item.to || pathname.startsWith(`${item.to}/`);
           return (
             <Link
               key={item.to}
@@ -132,13 +182,26 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         })}
         {visibleWorkspaceItems.length > 0 && (
           <div className="pt-5">
-            <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Workspace</p>
+            <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+              Workspace
+            </p>
             <div className="space-y-1">
               {visibleWorkspaceItems.map((item) => {
-                const isActive = pathname === item.to || pathname.startsWith(`${item.to}/`);
+                const isActive =
+                  pathname === item.to || pathname.startsWith(`${item.to}/`);
                 return (
-                  <Link key={item.to} href={item.to} onClick={() => setMobileOpen(false)} aria-current={isActive ? "page" : undefined}
-                    className={cn("flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all", isActive ? "bg-secondary text-secondary-foreground shadow-sm" : "text-muted hover:bg-surface-elevated/70 hover:text-foreground")}>
+                  <Link
+                    key={item.to}
+                    href={item.to}
+                    onClick={() => setMobileOpen(false)}
+                    aria-current={isActive ? "page" : undefined}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+                      isActive
+                        ? "bg-secondary text-secondary-foreground shadow-sm"
+                        : "text-muted hover:bg-surface-elevated/70 hover:text-foreground",
+                    )}
+                  >
                     <item.icon className="h-4 w-4" />
                     <span>{item.label}</span>
                   </Link>
@@ -165,12 +228,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           </Badge>
           <ThemeToggle />
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          onClick={logout}
-        >
+        <Button variant="outline" size="sm" className="w-full" onClick={logout}>
           <LogOut className="mr-2 h-4 w-4" />
           Log out
         </Button>
@@ -181,13 +239,16 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* Mobile header */}
-      <a href="#main-content" className="sr-only z-[60] rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:left-4 focus:top-4">Skip to main content</a>
+      <a
+        href="#main-content"
+        className="sr-only z-[60] rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+      >
+        Skip to main content
+      </a>
       <div className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-background/85 px-4 backdrop-blur-xl md:hidden">
         <div className="flex items-center gap-2">
           <Logo className="h-8 w-8" />
-          <span className="text-lg font-semibold text-foreground">
-            NotchMe
-          </span>
+          <span className="text-lg font-semibold text-foreground">NotchMe</span>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -199,7 +260,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileOpen}
           >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {mobileOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
           </Button>
         </div>
       </div>
@@ -224,7 +289,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Main content */}
-      <main id="main-content" className="min-w-0 flex-1">{children}</main>
+      <main id="main-content" className="min-w-0 flex-1">
+        {children}
+      </main>
     </div>
   );
 }

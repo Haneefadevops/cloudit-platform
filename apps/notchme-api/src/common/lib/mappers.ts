@@ -40,6 +40,7 @@ export function mapUser(row: {
   organization_id?: string | null;
   is_billing_contact?: boolean;
   plan?: string;
+  email_verified_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }): User {
@@ -51,6 +52,9 @@ export function mapUser(row: {
     organizationId: row.organization_id ?? null,
     isBillingContact: row.is_billing_contact ?? false,
     plan: (row.plan as User["plan"]) ?? "free",
+    emailVerifiedAt: row.email_verified_at
+      ? row.email_verified_at.toISOString()
+      : null,
     createdAt: row.created_at ? row.created_at.toISOString() : "",
     updatedAt: row.updated_at ? row.updated_at.toISOString() : "",
   };
@@ -236,6 +240,7 @@ export function buildAuthMe(input: {
   user: User;
   profile: Profile | null;
   organization: Organization | null;
+  emailVerificationRequired: boolean;
 }): AuthMe {
   return input;
 }

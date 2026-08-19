@@ -2,9 +2,7 @@
 // Scope: digital card â†’ meeting â†’ CRM
 // This file is the single source of truth for the redesigned v2 API.
 
-export type ApiResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 // ============================================================
 // Plans & billing
@@ -52,6 +50,7 @@ export type User = {
   organizationId: string | null;
   isBillingContact: boolean;
   plan: Plan;
+  emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -60,6 +59,7 @@ export type AuthMe = {
   user: User;
   profile: Profile | null;
   organization: Organization | null;
+  emailVerificationRequired: boolean;
 };
 
 export type LoginInput = {
@@ -334,13 +334,7 @@ export type CustomerStageHistory = {
 };
 
 export type CustomerActivityType =
-  | "note"
-  | "call"
-  | "email"
-  | "meeting"
-  | "sms"
-  | "whatsapp"
-  | "other";
+  "note" | "call" | "email" | "meeting" | "sms" | "whatsapp" | "other";
 
 export type CustomerActivity = {
   id: string;
@@ -748,7 +742,8 @@ export type FeedbackTokenInfo = {
 // Business accounts
 // ============================================================
 
-export type AccountLifecycleStage = "prospect" | "qualified" | "customer" | "churned" | "archived";
+export type AccountLifecycleStage =
+  "prospect" | "qualified" | "customer" | "churned" | "archived";
 
 export type Account = {
   id: string;
@@ -903,7 +898,8 @@ export type SchedulingAvailability = {
   exceptions: AvailabilityException[];
 };
 
-export type BookingStatus = "pending" | "confirmed" | "cancelled" | "rescheduled";
+export type BookingStatus =
+  "pending" | "confirmed" | "cancelled" | "rescheduled";
 
 export type BookingSource = "profile" | "connection" | "event" | "direct";
 

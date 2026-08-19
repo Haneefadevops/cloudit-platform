@@ -28,6 +28,7 @@ import {
 } from "../common/lib/mappers";
 import { LoginInput, RegisterInput } from "../common/contracts/notchme.v2";
 import { z } from "zod";
+import { Throttle } from "@nestjs/throttler";
 
 const registerSchema = z.object({
   fullName: z.string().trim().min(1).max(120),
@@ -46,6 +47,17 @@ const acceptInviteSchema = z.object({
   fullName: z.string().trim().min(1).max(120).optional(),
 });
 
+const forgotPasswordSchema = z.object({
+  email: z.string().trim().email().max(254),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(32).max(256),
+  password: z.string().min(8).max(128),
+});
+
+const tokenSchema = z.object({ token: z.string().min(32).max(256) });
+
 @Controller("v2/auth")
 export class AuthController {
   constructor(
@@ -57,6 +69,7 @@ export class AuthController {
 
   @Public()
   @Post("register")
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async register(
     @Body() body: unknown,
     @Res({ passthrough: true }) res: Response,
@@ -79,6 +92,7 @@ export class AuthController {
 
   @Public()
   @Post("login")
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async login(
     @Body() body: unknown,
@@ -128,6 +142,11 @@ export class AuthController {
         res,
         await this.sessionService.signSession(user),
       );
+      if (this.authService.emailDeliveryEnabled()) {
+        await this.authService
+          .requestEmailVerification(user.id)
+          .catch(() => undefined);
+      }
       res.status(HttpStatus.CREATED);
       return { ok: true, data: user };
     } catch (error) {
@@ -171,12 +190,90 @@ export class AuthController {
           organization_id: auth.organizationId,
           is_billing_contact: auth.isBillingContact,
           plan: auth.plan,
+          email_verified_at: auth.emailVerifiedAt
+            ? new Date(auth.emailVerifiedAt)
+            : null,
           created_at: auth.createdAt ? new Date(auth.createdAt) : undefined,
           updated_at: auth.updatedAt ? new Date(auth.updatedAt) : undefined,
         }),
         profile,
         organization,
+        emailVerificationRequired: this.authService.verificationRequired(),
       }),
     };
+  }
+
+  @Public()
+  @Post("forgot-password")
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async forgotPassword(@Body() body: unknown) {
+    const input = forgotPasswordSchema.safeParse(body);
+    if (input.success) {
+      await this.authService.requestPasswordReset(input.data.email);
+    }
+    return {
+      ok: true,
+      data: {
+        accepted: true,
+        message:
+          "If an account exists and email delivery is available, a reset link has been sent.",
+      },
+    };
+  }
+
+  @Public()
+  @Post("reset-password")
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async resetPassword(@Body() body: unknown) {
+    const input = resetPasswordSchema.safeParse(body);
+    if (!input.success) {
+      return { ok: false, error: "Invalid password reset request." };
+    }
+    try {
+      await this.authService.resetPassword(
+        input.data.token,
+        input.data.password,
+      );
+      return { ok: true, data: { reset: true } };
+    } catch (error) {
+      if (error instanceof AuthError) {
+        return { ok: false, error: error.message };
+      }
+      throw error;
+    }
+  }
+
+  @Post("request-verification")
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async requestVerification(@AuthUser() user: AuthContext) {
+    try {
+      await this.authService.requestEmailVerification(user.id);
+      return { ok: true, data: { requested: true } };
+    } catch (error) {
+      if (error instanceof AuthError) {
+        return { ok: false, error: error.message };
+      }
+      throw error;
+    }
+  }
+
+  @Public()
+  @Post("verify-email")
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async verifyEmail(@Body() body: unknown) {
+    const input = tokenSchema.safeParse(body);
+    if (!input.success) {
+      return { ok: false, error: "Invalid verification request." };
+    }
+    try {
+      await this.authService.verifyEmail(input.data.token);
+      return { ok: true, data: { verified: true } };
+    } catch (error) {
+      if (error instanceof AuthError) {
+        return { ok: false, error: error.message };
+      }
+      throw error;
+    }
   }
 }

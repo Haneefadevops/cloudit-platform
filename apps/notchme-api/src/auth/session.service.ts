@@ -148,6 +148,7 @@ export class SessionService {
     const result = await this.databaseService.query(
       `SELECT
          u.id, u.email, u.full_name, u.role, u.organization_id, u.is_billing_contact, u.plan,
+         u.email_verified_at,
          u.created_at, u.updated_at,
          o.id AS org_id, o.slug AS org_slug, o.name AS org_name, o.plan AS org_plan,
          o.plan_status AS org_plan_status, o.trial_ends_at AS org_trial_ends_at
@@ -168,6 +169,9 @@ export class SessionService {
       organizationId: row.organization_id,
       isBillingContact: row.is_billing_contact,
       plan: row.plan,
+      emailVerifiedAt: row.email_verified_at
+        ? (row.email_verified_at as Date).toISOString()
+        : null,
       createdAt: row.created_at ? (row.created_at as Date).toISOString() : "",
       updatedAt: row.updated_at ? (row.updated_at as Date).toISOString() : "",
       organization: row.org_id

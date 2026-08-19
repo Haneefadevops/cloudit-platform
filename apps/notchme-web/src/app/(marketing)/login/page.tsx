@@ -8,7 +8,13 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 
 const loginSchema = z.object({
@@ -48,26 +54,51 @@ export default function LoginPage() {
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" {...form.register("email")} />
               {form.formState.errors.email && (
-                <p className="text-sm text-error">{form.formState.errors.email.message}</p>
+                <p className="text-sm text-error">
+                  {form.formState.errors.email.message}
+                </p>
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" {...form.register("password")} />
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="password">Password</Label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <Input
+                id="password"
+                type="password"
+                {...form.register("password")}
+              />
               {form.formState.errors.password && (
-                <p className="text-sm text-error">{form.formState.errors.password.message}</p>
+                <p className="text-sm text-error">
+                  {form.formState.errors.password.message}
+                </p>
               )}
             </div>
             {form.formState.errors.root && (
-              <p className="text-sm text-error">{form.formState.errors.root.message}</p>
+              <p className="text-sm text-error">
+                {form.formState.errors.root.message}
+              </p>
             )}
-            <Button type="submit" className="w-full" isLoading={form.formState.isSubmitting}>
+            <Button
+              type="submit"
+              className="w-full"
+              isLoading={form.formState.isSubmitting}
+            >
               Log in
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted">
             Do not have an account?{" "}
-            <Link href="/register" className="font-medium text-secondary hover:underline">
+            <Link
+              href="/register"
+              className="font-medium text-secondary hover:underline"
+            >
               Sign up
             </Link>
           </p>

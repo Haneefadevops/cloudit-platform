@@ -1006,6 +1006,15 @@ Exit criteria:
 - Added public pre-launch Privacy, Terms, Cookie, and Security pages and linked them from the public footer. The text reflects current behavior, including optional AI processing, Stripe-hosted billing, essential sessions, account controls, absence of advertising cookies, and remaining production safeguards; it does not invent a legal entity, address, jurisdiction, or contact email.
 - These legal pages are intentionally marked pre-launch drafts. Legal entity/controller details, official privacy/security/support contacts, governing law, processor list, transfer safeguards, final retention periods, cancellation/refund/withdrawal terms, and Malta/EU legal review remain release blockers.
 
+#### Phase 6D implementation checkpoint: email verification and recovery
+
+- Added one-time, expiry-limited email-verification and password-reset tokens. Only SHA-256 token digests are stored; successful password reset consumes outstanding reset tokens and revokes every active session for that user.
+- Password-reset requests always return the same response for known and unknown addresses. Registration, login, resend, verification, forgot-password, and reset endpoints are rate limited, and token values are accepted only in request bodies or the dedicated browser pages.
+- Transactional delivery uses a server-only Resend API key and an explicitly configured sender. No sender address or production domain is invented. Links use `NOTCHME_WEB_URL`, which must be HTTPS outside explicit loopback development.
+- Existing users are marked verified by migration `0024_auth_verification_recovery.sql` to avoid locking out migrated accounts. New accounts begin unverified. Enforcement is controlled by `NOTCHME_REQUIRE_EMAIL_VERIFICATION` and must remain disabled until the production domain, DNS authentication, sender, and delivery tests are complete.
+- The web application includes forgot-password, reset-password, and verify-email routes, a login recovery link, and an authenticated verification gate. The gate is derived from saved account state and does not claim delivery when transactional email is unavailable.
+- Automated coverage verifies migration structure, one-time/expired token handling, generic recovery behavior, session revocation, delivery configuration, link construction, and authenticated verification enforcement. Live email delivery remains a release gate because no production Resend credential or branded sender is stored in the repository.
+
 Exit criteria:
 
 - Real payment and cancellation work end to end

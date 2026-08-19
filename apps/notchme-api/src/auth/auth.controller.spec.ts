@@ -7,6 +7,7 @@ import { DatabaseService } from "../database/database.service";
 import { OrganizationsService } from "../organizations/organizations.service";
 import { SlugService } from "../common/lib/slug.service";
 import { RedisService } from "../redis/redis.service";
+import { TransactionalEmailService } from "./transactional-email.service";
 
 describe("AuthController", () => {
   let controller: AuthController;
@@ -20,6 +21,13 @@ describe("AuthController", () => {
         SessionService,
         OrganizationsService,
         SlugService,
+        {
+          provide: TransactionalEmailService,
+          useValue: {
+            enabled: jest.fn().mockReturnValue(false),
+            verificationRequired: jest.fn().mockReturnValue(false),
+          },
+        },
         {
           provide: DatabaseService,
           useValue: {

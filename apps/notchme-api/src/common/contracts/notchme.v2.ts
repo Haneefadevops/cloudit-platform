@@ -50,6 +50,7 @@ export type User = {
   organizationId: string | null;
   isBillingContact: boolean;
   plan: Plan;
+  emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -58,6 +59,7 @@ export type AuthMe = {
   user: User;
   profile: Profile | null;
   organization: Organization | null;
+  emailVerificationRequired: boolean;
 };
 
 export type LoginInput = {
