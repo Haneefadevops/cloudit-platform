@@ -21,3 +21,16 @@ describe("billing foundation migration", () => {
     expect(sql).toContain("provider_event_id text primary key");
   });
 });
+
+describe("Lemon Squeezy billing migration", () => {
+  const sql = readFileSync(
+    resolve(__dirname, "../../migrations/0025_lemon_squeezy_billing.sql"),
+    "utf8",
+  ).toLowerCase();
+
+  it("adds Lemon Squeezy without destroying legacy Stripe records", () => {
+    expect(sql).toContain("drop constraint if exists");
+    expect(sql).toContain("'stripe', 'lemon_squeezy'");
+    expect(sql).not.toMatch(/delete from|drop table|truncate/);
+  });
+});

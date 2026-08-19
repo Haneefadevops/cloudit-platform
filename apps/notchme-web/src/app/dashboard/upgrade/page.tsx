@@ -62,8 +62,8 @@ export default function PlansPage() {
           Choose the workspace that fits now
         </h1>
         <p className="mt-1 text-muted">
-          Start with a 14-day trial. A payment method is requested only when the
-          configured checkout requires one.
+          Eligible first-time customers can start with the configured 14-day
+          trial in Lemon Squeezy&apos;s secure checkout.
         </p>
       </header>
 
@@ -200,9 +200,9 @@ export default function PlansPage() {
             {status?.taxNotice ?? "Applicable VAT is calculated at checkout."}
           </p>
           <p className="mt-1">
-            Checkout, invoices, payment details, renewal, and cancellation are
-            handled in Stripe&apos;s hosted surfaces. NotchMe never stores card
-            details.
+            Checkout, invoices, payment details, renewal, cancellation, and
+            applicable sales-tax collection are handled by Lemon Squeezy as
+            merchant of record. NotchMe never stores card details.
           </p>
           {!status?.checkoutEnabled && (
             <p className="mt-2 font-medium text-foreground">

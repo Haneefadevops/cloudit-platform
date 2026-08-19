@@ -39,11 +39,12 @@ export default function PrivacyPage() {
         </LegalSection>
         <LegalSection title="Processors and international transfers">
           <p>
-            Stripe processes checkout, invoices, taxes, and payment methods when
-            billing is enabled. OpenAI processes a voice note only when AI
+            Lemon Squeezy acts as merchant of record and processes checkout,
+            subscriptions, invoices, applicable sales taxes, and payment methods
+            when billing is enabled. OpenAI processes a voice note only when AI
             assistance is enabled and requested. Hosting and transactional-email
-            processors will be named here before launch, together with
-            applicable transfer safeguards.
+            processors will be named here before launch, together with applicable
+            transfer safeguards.
           </p>
         </LegalSection>
         <LegalSection title="Retention and control">

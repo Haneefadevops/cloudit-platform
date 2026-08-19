@@ -10,7 +10,7 @@ Do not expose NotchMe to paying or invited pilot users until every release gate 
 ### Required product gates
 
 - Registration, verification, recovery, onboarding, publishing, reciprocal contact capture, booking management, People, Today, recap review, export, and deletion pass end-to-end testing against a representative PostgreSQL database.
-- The migrations through `0024_auth_verification_recovery.sql` are applied to a disposable clone first, then to production with a verified backup and rollback procedure.
+- The migrations through `0025_lemon_squeezy_billing.sql` are applied to a disposable clone first, then to production with a verified backup and rollback procedure.
 - Desktop, 768px tablet, and 375px mobile checks pass in light and dark themes. Keyboard order, focus visibility, skip links, reduced motion, touch targets, dialogs, errors, empty states, and horizontal overflow are reviewed in a real browser.
 - A production dependency audit has no accepted critical exposure. Remaining high or moderate findings have an owner, applicability assessment, mitigation, and deadline.
 
@@ -19,7 +19,7 @@ Do not expose NotchMe to paying or invited pilot users until every release gate 
 - Final application domain and API domain, with DNS and TLS.
 - Official support, privacy, security, and transactional sender addresses.
 - Legal entity/controller details, governing law, final Terms, Privacy, Cookies, cancellation/refund wording, processor list, and Malta/EU legal review.
-- Stripe live Products/Prices, webhook secret, Customer Portal, tax registrations, invoice wording, and sandbox-to-live acceptance evidence.
+- Approved Lemon Squeezy merchant account, live EUR Products/Variants, explicit 14-day trial configuration, webhook signing secret, Customer Portal/store branding, payout account, invoice/refund wording, and test-to-live acceptance evidence.
 - Resend domain authentication and delivery testing before `NOTCHME_REQUIRE_EMAIL_VERIFICATION=true`.
 - Production database, Redis, secrets, backups, restore rehearsal, monitoring, alert ownership, and incident contact.
 - OpenAI processing approval and a live redacted test only if AI recap is enabled. The core product must remain usable with AI disabled.
@@ -87,11 +87,27 @@ Use saved server data as the source of truth. Do not infer completion from a bro
 | Meeting completed | non-cancelled booking whose end time has passed |
 | Recap completed | finalized meeting recap |
 | Follow-up completed | saved follow-up with `completed_at` |
-| Paid conversion | verified Stripe subscription state, never the return-page redirect |
+| Paid conversion | verified Lemon Squeezy subscription state, never the return-page redirect |
 
 Report Week 1 and Week 4 retention, weekly Today use, follow-ups completed, introductions-to-bookings, meetings with finalized recaps, trial-to-paid conversion, churn signals, AI generation cost, and AI draft acceptance. Small-cohort percentages must always include their numerator and denominator.
 
-## 6. Decision framework
+## 6. Lemon Squeezy billing configuration
+
+Use test-mode credentials first. Set all values server-side; never expose the API key or webhook signing secret to the browser.
+
+```text
+LEMON_SQUEEZY_API_KEY=
+LEMON_SQUEEZY_WEBHOOK_SECRET=
+LEMON_SQUEEZY_STORE_ID=
+LEMON_SQUEEZY_TEST_MODE=true
+LEMON_SQUEEZY_FOUNDING_PRO_MONTHLY_VARIANT_ID=
+LEMON_SQUEEZY_FOUNDING_PRO_ANNUAL_VARIANT_ID=
+LEMON_SQUEEZY_TEAMS_MONTHLY_VARIANT_ID=
+```
+
+Configure the webhook callback as `/api/v2/billing/webhooks/lemon-squeezy` and subscribe to subscription created, updated, cancelled, resumed, expired, paused, and unpaused events. Before changing `LEMON_SQUEEZY_TEST_MODE` to `false`, replace every test credential and Variant ID with its live counterpart and repeat the complete lifecycle test. Teams annual remains intentionally unset.
+
+## 7. Decision framework
 
 The pilot is successful enough to expand when participants repeatedly return to complete relationship work, not merely when they publish a page. Before the pilot begins, the product owner must set numeric hypotheses for activation, Week 4 retention, weekly follow-up completion, and willingness to pay. Do not choose thresholds after seeing the results.
 
@@ -102,7 +118,7 @@ At the end of four weeks choose one:
 - **Narrow:** one segment shows value while others do not; focus the positioning and onboarding.
 - **Stop:** page creation occurs but relationship follow-through does not repeat.
 
-## 7. Expansion sequencing
+## 8. Expansion sequencing
 
 1. Malta pilot in English and EUR.
 2. Wider European rollout only after legal, tax, support, localization, and payment requirements are validated per target country.

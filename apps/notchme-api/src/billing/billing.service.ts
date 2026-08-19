@@ -8,9 +8,10 @@ import {
 import type { AuthContext } from "../auth/types";
 import { DatabaseService } from "../database/database.service";
 import type { CheckoutInput } from "./billing.schemas";
-import { StripeBillingProvider } from "./stripe-billing.provider";
+import { LemonSqueezyBillingProvider } from "./lemon-squeezy-billing.provider";
 
 type SubscriptionRow = {
+  provider: "stripe" | "lemon_squeezy";
   provider_customer_id: string;
   provider_subscription_id: string | null;
   product_key: "founding_pro" | "teams";
@@ -24,7 +25,7 @@ type SubscriptionRow = {
 export class BillingService {
   constructor(
     private readonly db: DatabaseService,
-    private readonly provider: StripeBillingProvider,
+    private readonly provider: LemonSqueezyBillingProvider,
   ) {}
 
   async status(user: AuthContext) {
@@ -52,14 +53,14 @@ export class BillingService {
       },
     };
     return {
-      provider: "stripe" as const,
+      provider: "lemon_squeezy" as const,
       checkoutEnabled: Object.values(products).some((product) =>
         Object.values(product).some(Boolean),
       ),
       products,
       subscription: subscription ? this.serialize(subscription) : null,
       taxNotice:
-        "Prices are shown before any location-dependent VAT. The checkout calculates applicable tax and collects supported tax IDs.",
+        "Lemon Squeezy is the merchant of record and calculates, collects, and remits applicable sales tax and VAT at checkout.",
     };
   }
 
@@ -89,22 +90,26 @@ export class BillingService {
       userId: user.id,
       organizationId: user.organizationId,
       email: user.email,
-      customerId: existing?.provider_customer_id ?? null,
       trialEligible: !existing,
     });
-    return { url: this.safeHostedUrl(session.url, "checkout.stripe.com") };
+    return { url: this.safeLemonSqueezyUrl(session.url) };
   }
 
   async portal(user: AuthContext) {
     this.assertBillingAuthority(user);
     const subscription = await this.subscription(user);
-    if (!subscription?.provider_customer_id) {
+    if (!subscription?.provider_subscription_id) {
       throw new NotFoundException("No billing account is available yet.");
     }
+    if (subscription.provider !== "lemon_squeezy") {
+      throw new ConflictException(
+        "This legacy subscription cannot be managed through the active billing provider.",
+      );
+    }
     const session = await this.provider.createPortal(
-      subscription.provider_customer_id,
+      subscription.provider_subscription_id,
     );
-    return { url: this.safeHostedUrl(session.url, "billing.stripe.com") };
+    return { url: this.safeLemonSqueezyUrl(session.url) };
   }
 
   private assertBillingAuthority(user: AuthContext): void {
@@ -143,11 +148,11 @@ export class BillingService {
       status: row.status,
       currentPeriodEnd: row.current_period_end?.toISOString() ?? null,
       cancelAtPeriodEnd: row.cancel_at_period_end,
-      canManage: Boolean(row.provider_customer_id),
+      canManage: Boolean(row.provider_subscription_id),
     };
   }
 
-  private safeHostedUrl(value: string | null, hostname: string): string {
+  private safeLemonSqueezyUrl(value: string | null): string {
     if (!value) {
       throw new ServiceUnavailableException(
         "The billing provider returned no redirect.",
@@ -155,7 +160,11 @@ export class BillingService {
     }
     try {
       const url = new URL(value);
-      if (url.protocol !== "https:" || url.hostname !== hostname)
+      if (
+        url.protocol !== "https:" ||
+        (url.hostname !== "lemonsqueezy.com" &&
+          !url.hostname.endsWith(".lemonsqueezy.com"))
+      )
         throw new Error();
       return url.toString();
     } catch {

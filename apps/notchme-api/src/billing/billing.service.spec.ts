@@ -23,14 +23,16 @@ describe("BillingService", () => {
     db.query.mockResolvedValueOnce({ rows: [] });
     provider.createCheckout.mockResolvedValue({
       id: "cs_test",
-      url: "https://checkout.stripe.com/c/pay/test",
+      url: "https://notchme.lemonsqueezy.com/checkout/custom/test",
     });
     await expect(
       service.checkout(owner, {
         product: "founding_pro",
         interval: "monthly",
       }),
-    ).resolves.toEqual({ url: "https://checkout.stripe.com/c/pay/test" });
+    ).resolves.toEqual({
+      url: "https://notchme.lemonsqueezy.com/checkout/custom/test",
+    });
     expect(provider.createCheckout).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
@@ -73,7 +75,7 @@ describe("BillingService", () => {
     ).rejects.toThrow("existing subscription");
   });
 
-  it("accepts only the expected Stripe hosted redirect", async () => {
+  it("accepts only an expected Lemon Squeezy hosted redirect", async () => {
     db.query.mockResolvedValueOnce({ rows: [] });
     provider.createCheckout.mockResolvedValue({
       id: "cs_test",

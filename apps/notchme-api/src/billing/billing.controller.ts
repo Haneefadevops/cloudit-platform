@@ -15,12 +15,14 @@ import type { AuthContext } from "../auth/types";
 import { BillingService } from "./billing.service";
 import { checkoutSchema } from "./billing.schemas";
 import { StripeWebhookService } from "./stripe-webhook.service";
+import { LemonSqueezyWebhookService } from "./lemon-squeezy-webhook.service";
 
 @Controller("v2/billing")
 export class BillingController {
   constructor(
     private readonly billing: BillingService,
-    private readonly webhooks: StripeWebhookService,
+    private readonly stripeWebhooks: StripeWebhookService,
+    private readonly lemonSqueezyWebhooks: LemonSqueezyWebhookService,
   ) {}
 
   @Get("status")
@@ -42,15 +44,32 @@ export class BillingController {
     return { ok: true, data: await this.billing.portal(user) };
   }
 
-  @Post("webhook")
+  @Post("webhooks/lemon-squeezy")
   @Public()
   @HttpCode(200)
-  async webhook(
+  async lemonSqueezyWebhook(
+    @Req() request: RawBodyRequest<Request>,
+    @Headers("x-signature") signature: string | undefined,
+    @Headers("x-event-name") eventName: string | undefined,
+  ) {
+    const event = this.lemonSqueezyWebhooks.verify(
+      request.rawBody,
+      signature,
+      eventName,
+    );
+    const result = await this.lemonSqueezyWebhooks.process(event);
+    return { ok: true, data: { received: true, duplicate: result.duplicate } };
+  }
+
+  @Post("webhooks/stripe")
+  @Public()
+  @HttpCode(200)
+  async stripeWebhook(
     @Req() request: RawBodyRequest<Request>,
     @Headers("stripe-signature") signature: string | undefined,
   ) {
-    const event = this.webhooks.verify(request.rawBody, signature);
-    const result = await this.webhooks.process(event);
+    const event = this.stripeWebhooks.verify(request.rawBody, signature);
+    const result = await this.stripeWebhooks.process(event);
     return { ok: true, data: { received: true, duplicate: result.duplicate } };
   }
 }

@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
 export type BillingStatus = {
-  provider: "stripe";
+  provider: "lemon_squeezy";
   checkoutEnabled: boolean;
   products: {
     foundingPro: { monthly: boolean; annual: boolean };

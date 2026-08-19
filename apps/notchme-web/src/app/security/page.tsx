@@ -16,17 +16,17 @@ export default function SecurityPage() {
             changes, and redaction of sensitive guest-management paths.
           </p>
           <p>
-            Payment details stay in Stripe-hosted surfaces. AI credentials stay
-            on the API server; voice-note audio and transcripts are not retained
-            by NotchMe. Account exports exclude credentials, tokens, secrets,
-            and card data.
+            Payment details stay in Lemon Squeezy-hosted surfaces. AI credentials
+            stay on the API server; voice-note audio and transcripts are not
+            retained by NotchMe. Account exports exclude credentials, tokens,
+            secrets, and card data.
           </p>
         </LegalSection>
         <LegalSection title="Production requirements">
           <p>
             Production must use HTTPS, strong rotated secrets, encrypted
             calendar tokens, restricted database and Redis access, monitored
-            backups, verified email delivery, Stripe webhook verification,
+            backups, verified email delivery, Lemon Squeezy webhook verification,
             dependency and container scanning, alerting, and tested restoration
             and incident procedures.
           </p>
