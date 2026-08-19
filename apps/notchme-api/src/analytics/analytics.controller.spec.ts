@@ -1,7 +1,10 @@
 import { AnalyticsController } from "./analytics.controller";
 
 describe("AnalyticsController activation events", () => {
-  const analyticsService = { trackActivationEvent: jest.fn() };
+  const analyticsService = {
+    trackActivationEvent: jest.fn(),
+    getActionableInsights: jest.fn(),
+  };
   const controller = new AnalyticsController(
     analyticsService as never,
     {} as never,
@@ -19,7 +22,10 @@ describe("AnalyticsController activation events", () => {
       response,
     );
 
-    expect(analyticsService.trackActivationEvent).toHaveBeenCalledWith("user-1", "activation_page_published");
+    expect(analyticsService.trackActivationEvent).toHaveBeenCalledWith(
+      "user-1",
+      "activation_page_published",
+    );
     expect(status).toHaveBeenCalledWith(204);
   });
 
@@ -33,5 +39,18 @@ describe("AnalyticsController activation events", () => {
     expect(result).toEqual({ ok: false, error: "Invalid activation event." });
     expect(analyticsService.trackActivationEvent).not.toHaveBeenCalled();
     expect(status).toHaveBeenCalledWith(400);
+  });
+
+  it("derives paid insights from the authenticated context", async () => {
+    analyticsService.getActionableInsights.mockResolvedValue({
+      periodDays: 30,
+    });
+    await controller.insights({
+      id: "user-1",
+      organizationId: "org-1",
+    } as never);
+    expect(analyticsService.getActionableInsights).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "user-1", organizationId: "org-1" }),
+    );
   });
 });

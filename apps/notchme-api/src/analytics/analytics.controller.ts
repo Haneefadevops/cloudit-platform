@@ -50,13 +50,15 @@ export class AnalyticsController {
       return { ok: false, error: "Invalid activation event." };
     }
 
-    await this.analyticsService.trackActivationEvent(user.id, input.data.eventType);
+    await this.analyticsService.trackActivationEvent(
+      user.id,
+      input.data.eventType,
+    );
     res.status(204);
     return;
   }
 
   @Get("me")
-  @UseGuards(RequireAnalyticsGuard)
   async getMe(
     @AuthUser() user: AuthContext,
     @Res({ passthrough: true }) res: Response,
@@ -85,6 +87,15 @@ export class AnalyticsController {
         profileMetrics: metrics,
         usage,
       },
+    };
+  }
+
+  @Get("insights")
+  @UseGuards(RequireAnalyticsGuard)
+  async insights(@AuthUser() user: AuthContext) {
+    return {
+      ok: true,
+      data: await this.analyticsService.getActionableInsights(user),
     };
   }
 }

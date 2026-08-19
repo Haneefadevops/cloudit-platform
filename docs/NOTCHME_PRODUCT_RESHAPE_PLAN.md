@@ -976,6 +976,15 @@ Exit criteria:
 - Run launch security, accessibility, performance, and end-to-end reviews
 - Onboard the Malta pilot cohort
 
+#### Phase 6A implementation checkpoint: actionable Insights
+
+- Authenticated Free users can now see the promised basic all-time page statistics; the API no longer incorrectly blocks that basic summary behind the paid analytics guard.
+- Paid Insights add a 30-day comparison for page views, newly added people, and non-cancelled bookings, plus completed next actions. Comparisons state only the numeric change from the prior 30 days and do not present a synthetic performance or relationship score.
+- The current-workflow view reports overdue actions, actions due within seven days, upcoming non-cancelled bookings, and past-30-day meetings without a recap.
+- Deterministic attention cards link users to saved-data gaps: unpublished page, no active meeting type, overdue next actions, and meetings awaiting recap. When none apply, the interface says only that no urgent saved-data gap was found.
+- People and follow-up aggregation is restricted to the authenticated organization (or the owning user for legacy individual records); booking, recap, meeting-type, profile, and event queries remain scoped to the authenticated user/profile. Counts and actions are calculated by the API over the authorized dataset, not inferred from a paginated browser response.
+- Loading, retryable error, free-plan upgrade, empty-attention, responsive metric, and accessible heading states are implemented. Billing remains Phase 6B and must remove the development self-upgrade behavior before any paid launch.
+
 Exit criteria:
 
 - Real payment and cancellation work end to end
