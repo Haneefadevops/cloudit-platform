@@ -1,16 +1,39 @@
 "use client";
 
+import { useState } from "react";
+
 import { useAuth } from "@/hooks/useAuth";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/ui/avatar";
-import { Mail, Shield, LogOut, Sparkles, Settings2 } from "lucide-react";
+import {
+  Download,
+  Mail,
+  Shield,
+  LogOut,
+  Sparkles,
+  Settings2,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useDeleteAccount, useExportAccount } from "@/hooks/useAccountControl";
 
 export default function SettingsPage() {
   const { state, logout } = useAuth();
+  const exportAccount = useExportAccount();
+  const deleteAccount = useDeleteAccount();
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
 
   if (state.status === "loading") {
     return (
@@ -34,7 +57,9 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Settings
+        </h1>
         <p className="text-muted">Manage your account and preferences.</p>
       </div>
 
@@ -44,23 +69,31 @@ export default function SettingsPage() {
             <Avatar fallback={user.fullName} size="sm" />
             Account
           </CardTitle>
-          <CardDescription>Your account details and current plan.</CardDescription>
+          <CardDescription>
+            Your account details and current plan.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <p className="text-xs text-muted">Full name</p>
-              <p className="text-sm font-medium text-foreground">{user.fullName}</p>
+              <p className="text-sm font-medium text-foreground">
+                {user.fullName}
+              </p>
             </div>
             <div>
               <p className="text-xs text-muted">Email</p>
-              <p className="text-sm font-medium text-foreground">{user.email}</p>
+              <p className="text-sm font-medium text-foreground">
+                {user.email}
+              </p>
             </div>
             <div>
               <p className="text-xs text-muted">Role</p>
               <div className="flex items-center gap-2">
                 <Shield className="h-3.5 w-3.5 text-muted" />
-                <p className="text-sm font-medium capitalize text-foreground">{user.role}</p>
+                <p className="text-sm font-medium capitalize text-foreground">
+                  {user.role}
+                </p>
               </div>
             </div>
             <div>
@@ -92,10 +125,94 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
+            <Download className="h-5 w-5" />
+            Your data
+          </CardTitle>
+          <CardDescription>
+            Download a portable JSON copy of the account and workspace data you
+            are authorized to export. Secrets and payment-card data are
+            excluded.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            onClick={() => exportAccount.mutate()}
+            isLoading={exportAccount.isPending}
+          >
+            Download my data
+          </Button>
+          {exportAccount.isError && (
+            <p role="alert" className="mt-2 text-sm text-error">
+              {exportAccount.error.message}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-error/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Trash2 className="h-5 w-5 text-error" />
+            Delete account
+          </CardTitle>
+          <CardDescription>
+            This permanently removes your NotchMe account and revokes every
+            session. Active subscriptions must be ended first. Shared workspaces
+            must retain another administrator.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="delete-password">Current password</Label>
+            <Input
+              id="delete-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="delete-confirmation">
+              Type DELETE MY ACCOUNT to confirm
+            </Label>
+            <Input
+              id="delete-confirmation"
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+            />
+          </div>
+          <Button
+            variant="outline"
+            className="border-error/40 text-error"
+            disabled={
+              !password ||
+              confirmation !== "DELETE MY ACCOUNT" ||
+              deleteAccount.isPending
+            }
+            isLoading={deleteAccount.isPending}
+            onClick={() => deleteAccount.mutate({ password, confirmation })}
+          >
+            Permanently delete account
+          </Button>
+          {deleteAccount.isError && (
+            <p role="alert" className="text-sm text-error">
+              {deleteAccount.error.message}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <Settings2 className="h-5 w-5" />
             CRM configuration
           </CardTitle>
-          <CardDescription>Customize fields and pipeline stages.</CardDescription>
+          <CardDescription>
+            Customize fields and pipeline stages.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Button variant="outline" asChild>
@@ -110,11 +227,14 @@ export default function SettingsPage() {
             <Mail className="h-5 w-5" />
             Support
           </CardTitle>
-          <CardDescription>Need help? Contact the NotchMe team.</CardDescription>
+          <CardDescription>
+            Need help? Contact the NotchMe team.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted">
-            For account and billing questions, reach out to your NotchMe administrator.
+            For account and billing questions, reach out to your NotchMe
+            administrator.
           </p>
         </CardContent>
       </Card>

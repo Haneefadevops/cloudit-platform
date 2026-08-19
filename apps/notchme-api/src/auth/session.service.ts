@@ -105,6 +105,18 @@ export class SessionService {
     this.clearSessionCookie(res);
   }
 
+  async revokeAllUserSessions(userId: string): Promise<void> {
+    const sessionIds = await this.redisService.client.smembers(
+      this.userSessionsKey(userId),
+    );
+    const pipeline = this.redisService.client.pipeline();
+    for (const sessionId of sessionIds) {
+      pipeline.del(this.sessionKey(sessionId));
+    }
+    pipeline.del(this.userSessionsKey(userId));
+    await pipeline.exec();
+  }
+
   async getAuthUser(req: Request): Promise<SessionUser | null> {
     const token =
       this.getCookie(req.headers.cookie, authCookieName) ??

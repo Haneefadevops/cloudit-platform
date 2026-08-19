@@ -28,6 +28,7 @@ import { CustomersModule } from "./customers/customers.module";
 import { SchedulingModule } from "./scheduling/scheduling.module";
 import { PublicBookingModule } from "./public-booking/public-booking.module";
 import { InternalModule } from "./internal/internal.module";
+import { AccountModule } from "./account/account.module";
 import { SessionAuthGuard } from "./common/guards/session-auth.guard";
 import { ModuleGuard } from "./common/guards/module.guard";
 import { RequestLoggingInterceptor } from "./common/interceptors/request-logging.interceptor";
@@ -93,6 +94,7 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
     SchedulingModule,
     PublicBookingModule,
     InternalModule,
+    AccountModule,
   ],
   controllers: [AppController],
   providers: [

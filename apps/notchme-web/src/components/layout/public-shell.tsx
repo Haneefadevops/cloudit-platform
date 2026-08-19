@@ -1,4 +1,5 @@
 import { MarketingHeader } from "./marketing-header";
+import Link from "next/link";
 
 export function PublicShell({ children }: { children: React.ReactNode }) {
   return (
@@ -10,10 +11,24 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
         Skip to main content
       </a>
       <MarketingHeader />
-      <main id="main-content" className="flex-1">{children}</main>
+      <main id="main-content" className="flex-1">
+        {children}
+      </main>
       <footer className="border-t border-border py-6">
-        <div className="mx-auto max-w-7xl px-4 text-center text-sm text-muted sm:px-6 lg:px-8">
-          &copy; {new Date().getFullYear()} NotchMe. Every introduction deserves a next step.
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 text-sm text-muted sm:px-6 md:flex-row lg:px-8">
+          <span>
+            &copy; {new Date().getFullYear()} NotchMe. Every introduction
+            deserves a next step.
+          </span>
+          <nav
+            aria-label="Legal and trust"
+            className="flex flex-wrap justify-center gap-x-4 gap-y-2"
+          >
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/cookies">Cookies</Link>
+            <Link href="/security">Security</Link>
+          </nav>
         </div>
       </footer>
     </div>

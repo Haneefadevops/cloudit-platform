@@ -997,6 +997,15 @@ Exit criteria:
 - `billing_subscriptions` contains lifecycle identifiers and state; `billing_webhook_events` provides event idempotency. Neither table has payment-card fields. Automated tests cover tax/trial parameters, repeat-trial prevention, authority, redirect validation, raw-body signatures and expiry, scope and price validation, event deduplication, activation, cancellation, payment failure, and migration structure.
 - Live-mode completion remains an environment/release gate: create real Stripe Products/Prices, configure the Customer Portal and tax registrations, register the webhook endpoint, apply migration `0022_billing_foundation.sql`, and exercise sandbox then live checkout/invoice/cancellation/payment-failure events. Existing pre-Stripe paid development rows require a manual entitlement audit; the migration intentionally does not revoke them automatically.
 
+#### Phase 6C implementation checkpoint: account control and trust surfaces
+
+- Added an authenticated, portable JSON account export. It includes the user's account/profile, authorized relationship records, bookings, availability, authored actions/activities/recaps, factual analytics events, workspace summary, and non-sensitive billing lifecycle state. It explicitly excludes password hashes, reset tokens, sessions, authentication cookies, calendar credentials, guest-management tokens, webhook/provider secrets, card data, and non-retained AI audio/transcripts.
+- Staff exports include only assigned People records; an organization admin export uses the authorized organization scope. Provider customer/subscription identifiers are not included in the browser export.
+- Added password-reconfirmed permanent account deletion with the exact phrase `DELETE MY ACCOUNT`. Active/trialing/past-due/paused subscriptions block deletion until handled in the billing portal. A sole organization administrator cannot delete their account while other members remain; a sole-member workspace is removed with its account data.
+- Account erasure transactionally removes AI operational rows and recap/booking dependencies before deleting the user, removes orphaned booking guests, and revokes all Redis sessions. Billing lifecycle history is detached from deleted user/organization foreign keys rather than silently deleting records that may be subject to accounting retention.
+- Added public pre-launch Privacy, Terms, Cookie, and Security pages and linked them from the public footer. The text reflects current behavior, including optional AI processing, Stripe-hosted billing, essential sessions, account controls, absence of advertising cookies, and remaining production safeguards; it does not invent a legal entity, address, jurisdiction, or contact email.
+- These legal pages are intentionally marked pre-launch drafts. Legal entity/controller details, official privacy/security/support contacts, governing law, processor list, transfer safeguards, final retention periods, cancellation/refund/withdrawal terms, and Malta/EU legal review remain release blockers.
+
 Exit criteria:
 
 - Real payment and cancellation work end to end
