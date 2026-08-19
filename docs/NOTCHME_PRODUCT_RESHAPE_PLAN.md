@@ -901,6 +901,13 @@ Exit criteria:
 
 **Phase 4 complete:** reciprocal contact capture, public booking, guest booking continuity, timezone clarity, guest management, and calendar handoff are implemented. Deferred cosmetic browser QA remains required. **Recommended Phase 5 scope:** private, review-before-save AI meeting recap and follow-up assistance with consent, retention, and cost controls.
 
+#### Phase 5A1a Meeting recap drafts
+
+- `meeting_recaps` is an organization-isolated private table with one recap per booking, linked booking/customer/author ownership, draft/finalized lifecycle, manual source, and a reserved future AI-assisted source. No audio, transcript, provider, or embedding fields are stored.
+- Authenticated scheduling endpoints provide GET/PUT/DELETE at `/v2/scheduling/bookings/:bookingId/recap`. Draft input is strict, bounded, sanitized, and cannot set ownership, status, source, or finalization fields. Public and guest routes do not expose recaps.
+- Drafts are unavailable for future/cancelled bookings and create no activity, follow-up, or analytics data. Finalized records are immutable; Phase 5A1b will add reviewed atomic finalization, factual timeline activity, and optional explicit follow-up creation.
+- Migration `0020_meeting_recaps.sql` was structurally checked against the current organization, booking, customer, user, and timestamp conventions. Organization ownership is mandatory; booking/customer deletion is restricted; author deletion preserves the recap; JSON arrays, content lengths, lifecycle/source values, finalized timestamps, uniqueness, and lookup indexes are constrained at the database boundary. Execution against a disposable PostgreSQL database remains required before production deployment.
+
 Exit criteria:
 
 - A user can capture a person and set a next action in under one minute
