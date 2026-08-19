@@ -1,11 +1,22 @@
-import { Body, Controller, Delete, Get, Param, Put } from "@nestjs/common";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+} from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthUser } from "../common/decorators/auth-user.decorator";
 import { RequireModule } from "../common/decorators/require-module.decorator";
 import type { AuthContext } from "../auth/types";
 import { MeetingRecapsService } from "./meeting-recaps.service";
-import { recapDraftSchema } from "./meeting-recaps.schemas";
-import { BadRequestException } from "@nestjs/common";
+import {
+  recapDraftSchema,
+  recapFinalizeSchema,
+} from "./meeting-recaps.schemas";
 
 @ApiTags("scheduling")
 @Controller("v2/scheduling/bookings")
@@ -34,5 +45,20 @@ export class MeetingRecapsController {
   ) {
     await this.recaps.remove(user, id);
     return { ok: true, data: { deleted: true } };
+  }
+
+  @Post(":bookingId/recap/finalize") async finalize(
+    @AuthUser() user: AuthContext,
+    @Param("bookingId") id: string,
+    @Body() body: unknown,
+  ) {
+    const input = recapFinalizeSchema.safeParse(body);
+    if (!input.success) {
+      throw new BadRequestException("Invalid recap finalization.");
+    }
+    return {
+      ok: true,
+      data: await this.recaps.finalize(user, id, input.data),
+    };
   }
 }

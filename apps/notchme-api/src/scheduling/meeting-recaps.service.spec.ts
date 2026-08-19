@@ -1,8 +1,11 @@
 import { MeetingRecapsService } from "./meeting-recaps.service";
-import { recapDraftSchema } from "./meeting-recaps.schemas";
+import {
+  recapDraftSchema,
+  recapFinalizeSchema,
+} from "./meeting-recaps.schemas";
 
 describe("MeetingRecapsService drafts", () => {
-  const db = { query: jest.fn() };
+  const db = { query: jest.fn(), connect: jest.fn() };
   const service = new MeetingRecapsService(db as never);
   const user = { id: "user-1", organizationId: "org-1" } as never;
   const booking = {
@@ -69,5 +72,150 @@ describe("MeetingRecapsService drafts", () => {
         commitments: [],
       }).summary,
     ).toBe("x");
+  });
+});
+
+describe("MeetingRecapsService finalization", () => {
+  const db = { query: jest.fn(), connect: jest.fn() };
+  const service = new MeetingRecapsService(db as never);
+  const user = { id: "user-1", organizationId: "org-1" } as never;
+  const booking = {
+    id: "booking-1",
+    customer_id: "customer-1",
+    status: "confirmed",
+    start_at: new Date("2026-08-01T10:00:00.000Z"),
+  };
+  const draft = {
+    id: "recap-1",
+    status: "draft",
+    summary: "Reviewed summary",
+  };
+  const finalized = {
+    ...draft,
+    status: "finalized",
+    finalized_at: new Date("2026-08-19T10:00:00.000Z"),
+  };
+
+  const makeClient = () => ({
+    query: jest.fn(),
+    release: jest.fn(),
+  });
+
+  beforeEach(() => {
+    db.query.mockReset();
+    db.connect.mockReset();
+  });
+
+  it("finalizes with one factual activity and no automatic follow-up", async () => {
+    const client = makeClient();
+    db.connect.mockResolvedValue(client);
+    client.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [booking] })
+      .mockResolvedValueOnce({ rows: [draft] })
+      .mockResolvedValueOnce({ rows: [finalized] })
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({});
+
+    await expect(
+      service.finalize(user, "booking-1", { createFollowUp: false }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        alreadyFinalized: false,
+        followUpCreated: false,
+      }),
+    );
+    const sql = client.query.mock.calls
+      .map(([statement]) => String(statement).toLowerCase())
+      .join(" ");
+    expect(sql).toContain("for update");
+    expect(sql).toContain("meeting recap finalized");
+    expect(sql).not.toContain("insert into customer_follow_ups");
+    expect(sql).not.toContain("reviewed summary");
+    expect(client.release).toHaveBeenCalled();
+  });
+
+  it("creates a follow-up only when explicitly requested", async () => {
+    const client = makeClient();
+    db.connect.mockResolvedValue(client);
+    client.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [booking] })
+      .mockResolvedValueOnce({ rows: [draft] })
+      .mockResolvedValueOnce({ rows: [finalized] })
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [{ id: "follow-up-1" }] })
+      .mockResolvedValueOnce({});
+
+    await expect(
+      service.finalize(user, "booking-1", {
+        createFollowUp: true,
+        followUpTitle: "Send proposal",
+        followUpDueAt: "2099-08-20T10:00:00.000Z",
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        followUpCreated: true,
+        followUpId: "follow-up-1",
+      }),
+    );
+  });
+
+  it("is idempotent when the recap is already finalized", async () => {
+    const client = makeClient();
+    db.connect.mockResolvedValue(client);
+    client.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [booking] })
+      .mockResolvedValueOnce({ rows: [finalized] })
+      .mockResolvedValueOnce({});
+
+    await expect(
+      service.finalize(user, "booking-1", {
+        createFollowUp: true,
+        followUpTitle: "Should not be created",
+        followUpDueAt: "2099-08-20T10:00:00.000Z",
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        alreadyFinalized: true,
+        followUpCreated: false,
+      }),
+    );
+    const sql = client.query.mock.calls
+      .map(([statement]) => String(statement).toLowerCase())
+      .join(" ");
+    expect(sql).not.toContain("insert into customer_activities");
+    expect(sql).not.toContain("insert into customer_follow_ups");
+  });
+
+  it("rolls back when activity creation fails", async () => {
+    const client = makeClient();
+    db.connect.mockResolvedValue(client);
+    client.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [booking] })
+      .mockResolvedValueOnce({ rows: [draft] })
+      .mockResolvedValueOnce({ rows: [finalized] })
+      .mockRejectedValueOnce(new Error("activity failed"))
+      .mockResolvedValueOnce({});
+
+    await expect(
+      service.finalize(user, "booking-1", { createFollowUp: false }),
+    ).rejects.toThrow("activity failed");
+    expect(client.query).toHaveBeenCalledWith("ROLLBACK");
+    expect(client.release).toHaveBeenCalled();
+  });
+
+  it("validates explicit follow-up input", () => {
+    expect(
+      recapFinalizeSchema.safeParse({ createFollowUp: true }).success,
+    ).toBe(false);
+    expect(
+      recapFinalizeSchema.safeParse({
+        createFollowUp: false,
+        organizationId: "org-2",
+      }).success,
+    ).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ import {
 import type { AuthContext } from "../auth/types";
 import { DatabaseService } from "../database/database.service";
 import type { RecapDraftInput } from "./meeting-recaps.schemas";
+import type { RecapFinalizeInput } from "./meeting-recaps.schemas";
 
 type BookingRow = {
   id: string;
@@ -149,5 +150,111 @@ export class MeetingRecapsService {
       throw new ConflictException("Finalized recaps are immutable.");
     }
     throw new NotFoundException("Recap not found.");
+  }
+
+  async finalize(user: AuthContext, id: string, input: RecapFinalizeInput) {
+    const organizationId = this.organizationId(user);
+    const client = await this.db.connect();
+    try {
+      await client.query("BEGIN");
+      const bookingResult = await client.query<BookingRow>(
+        `SELECT b.id, b.customer_id, b.status, b.start_at
+         FROM bookings b
+         JOIN users u ON u.id = b.owner_user_id
+         JOIN customers c ON c.id = b.customer_id
+         WHERE b.id = $1
+           AND b.owner_user_id = $2
+           AND u.organization_id = $3
+           AND c.organization_id = $3`,
+        [id, user.id, organizationId],
+      );
+      const booking = bookingResult.rows[0];
+      if (!booking) throw new NotFoundException("Booking not found.");
+      if (booking.status === "cancelled") {
+        throw new ConflictException("A cancelled booking cannot be finalized.");
+      }
+
+      const recapResult = await client.query<MeetingRecapRow>(
+        `SELECT * FROM meeting_recaps
+         WHERE booking_id = $1 AND organization_id = $2
+         FOR UPDATE`,
+        [id, organizationId],
+      );
+      const recap = recapResult.rows[0];
+      if (!recap) throw new NotFoundException("Recap not found.");
+      if (recap.status === "finalized") {
+        await client.query("COMMIT");
+        return {
+          recap,
+          alreadyFinalized: true,
+          followUpCreated: false,
+        };
+      }
+      if (!recap.summary.trim()) {
+        throw new ConflictException("A summary is required to finalize.");
+      }
+
+      let followUpId: string | null = null;
+      if (input.createFollowUp) {
+        if (!input.followUpTitle || !input.followUpDueAt) {
+          throw new ConflictException("Valid follow-up details are required.");
+        }
+        const dueAt = new Date(input.followUpDueAt);
+        if (dueAt.getTime() <= Date.now()) {
+          throw new ConflictException("The follow-up due date must be future.");
+        }
+      }
+
+      const finalizedResult = await client.query<MeetingRecapRow>(
+        `UPDATE meeting_recaps
+         SET status = 'finalized', finalized_at = now(), updated_at = now()
+         WHERE id = $1 AND status = 'draft'
+         RETURNING *`,
+        [recap.id],
+      );
+      const finalized = finalizedResult.rows[0];
+      if (!finalized) {
+        throw new ConflictException("Recap could not be finalized.");
+      }
+
+      await client.query(
+        `INSERT INTO customer_activities (
+           customer_id, created_by_user_id, type, title, body, occurred_at
+         ) VALUES ($1, $2, 'meeting', 'Meeting recap finalized', NULL, $3)`,
+        [booking.customer_id, user.id, booking.start_at],
+      );
+
+      if (input.createFollowUp) {
+        const followUpResult = await client.query<{ id: string }>(
+          `INSERT INTO customer_follow_ups (
+             customer_id, created_by_user_id, title, due_at
+           ) VALUES ($1, $2, $3, $4)
+           RETURNING id`,
+          [
+            booking.customer_id,
+            user.id,
+            input.followUpTitle,
+            input.followUpDueAt,
+          ],
+        );
+        followUpId = followUpResult.rows[0]?.id ?? null;
+        if (!followUpId) {
+          throw new ConflictException("Follow-up could not be created.");
+        }
+      }
+
+      await client.query("COMMIT");
+      return {
+        recap: finalized,
+        alreadyFinalized: false,
+        followUpCreated: followUpId !== null,
+        followUpId,
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }

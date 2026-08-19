@@ -908,6 +908,13 @@ Exit criteria:
 - Drafts are unavailable for future/cancelled bookings and create no activity, follow-up, or analytics data. Finalized records are immutable; Phase 5A1b will add reviewed atomic finalization, factual timeline activity, and optional explicit follow-up creation.
 - Migration `0020_meeting_recaps.sql` was structurally checked against the current organization, booking, customer, user, and timestamp conventions. Organization ownership is mandatory; booking/customer deletion is restricted; author deletion preserves the recap; JSON arrays, content lengths, lifecycle/source values, finalized timestamps, uniqueness, and lookup indexes are constrained at the database boundary. Execution against a disposable PostgreSQL database remains required before production deployment.
 
+#### Phase 5A1b Reviewed recap finalization
+
+- Authenticated `POST /v2/scheduling/bookings/:bookingId/recap/finalize` accepts an explicit `createFollowUp` decision. Follow-up title and due time are required only when that decision is true; ownership, status, source, and finalization fields remain server-controlled.
+- Finalization locks the organization-scoped recap row and atomically marks it finalized, creates one factual `Meeting recap finalized` Person activity, and optionally creates one explicitly requested follow-up. The activity deliberately excludes the summary, private note, key points, commitments, and proposed action content.
+- Repeated and concurrent requests serialize on the recap row. An already-finalized recap returns an idempotent result and never creates another activity or follow-up. Any activity or follow-up failure rolls back the recap state change.
+- Finalized recaps remain immutable. Correction/versioning, the authenticated editor/review UI, audio, transcription, and AI assistance remain deferred to later Phase 5 work.
+
 Exit criteria:
 
 - A user can capture a person and set a next action in under one minute

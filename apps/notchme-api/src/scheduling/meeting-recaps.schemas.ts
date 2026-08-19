@@ -27,3 +27,36 @@ export const recapDraftSchema = z
   .strict();
 
 export type RecapDraftInput = z.infer<typeof recapDraftSchema>;
+
+export const recapFinalizeSchema = z
+  .object({
+    createFollowUp: z.boolean().default(false),
+    followUpTitle: z
+      .string()
+      .trim()
+      .min(1)
+      .max(160)
+      .transform(stripTags)
+      .optional(),
+    followUpDueAt: z.string().datetime().optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (!value.createFollowUp) return;
+    if (!value.followUpTitle) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["followUpTitle"],
+        message: "A follow-up title is required.",
+      });
+    }
+    if (!value.followUpDueAt) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["followUpDueAt"],
+        message: "A follow-up due date is required.",
+      });
+    }
+  });
+
+export type RecapFinalizeInput = z.infer<typeof recapFinalizeSchema>;
