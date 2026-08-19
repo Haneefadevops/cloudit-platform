@@ -892,7 +892,14 @@ Exit criteria:
 - Management responses contain only the meeting title, start/end UTC timestamps, display timezone, status, host display name, and allowed operations. Invalid or expired management links receive a generic unavailable result; request and exception logging redact management-token path segments.
 - Creation remains linked to the existing customer matching flow. Guest cancellation and rescheduling create factual booking audit and Person timeline activity rows in the same transaction. Rescheduling persists UTC instants plus a validated IANA display timezone; the API accepts canonical ISO UTC instants only, so an impossible or ambiguous unqualified local DST time is rejected rather than guessed. No automatic follow-up, outbound message, or notification is created.
 
-**Phase 4B2 remaining:** build the guest management UI, add-to-calendar output, and explicit local-time selection/ambiguity handling on top of this API; reminder delivery remains deferred.
+#### Phase 4B2 Guest confirmation and management — 2026-08-18
+
+- Public booking now ends in a guest-safe confirmation journey showing only the meeting, host, UTC-backed time in its explicit display timezone, and status. It provides calendar download, a management link, and a return-to-profile action. No email or notification is claimed or sent; guests are truthfully asked to save the management link.
+- `/book/manage/[token]` uses the existing opaque Phase 4B1 token endpoints only. It handles loading, unavailable links, retryable failures, cancelled/past states, cancellation confirmation, and backend-confirmed state refreshes. Tokens are neither added to analytics nor persisted in browser storage; the page disables indexing and applies `no-referrer` metadata.
+- Rescheduling uses the same public generated-slot endpoint, defaults to the browser IANA timezone with UTC fallback, shows the original and proposed instants, and confirms before submitting. Conflicts leave the current booking unchanged and return the guest to refreshed availability.
+- Calendar download produces a CRLF `.ics` file with UTC start/end, DTSTAMP, escaped public summary/description, a non-private derived UID, and status. It excludes management tokens, private notes, guest messages, and internal tenant/person/user identifiers.
+
+**Phase 4 complete:** reciprocal contact capture, public booking, guest booking continuity, timezone clarity, guest management, and calendar handoff are implemented. Deferred cosmetic browser QA remains required. **Recommended Phase 5 scope:** private, review-before-save AI meeting recap and follow-up assistance with consent, retention, and cost controls.
 
 Exit criteria:
 

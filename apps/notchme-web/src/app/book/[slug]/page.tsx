@@ -32,6 +32,7 @@ import {
 import Link from "next/link";
 import { GlassCard } from "@/components/ui/glass-card";
 import { cn } from "@/lib/utils";
+import { downloadGuestBookingIcs } from "@/lib/guest-calendar";
 
 const guestSchema = z.object({
   guestName: z.string().min(1, "Name is required").max(120),
@@ -314,6 +315,7 @@ function BookingFlow({ meetingType }: { meetingType: MeetingType }) {
         booking={booking}
         guestTokens={createBooking.data.guestTokens}
         profileName={createBooking.data.profile.fullName}
+        profileSlug={slug ?? ""}
       />
     );
   }
@@ -442,17 +444,19 @@ function ConfirmationCard({
   booking,
   guestTokens,
   profileName,
+  profileSlug,
 }: {
   booking: { startAt: string; endAt: string; timezone: string; status: string; meetingType?: { title: string } };
   guestTokens?: { reschedule: string; cancel: string };
   profileName: string;
+  profileSlug: string;
 }) {
   return (
     <Card className="border-success">
       <CardContent className="space-y-4 p-6 text-center">
         <CheckCircle className="mx-auto h-12 w-12 text-success" />
         <div>
-          <h2 className="text-xl font-bold text-primary">Booking confirmed</h2>
+          <h2 className="text-xl font-bold text-primary">Booking {booking.status}</h2>
           <p className="text-muted">
             You&apos;re meeting with {profileName} for {booking.meetingType?.title ?? "a meeting"}.
           </p>
@@ -471,11 +475,14 @@ function ConfirmationCard({
           </p>
         </div>
 
-        {guestTokens && (
-          <div className="space-y-2 text-left text-sm text-muted">
-            <p>A confirmation email with reschedule and cancel links has been sent to you.</p>
-          </div>
-        )}
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <Button type="button" variant="outline" onClick={() => downloadGuestBookingIcs({ profileSlug, meetingTypeSlug: "", meetingTypeTitle: booking.meetingType?.title ?? "Meeting", startAt: booking.startAt, endAt: booking.endAt, timezone: booking.timezone, status: booking.status === "cancelled" ? "cancelled" : "confirmed", hostName: profileName, cancellationAllowed: false, reschedulingAllowed: false })}>
+            <CalendarDays className="h-4 w-4" /> Add to calendar
+          </Button>
+          {guestTokens?.reschedule && <a className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground" href={`/book/manage/${encodeURIComponent(guestTokens.reschedule)}${guestTokens.cancel ? `#cancel=${encodeURIComponent(guestTokens.cancel)}` : ""}`}>Manage booking</a>}
+          <Button variant="ghost" asChild><Link href={`/p/${profileSlug}`}>Return to profile</Link></Button>
+        </div>
+        {guestTokens && <p className="text-sm text-muted">No confirmation email has been sent. Save your management link now if you may need to change or cancel this booking.</p>}
       </CardContent>
     </Card>
   );

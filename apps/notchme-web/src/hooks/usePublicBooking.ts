@@ -5,6 +5,7 @@ import type {
   PublicBookingSlots,
   PublicBookingInput,
   PublicBookingConfirmation,
+  GuestManagedBooking,
 } from "@/lib/contracts";
 
 export function usePublicBookingProfile(slug: string) {
@@ -17,6 +18,24 @@ export function usePublicBookingProfile(slug: string) {
     },
     enabled: slug.length > 0,
   });
+}
+
+export async function getGuestManagedBooking(token: string) {
+  const result = await apiFetch<GuestManagedBooking>(`/v2/book/manage/${encodeURIComponent(token)}`);
+  if (!result.ok) throw new Error(result.error);
+  return result.data;
+}
+
+export async function rescheduleGuestBooking(token: string, startAt: string, timezone: string) {
+  const result = await apiFetch<GuestManagedBooking>(`/v2/book/manage/${encodeURIComponent(token)}/reschedule`, { method: "POST", body: JSON.stringify({ startAt, timezone }) });
+  if (!result.ok) throw new Error(result.error);
+  return result.data;
+}
+
+export async function cancelGuestBooking(token: string) {
+  const result = await apiFetch<GuestManagedBooking>(`/v2/book/manage/${encodeURIComponent(token)}/cancel`, { method: "POST" });
+  if (!result.ok) throw new Error(result.error);
+  return result.data;
 }
 
 export function usePublicBookingSlots(

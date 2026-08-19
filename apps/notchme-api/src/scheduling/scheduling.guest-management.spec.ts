@@ -20,6 +20,8 @@ describe("guest booking management", () => {
     start_at: future,
     end_at: new Date(future.getTime() + 30 * 60 * 1000),
     timezone: "Europe/Berlin",
+    profile_slug: "host",
+    meeting_type_slug: "intro",
     meeting_type_title: "Intro",
     host_name: "Host",
   };
@@ -55,6 +57,8 @@ describe("guest booking management", () => {
     await expect(
       service.getGuestManagedBooking("opaque-token"),
     ).resolves.toEqual({
+      profileSlug: "host",
+      meetingTypeSlug: "intro",
       meetingTypeTitle: "Intro",
       startAt: future.toISOString(),
       endAt: new Date(future.getTime() + 30 * 60 * 1000).toISOString(),

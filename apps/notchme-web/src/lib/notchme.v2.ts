@@ -976,6 +976,19 @@ export type PublicBookingConfirmation = {
   };
 };
 
+export type GuestManagedBooking = {
+  profileSlug: string;
+  meetingTypeSlug: string;
+  meetingTypeTitle: string;
+  startAt: string;
+  endAt: string;
+  timezone: string;
+  status: "pending" | "confirmed" | "cancelled";
+  hostName: string;
+  cancellationAllowed: boolean;
+  reschedulingAllowed: boolean;
+};
+
 export type BookingCancelInput = {
   reason?: string;
 };

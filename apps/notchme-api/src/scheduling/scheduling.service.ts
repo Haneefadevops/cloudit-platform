@@ -919,7 +919,7 @@ export class SchedulingService {
   ) {
     const result = await this.databaseService.query(
       `SELECT b.id, b.owner_user_id, b.customer_id, b.status, b.start_at, b.end_at, b.timezone,
-              mt.title AS meeting_type_title, mt.duration_minutes, mt.buffer_before_minutes, mt.buffer_after_minutes, mt.min_notice_minutes, mt.booking_window_days, mt.max_bookings_per_day, p.full_name AS host_name, gt.type
+              mt.slug AS meeting_type_slug, mt.title AS meeting_type_title, mt.duration_minutes, mt.buffer_before_minutes, mt.buffer_after_minutes, mt.min_notice_minutes, mt.booking_window_days, mt.max_bookings_per_day, p.slug AS profile_slug, p.full_name AS host_name, gt.type
        FROM booking_guest_tokens gt JOIN bookings b ON b.id = gt.booking_id
        JOIN meeting_types mt ON mt.id = b.meeting_type_id JOIN profiles p ON p.user_id = b.owner_user_id
        WHERE gt.token_hash = $1 AND gt.expires_at > now() AND gt.used_at IS NULL ${type ? "AND gt.type = $2" : ""}`,
@@ -934,6 +934,8 @@ export class SchedulingService {
     const future = new Date(startAt) > new Date();
     const status = row.status as string;
     return {
+      profileSlug: row.profile_slug as string,
+      meetingTypeSlug: row.meeting_type_slug as string,
       meetingTypeTitle: row.meeting_type_title as string,
       startAt,
       endAt,
