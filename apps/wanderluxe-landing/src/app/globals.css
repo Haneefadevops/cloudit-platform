@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #FAF8F5;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--bg);
+  color: #0B1120;
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(212, 175, 55, 0.3);
+  color: #0B1120;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #F3EFE8;
+}
+::-webkit-scrollbar-thumb {
+  background: #D4AF37;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #C5A028;
+}
+
+@layer components {
+  .glass {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 8px 32px rgba(11, 17, 32, 0.08);
+  }
+
+  .glass-dark {
+    background: rgba(11, 17, 32, 0.65);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #E4C65A 0%, #D4AF37 50%, #C5A028 100%);
+  }
+
+  .text-gradient-light {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #FAF8F5 0%, #E4C65A 100%);
+  }
+
+  .btn-gradient {
+    background-image: linear-gradient(135deg, #E4C65A 0%, #D4AF37 50%, #C5A028 100%);
+    box-shadow: 0 8px 24px rgba(212, 175, 55, 0.25), 0 2px 8px rgba(197, 160, 40, 0.18);
+    transition: transform 0.25s cubic-bezier(0.21, 0.47, 0.32, 0.98), box-shadow 0.25s ease, filter 0.25s ease;
+  }
+  .btn-gradient:hover {
+    filter: brightness(1.06);
+    transform: translateY(-2px);
+    box-shadow: 0 14px 36px rgba(212, 175, 55, 0.35), 0 6px 16px rgba(197, 160, 40, 0.28);
+  }
+
+  .heading-xl {
+    @apply font-serif text-5xl font-medium leading-[1.05] tracking-tight sm:text-6xl md:text-7xl lg:text-8xl;
+  }
+
+  .heading-lg {
+    @apply font-serif text-4xl font-medium leading-[1.08] tracking-tight sm:text-5xl md:text-6xl;
+  }
+
+  .heading-md {
+    @apply font-serif text-3xl font-medium leading-[1.1] tracking-tight sm:text-4xl;
+  }
+
+  .body-lg {
+    @apply text-lg leading-relaxed text-navy-800;
+  }
+
+  .divider-gold {
+    @apply mx-auto h-[1px] w-24 bg-gradient-to-r from-transparent via-gold-400 to-transparent;
+  }
+}

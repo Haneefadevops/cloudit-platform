@@ -27,6 +27,7 @@ endpoints=(
   "https://api.thereplyte.com/api/health"
   "https://app.thereplyte.com"
   "https://inbox.thereplyte.com"
+  "https://wanderluxe.cloudit.lk"
 )
 
 log "Starting health checks (timeout ${TIMEOUT_SECONDS}s)..."

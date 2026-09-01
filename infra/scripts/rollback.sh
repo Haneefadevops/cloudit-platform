@@ -17,7 +17,7 @@ cd "$PROJECT_ROOT"
 log "Stopping maintenance page if active..."
 docker compose -f infra/maintenance/docker-compose.yml down 2>/dev/null || true
 
-app_services=(platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web touchorbit-admin-web touchorbit-employee-web)
+app_services=(platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web touchorbit-admin-web touchorbit-employee-web wanderluxe-landing)
 
 log "Restoring previous app images..."
 for svc in "${app_services[@]}"; do

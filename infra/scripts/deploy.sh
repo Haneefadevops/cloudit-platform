@@ -255,6 +255,12 @@ build_service "thereplyte-landing"
 docker compose -f infra/thereplyte-landing/docker-compose.yml up -d
 wait_for_service "thereplyte-landing"
 
+log "Building WanderLuxe landing page..."
+tag_previous_image "wanderluxe-landing"
+build_service "wanderluxe-landing"
+docker compose -f infra/wanderluxe-landing/docker-compose.yml up -d
+wait_for_service "wanderluxe-landing"
+
 ensure_chatwoot_env
 
 log "Preparing Chatwoot database..."

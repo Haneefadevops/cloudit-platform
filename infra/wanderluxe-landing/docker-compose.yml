@@ -1,0 +1,40 @@
+services:
+  wanderluxe-landing:
+    build:
+      context: ../../apps/wanderluxe-landing
+      dockerfile: Dockerfile
+    image: cloudit/wanderluxe-landing:latest
+    container_name: wanderluxe-landing
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - cloudit
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wanderluxe-landing.rule=Host(`wanderluxe.cloudit.lk`)"
+      - "traefik.http.routers.wanderluxe-landing.entrypoints=websecure"
+      - "traefik.http.routers.wanderluxe-landing.tls.certresolver=cloudflare"
+      - "traefik.http.routers.wanderluxe-landing.tls.domains[0].main=wanderluxe.cloudit.lk"
+      - "traefik.http.services.wanderluxe-landing.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+networks:
+  cloudit:
+    external: true
