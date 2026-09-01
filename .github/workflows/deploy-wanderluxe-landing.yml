@@ -1,0 +1,63 @@
+name: Deploy WanderLuxe Landing
+
+on:
+  push:
+    branches:
+      - feature/wanderluxe-landing
+
+concurrency:
+  group: deploy-wanderluxe-landing
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy WanderLuxe landing page
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          ssh "${SERVER_USER}@${SERVER_IP}" "bash -s" <<'REMOTE'
+            set -euo pipefail
+            cd /opt/cloudit/cloudit-platform
+            git fetch origin
+            git checkout -B feature/wanderluxe-landing origin/feature/wanderluxe-landing
+            docker compose -f infra/wanderluxe-landing/docker-compose.yml down
+            docker compose -f infra/wanderluxe-landing/docker-compose.yml up -d --build
+
+            echo "Waiting for WanderLuxe container to become healthy..."
+            for i in $(seq 1 30); do
+              status="$(docker inspect --format='{{.State.Health.Status}}' wanderluxe-landing 2>/dev/null || true)"
+              if [ "$status" = "healthy" ] || [ "$status" = "" ]; then
+                echo "Container is up"
+                break
+              fi
+              sleep 2
+            done
+          REMOTE
+
+      - name: Health check
+        env:
+          HEALTH_TIMEOUT: "60"
+        run: |
+          for i in $(seq 1 12); do
+            if curl -fsS --max-time 10 "https://wanderluxe.cloudit.lk" >/dev/null 2>&1; then
+              echo "WanderLuxe is live at https://wanderluxe.cloudit.lk"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "ERROR: WanderLuxe health check failed"
+          exit 1
