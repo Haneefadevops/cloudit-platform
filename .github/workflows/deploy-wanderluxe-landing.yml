@@ -33,7 +33,7 @@ jobs:
             set -euo pipefail
             cd /opt/cloudit/cloudit-platform
             git fetch origin
-            git checkout -B feature/wanderluxe-landing origin/feature/wanderluxe-landing
+            git checkout -f -B feature/wanderluxe-landing origin/feature/wanderluxe-landing
             git reset --hard origin/feature/wanderluxe-landing
             docker compose -f infra/wanderluxe-landing/docker-compose.yml down
             docker compose -f infra/wanderluxe-landing/docker-compose.yml up -d --build
