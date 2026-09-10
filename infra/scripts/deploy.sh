@@ -223,6 +223,9 @@ wait_for_service redis
 log "Ensuring application databases exist..."
 "$PROJECT_ROOT/infra/scripts/ensure-databases.sh"
 
+log "Ensuring the operations portal database, roles and schema exist..."
+"$PROJECT_ROOT/infra/scripts/ensure-operations-database.sh"
+
 log "Running pre-deployment checks and migrations..."
 "$PROJECT_ROOT/infra/scripts/predeploy.sh"
 

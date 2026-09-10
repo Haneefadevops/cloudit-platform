@@ -11,7 +11,10 @@ Operations Portal planned for `operations.cloudit.lk`.
   with password-only login (TOTP deferred; required no later than Phase 10);
   awaiting the owner's final login check and explicit approval. See
   `docs/cloudit-operations-portal-phase-2-foundation.md`.
-- Phase 3 (operations database) is not authorized yet.
+- Phase 3 (operations database): implemented and deployed; awaiting the owner's
+  production acceptance (anonymous denial, owner access, client isolation,
+  ingestion authentication, audit behavior) and explicit approval. See
+  `docs/cloudit-operations-portal-phase-3-database.md`.
 - The scheduled 1 October 2026 Phase 5E acceptance remains pending and its real
   report must remain `DRAFT` during review.
 - `ticketing_enabled` must remain `false`.

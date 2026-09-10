@@ -30,6 +30,7 @@ DATABASES=(
   orbitone
   chatwoot
   whatsapp_agent
+  operations
 )
 
 wait_for_postgres() {
