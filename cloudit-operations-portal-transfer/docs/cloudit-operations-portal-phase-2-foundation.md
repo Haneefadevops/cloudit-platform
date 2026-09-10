@@ -1,6 +1,6 @@
 # CloudIT Operations Portal — Phase 2 Foundation
 
-Status: **LOCAL ACCEPTANCE COMPLETE — awaiting owner approval of Phase 2**  
+Status: **ACCEPTED — owner approved Phase 2 on 10 September 2026**  
 Date: 10 September 2026
 
 ## Delivered
@@ -134,20 +134,26 @@ committed, logged or shown in the browser.
   changed to `true` with a provisioned `OPERATIONS_OWNER_TOTP_SECRET` no later
   than before Phase 10 report actions are enabled.
 
-## Production acceptance still required
+## Production acceptance
 
-- [ ] Owner provisions the production email, password hash and 32+ character
-      session secret in the protected server `.env` file (TOTP secret deferred;
-      see above).
-- [ ] Owner confirms the eight-hour session and the deferred-TOTP policy with
+- [x] Owner provisioned the production email, password hash and session secret
+      in the protected server `.env` file (TOTP deferred; see above). Note: the
+      server's Docker Compose version interpolates `$` in env_file values, so
+      the hash format uses dot separators (`scrypt.<salt hex>.<key hex>`).
+- [x] Owner confirmed the eight-hour session and the deferred-TOTP policy with
       password-only login plus rate limiting for the initial rollout.
-- [ ] DNS for `operations.cloudit.lk` is created or confirmed.
-- [ ] Portal is deployed through the approved workflow without printing secrets.
-- [ ] Traefik obtains HTTPS and HTTP redirects to HTTPS.
-- [ ] Health check passes through the public HTTPS route.
-- [ ] Login, logout, expiry, rate limiting and unauthorized-route behavior are
-      verified in the deployed browser.
-- [ ] Owner explicitly approves Phase 2 before Phase 3 begins.
+- [x] DNS for `operations.cloudit.lk` created by the owner.
+- [x] Deployed through the approved GitHub Actions workflow (portal-only
+      master commit; no CheckMe, WanderLuxe or NotchMe-reshape content).
+- [x] Traefik obtained HTTPS; HTTP redirects to HTTPS (301).
+- [x] Health check passes through the public HTTPS route (200, safe fields).
+- [x] Verified over public HTTPS: unauthenticated root and protected routes
+      redirect to login, wrong password returns the generic error, login rate
+      limiting throttles after five failures, and security headers (CSP, HSTS,
+      frame denial) are present.
+- [x] Owner performed the final real-credential login and logout check in the
+      deployed browser (10 September 2026).
+- [x] **Owner explicitly approved Phase 2 on 10 September 2026.**
 
 Completed locally on 10 September 2026: typecheck, lint, production build,
 authentication/session behavior, rate limiting, Docker image and Compose

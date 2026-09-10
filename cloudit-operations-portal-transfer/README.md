@@ -5,11 +5,13 @@ Operations Portal planned for `operations.cloudit.lk`.
 
 ## Current state
 
-- Phase 0 specification is prepared but still awaits explicit owner approval.
-- The Cavetta n8n production-safety correction was completed and accepted on
-  9 September 2026.
-- No portal application, database schema, credentials, DNS, deployment or UI has
-  been implemented.
+- Phase 0 specification: approved.
+- Phase 1 visual design: approved.
+- Phase 2 foundation: deployed to `operations.cloudit.lk` on 10 September 2026
+  with password-only login (TOTP deferred; required no later than Phase 10);
+  awaiting the owner's final login check and explicit approval. See
+  `docs/cloudit-operations-portal-phase-2-foundation.md`.
+- Phase 3 (operations database) is not authorized yet.
 - The scheduled 1 October 2026 Phase 5E acceptance remains pending and its real
   report must remain `DRAFT` during review.
 - `ticketing_enabled` must remain `false`.
