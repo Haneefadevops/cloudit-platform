@@ -147,7 +147,7 @@ database; migrations applied by the same script that runs in deploys.
 - All publisher secrets used in the suite are throwaway test-only values that
   existed solely inside the rolled-back transaction.
 
-## Production acceptance (server) — partially complete, awaiting owner
+## Production acceptance (server) — awaiting owner approval
 
 Deploy evidence (GitHub Actions "Deploy to Hetzner" on master):
 
@@ -165,6 +165,12 @@ Deploy evidence (GitHub Actions "Deploy to Hetzner" on master):
   migrations applied`, password provisioning warnings as expected, and all
   health checks passed.
 
+- Run 34494304326 green (docs commit): ensure step re-ran idempotently
+  (`OK: 4 roles, 25 tables`), health checks passed.
+- Owner ran `bash infra/postgres/operations/tests/isolation-tests.sh` on the
+  production server on 10 September 2026: **89/89 PASS, `ALL TESTS PASSED`**,
+  rolled back (no rows left behind).
+
 Checklist:
 
 - [ ] Owner provisions `OPERATIONS_DB_OWNER_PASSWORD` and
@@ -173,7 +179,7 @@ Checklist:
 - [x] Portal-only Phase 3 commits pushed to master; deploy workflow green
       (deploy log shows `Database 'operations' created` on the first run and
       `ensure-operations-database ... OK` on the later run).
-- [ ] Owner (or operator on the server) runs
+- [x] Owner (or operator on the server) runs
       `bash infra/postgres/operations/tests/isolation-tests.sh` against the
       production `operations` database; result `ALL TESTS PASSED`.
 - [ ] Confirm no other database was modified: only `operations` appears as
