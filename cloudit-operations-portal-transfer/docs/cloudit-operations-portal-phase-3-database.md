@@ -147,14 +147,32 @@ database; migrations applied by the same script that runs in deploys.
 - All publisher secrets used in the suite are throwaway test-only values that
   existed solely inside the rolled-back transaction.
 
-## Production acceptance (server) — pending
+## Production acceptance (server) — partially complete, awaiting owner
+
+Deploy evidence (GitHub Actions "Deploy to Hetzner" on master):
+
+- Run 34491168047 (first Phase 3 deploy) FAILED in the migration step: the
+  server's `en_US.UTF-8` locale sorts `0004_ingest_records.sql` before
+  `0004_ingest.sql` (punctuation ignored), so the record writers were applied
+  before the envelope type existed (`type operations_ingest.envelope does not
+  exist`). The portal app itself was unaffected (login page stayed HTTP 200).
+- Fixed in commit `c2a8e10`: writers renamed to `0005_ingest_records.sql` and
+  migrations are applied through an explicit `LC_ALL=C` sort. Re-verified on a
+  fresh container under `en_US.utf8`: clean apply, idempotent re-run,
+  isolation suite 89/89 PASS.
+- Run 34492566160 green: deploy log shows migrations applied in order
+  (`0001` … `0005`), `ensure-operations-database OK: 4 roles, 25 tables,
+  migrations applied`, password provisioning warnings as expected, and all
+  health checks passed.
+
+Checklist:
 
 - [ ] Owner provisions `OPERATIONS_DB_OWNER_PASSWORD` and
       `OPERATIONS_DB_INGEST_PASSWORD` in the server's gitignored
       `infra/postgres/.env` (long random values, no `$`).
-- [ ] Portal-only Phase 3 commit pushed to master; deploy workflow green
-      (the deploy log shows `Database 'operations' created` on first run and
-      `ensure-operations-database ... OK` on every later run).
+- [x] Portal-only Phase 3 commits pushed to master; deploy workflow green
+      (deploy log shows `Database 'operations' created` on the first run and
+      `ensure-operations-database ... OK` on the later run).
 - [ ] Owner (or operator on the server) runs
       `bash infra/postgres/operations/tests/isolation-tests.sh` against the
       production `operations` database; result `ALL TESTS PASSED`.
