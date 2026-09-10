@@ -18,7 +18,7 @@ if [[ "$mode" != "on" && "$mode" != "off" ]]; then
   exit 1
 fi
 
-app_services=(platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web)
+app_services=(platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web operations-web)
 
 if [[ "$mode" == "on" ]]; then
   log "Stopping app services..."

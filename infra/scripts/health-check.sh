@@ -24,6 +24,7 @@ endpoints=(
   "https://to-employee.${DOMAIN}"
   "https://to-kiosk.${DOMAIN}"
   "https://fixifai.${DOMAIN}"
+  "https://operations.${DOMAIN}/api/health"
   "https://api.thereplyte.com/api/health"
   "https://app.thereplyte.com"
   "https://inbox.thereplyte.com"

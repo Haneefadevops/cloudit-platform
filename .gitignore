@@ -30,6 +30,9 @@ infra/traefik/certs/
 # Worktrees
 .worktrees/
 
+# Local agent scratch space
+.scratch/
+
 # Test outputs
 **/test-results
 

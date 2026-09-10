@@ -58,6 +58,7 @@ CloudIT Platform is a lightweight, self-hosted multi-tenant SaaS platform runnin
 | Hospitality Web | Hospitality dashboard | Yes | 512 MB |
 | OrbitOne Web | Digital business cards dashboard | Yes | 512 MB |
 | TouchOrbit HR Web | HR management dashboard | Yes | 512 MB |
+| CloudIT Operations Portal | Private operational evidence portal | Yes | 384 MB |
 
 ## Resource Allocation
 
@@ -77,6 +78,7 @@ Total reserved memory for Docker services is kept under ~6.5 GB to leave room fo
 | platform-web | 512 MB | 128 MB |
 | hospitality-web | 512 MB | 128 MB |
 | orbitone-web | 512 MB | 128 MB |
+| operations-web | 384 MB | 96 MB |
 | touchorbit-web | 512 MB | 128 MB |
 
 ## Docker Networking
@@ -103,6 +105,7 @@ All services connect to the external `cloudit` bridge network. This allows conta
 | Hospitality API | `api-hospitality.<DOMAIN>` |
 | OrbitOne Web | `orbitone.<DOMAIN>` |
 | OrbitOne API | `api-orbitone.<DOMAIN>` |
+| CloudIT Operations Portal | `operations.<DOMAIN>` |
 | TouchOrbit HR Web | `touchorbit.<DOMAIN>` |
 | TouchOrbit HR API | `api-touchorbit.<DOMAIN>` |
 

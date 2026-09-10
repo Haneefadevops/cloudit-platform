@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.next/
+dist/
+coverage/
+.scratch/
+*.log
+*.dump
+*.backup
+*.sql.gz
+*.pdf
+*.key
+*.pem
+secrets/
+

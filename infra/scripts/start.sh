@@ -57,6 +57,7 @@ if [[ "$START_APPS" == "true" ]]; then
     docker-compose -f "${PROJECT_ROOT}/infra/hospitality-web/docker-compose.yml" up -d
     docker-compose -f "${PROJECT_ROOT}/infra/orbitone-web/docker-compose.yml" up -d
     docker-compose -f "${PROJECT_ROOT}/infra/touchorbit-web/docker-compose.yml" up -d
+    docker-compose -f "${PROJECT_ROOT}/infra/operations-web/docker-compose.yml" up -d
 fi
 
 log ""
@@ -80,6 +81,7 @@ if [[ "$START_APPS" == "true" ]]; then
     echo "  OrbitOne Web      : https://orbitone.<your-domain>"
     echo "  OrbitOne API      : https://api-orbitone.<your-domain>"
     echo "  TouchOrbit HR Web : https://touchorbit.<your-domain>"
+    echo "  Operations Portal : https://operations.<your-domain>"
     echo "  TouchOrbit HR API : https://api-touchorbit.<your-domain>"
 fi
 echo ""

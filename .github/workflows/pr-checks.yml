@@ -44,6 +44,8 @@ jobs:
           npm run build --workspace=hospitality-web
           npm run build --workspace=@cloudit/orbitone-web
           npm run build --workspace=@cloudit/touchorbit-web
+          npm run typecheck --workspace=@cloudit/operations-web
+          npm run build --workspace=@cloudit/operations-web
 
       - name: Run unit tests
         run: |
@@ -60,5 +62,6 @@ jobs:
           npm run lint --workspace=@cloudit/touchorbit-api
           npm run lint --workspace=platform-web
           npm run lint --workspace=hospitality-web
+          npm run lint --workspace=@cloudit/operations-web
           npm run lint --workspace=@cloudit/orbitone-web
           npm run lint --workspace=@cloudit/touchorbit-web

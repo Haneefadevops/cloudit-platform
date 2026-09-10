@@ -36,6 +36,7 @@ Built with **Docker + Docker Compose**, **NestJS**, **Next.js**, **Tailwind CSS*
 | **OrbitOne Web** | Digital business cards dashboard | Yes |
 | **TouchOrbit HR API** | HR management backend | Yes |
 | **TouchOrbit HR Web** | HR management dashboard | Yes |
+| **Operations Portal** | Private operational evidence portal | Yes |
 
 ## Quick Start (Local)
 
@@ -44,7 +45,7 @@ git clone https://github.com/YOUR_ORG/cloudit-platform.git
 cd cloudit-platform
 
 # Copy example env files (edit with real values before deploying)
-for svc in traefik postgres redis n8n uptime-kuma platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web; do
+for svc in traefik postgres redis n8n uptime-kuma platform-api hospitality-api orbitone-api touchorbit-api platform-web hospitality-web orbitone-web touchorbit-web operations-web; do
   cp infra/$svc/.env.example infra/$svc/.env 2>/dev/null || cp apps/$svc/.env.example apps/$svc/.env 2>/dev/null
 done
 
