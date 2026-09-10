@@ -28,7 +28,7 @@ export function getOperationsRuntimeConfig(): OperationsRuntimeConfig {
     if (url.pathname !== "/" || url.search || url.hash || (url.protocol !== "https:" && !local)) errors.push("public origin");
   } catch { errors.push("public origin"); }
   if (!ownerEmail || !ownerEmail.includes("@") || placeholders.test(ownerEmail)) errors.push("owner email");
-  if (!/^scrypt\$[0-9a-f]{32,}\$[0-9a-f]{128}$/i.test(passwordHash)) errors.push("password hash");
+  if (!/^scrypt\.[0-9a-f]{32,}\.[0-9a-f]{128}$/i.test(passwordHash)) errors.push("password hash");
   if (sessionSecret.length < 32 || placeholders.test(sessionSecret)) errors.push("session secret");
   if (!Number.isInteger(sessionTtlSeconds) || sessionTtlSeconds < 900 || sessionTtlSeconds > 43200) errors.push("session TTL");
   if (mfaRequired && (!totpSecret || !/^[A-Z2-7]{16,}$/.test(totpSecret))) errors.push("TOTP secret");

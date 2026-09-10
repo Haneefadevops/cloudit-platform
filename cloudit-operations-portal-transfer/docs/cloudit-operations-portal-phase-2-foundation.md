@@ -124,9 +124,10 @@ committed, logged or shown in the browser.
 - `OPERATIONS_PUBLIC_ORIGIN=https://operations.cloudit.lk`
 - `OPERATIONS_OWNER_EMAIL` — the owner's sign-in email.
 - `OPERATIONS_OWNER_PASSWORD_HASH` — format
-  `scrypt$<salt hex>$<64-byte derived key hex>` with Node.js scrypt
-  N=16384, r=8, p=1. Generate through an approved secret-management channel;
-  never type the plain password into a command, file or ticket.
+  `scrypt.<salt hex>.<64-byte derived key hex>` with Node.js scrypt
+  N=16384, r=8, p=1 (dot separators because `$` is mangled by some Docker
+  Compose env_file versions). Generate through an approved secret-management
+  channel; never type the plain password into a command, file or ticket.
 - `OPERATIONS_SESSION_SECRET` — at least 32 random characters.
 - `OPERATIONS_SESSION_TTL_SECONDS=28800`
 - `OPERATIONS_MFA_REQUIRED=false` — TOTP deferred by owner decision; must be

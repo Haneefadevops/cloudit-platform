@@ -2,7 +2,9 @@ import "server-only";
 import { scryptSync, timingSafeEqual } from "node:crypto";
 
 export function verifyPassword(password: string, encodedHash: string): boolean {
-  const [algorithm, saltHex, keyHex] = encodedHash.split("$");
+  // Dot separators: dollar signs get mangled by the env_file interpolation of
+  // some Docker Compose versions.
+  const [algorithm, saltHex, keyHex] = encodedHash.split(".");
   if (algorithm !== "scrypt" || !saltHex || !keyHex) return false;
 
   try {

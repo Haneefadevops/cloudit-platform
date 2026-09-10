@@ -26,10 +26,11 @@ is invalid.
 uses `https://operations.cloudit.lk`; arbitrary request Host headers are never
 used for successful authentication redirects.
 
-The password hash format is `scrypt$<salt hex>$<64-byte key hex>` using Node.js
-scrypt parameters N=16384, r=8 and p=1. Provision the hash through an approved
-secret-management workflow; never place the plain password in a command, source
-file or GitHub variable.
+The password hash format is `scrypt.<salt hex>.<64-byte key hex>` using Node.js
+scrypt parameters N=16384, r=8 and p=1. Dot separators are used because `$` is
+mangled by the env_file interpolation of some Docker Compose versions.
+Provision the hash through an approved secret-management workflow; never place
+the plain password in a command, source file or GitHub variable.
 
 Production requires a base32 TOTP secret when `OPERATIONS_MFA_REQUIRED=true`.
 The owner has deferred TOTP for the initial Phase 2 rollout, so production
