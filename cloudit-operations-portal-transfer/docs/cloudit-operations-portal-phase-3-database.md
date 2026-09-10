@@ -173,7 +173,7 @@ Deploy evidence (GitHub Actions "Deploy to Hetzner" on master):
 
 Checklist:
 
-- [ ] Owner provisions `OPERATIONS_DB_OWNER_PASSWORD` and
+- [x] Owner provisions `OPERATIONS_DB_OWNER_PASSWORD` and
       `OPERATIONS_DB_INGEST_PASSWORD` in the server's gitignored
       `infra/postgres/.env` (long random values, no `$`).
 - [x] Portal-only Phase 3 commits pushed to master; deploy workflow green
@@ -182,7 +182,7 @@ Checklist:
 - [x] Owner (or operator on the server) runs
       `bash infra/postgres/operations/tests/isolation-tests.sh` against the
       production `operations` database; result `ALL TESTS PASSED`.
-- [ ] Confirm no other database was modified: only `operations` appears as
+- [x] Confirm no other database was modified: only `operations` appears as
       new; the n8n database and all application databases are untouched.
 - [ ] Owner explicitly approves Phase 3.
 
