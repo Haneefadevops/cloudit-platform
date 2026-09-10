@@ -30,7 +30,7 @@ port. The n8n database and every other application database are never used.
   active-membership policies, private security-definer helpers (empty
   `search_path`, no PUBLIC execute), append-only triggers, audit/command entry
   functions.
-- `migrations/0004_ingest.sql` / `0004_ingest_records.sql` — strict envelope
+- `migrations/0004_ingest.sql` / `0005_ingest_records.sql` — strict envelope
   and payload validation plus the per-record writers for the Phase 0 section
   7 publishing contract. Tenant identity always comes from the authenticated
   publisher, never from the request body.

@@ -69,12 +69,15 @@ else
   echo "[ensure-operations-database] Database '${OPERATIONS_DB}' created"
 fi
 
-for migration in "${MIGRATIONS_DIR}"/*.sql; do
+# Apply migrations in explicit numeric order. The glob order is locale
+# dependent (under en_US.UTF-8, "0004_ingest_records" sorts before
+# "0004_ingest" because punctuation is ignored), so sort with LC_ALL=C.
+while IFS= read -r migration; do
   name="$(basename "$migration")"
   echo "[ensure-operations-database] Applying ${name}..."
   docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$OPERATIONS_DB" \
     -v ON_ERROR_STOP=1 -q -f - < "$migration"
-done
+done < <(printf '%s\n' "${MIGRATIONS_DIR}"/*.sql | LC_ALL=C sort)
 
 if [ -n "${OPERATIONS_DB_OWNER_PASSWORD:-}" ]; then
   docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$OPERATIONS_DB" \
