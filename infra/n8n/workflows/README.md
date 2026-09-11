@@ -55,6 +55,12 @@ publishes them to the private operations ingestion endpoint
   operations database and used by the operations-ingest service).
 - `OPERATIONS_INGEST_URL` — optional; defaults to `http://operations-ingest:3020`.
 
+**Required n8n service configuration:**
+- `NODE_FUNCTION_ALLOW_BUILTIN=crypto` — the "Build Signed Request" Code node
+  uses Node's built-in `crypto` module, which n8n disallows by default. This
+  is already set in `infra/n8n/docker-compose.yml`; after changing it the n8n
+  container must be recreated (`docker compose up -d` recreates it).
+
 The endpoint never receives secrets in the body; forbidden fields (tokens,
 stack traces, request/response bodies, customer data) must be stripped by the
 caller before invoking this sub-workflow, per Phase 0 section 7.5.
