@@ -67,6 +67,23 @@ Private ingestion path for sanitized n8n evidence per Phase 0 section 7:
 
 ## Production acceptance (server) — pending owner
 
+Deploy evidence (GitHub Actions "Deploy to Hetzner" on master):
+
+- Run 34570520650 (first Phase 4 deploy) failed: the runtime image copied
+  only `dist/`, so the container crash-looped with `Cannot find module 'pg'`.
+  Fixed in `4e00c1d` by copying the hoisted workspace `node_modules` into the
+  runner image. Verified locally: the built image passes the full 12-check
+  smoke suite against throwaway containers.
+- Run 34571069458 green: deploy log shows
+  `ensure-operations-database OK: 4 roles, 25 tables, Cavetta catalogue
+  seeded`, `operations-ingest is healthy` and all health checks passed. The
+  publisher-secret warning is expected until the owner provisions the secret
+  below. `https://operations.cloudit.lk` remains HTTP 200.
+
+Checklist:
+
+- [x] Portal-only Phase 4 commits pushed to master; deploy workflow green
+      with the private ingest service healthy.
 - [ ] Owner generates one long random publisher secret (no `$`) and puts the
       SAME value in both places: `infra/postgres/.env` as
       `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N` and the n8n
