@@ -57,9 +57,11 @@ publishes them to the private operations ingestion endpoint
 
 **Required n8n service configuration:**
 - `NODE_FUNCTION_ALLOW_BUILTIN=crypto` — the "Build Signed Request" Code node
-  uses Node's built-in `crypto` module, which n8n disallows by default. This
-  is already set in `infra/n8n/docker-compose.yml`; after changing it the n8n
-  container must be recreated (`docker compose up -d` recreates it).
+  uses Node's built-in `crypto` module, which n8n disallows by default.
+- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` — the same node reads the publisher
+  secret via `$env`, which n8n blocks by default.
+Both are set in `infra/n8n/docker-compose.yml`; after changing them the n8n
+container must be recreated (`docker compose up -d` recreates it).
 
 The endpoint never receives secrets in the body; forbidden fields (tokens,
 stack traces, request/response bodies, customer data) must be stripped by the
