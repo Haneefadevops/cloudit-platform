@@ -39,10 +39,12 @@ Private ingestion path for sanitized n8n evidence per Phase 0 section 7:
   `infra/scripts/deploy.sh` builds and starts it after the operations database
   ensure step.
 - `infra/n8n/workflows/cloudit-publish-operations-evidence.json` — the
-  reusable sub-workflow template `CloudIT - Publish Operations Evidence`
-  (sign → POST → assert), plus README wiring notes. The publisher secret is
-  read by the sub-workflow from the n8n container environment
-  (`OPERATIONS_PUBLISHER_SECRET_<KEY>`); the same value lives in
+  reusable sub-workflow template `CloudIT - Publish Operations Evidence v2`
+  (prepare → Crypto-node HMAC sign → POST → assert). The publisher secret
+  never enters workflow data or Code-node env lookups: the "Sign Request"
+  Crypto node signs `timestamp.nonce.digest` with the **Operations Publisher
+  Signing** n8n credential, whose Hmac Secret equals
+  `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N`; the same value lives in
   `infra/postgres/.env` for the service and (hashed) in the database.
 
 ## Local verification evidence
@@ -65,6 +67,35 @@ Private ingestion path for sanitized n8n evidence per Phase 0 section 7:
   payload field rejected (422); mixed valid+invalid batch rejected
   atomically with zero rows written; oversized body rejected (413).
 
+## Production gate evidence — 11 September 2026 (UTC)
+
+End-to-end from the live n8n workflow `Cavetta - Automation Watchdog` through
+the private `operations-ingest` service into the operations database:
+
+- **Accepted run** (~21:42 UTC): sub-workflow returned
+  `result: accepted, accepted: 1, receiptId ff7a1a28-e607-4f3f-8910-f4f29e11f7da`
+  for record `watchdog-exec-9091` (fresh envelope, valid HMAC, contract-valid
+  payload). An earlier fresh run (~21:29 UTC) was likewise accepted; its row
+  was confirmed in `operations.workflow_executions` (count = 1 at the time).
+- **Idempotent retry** (Execute-step re-send of the same record within the
+  freshness window): `result: accepted, accepted: 0, duplicates: 1`,
+  new receipt `d3ef6baf-8d19-45e5-9279-eed5771ed0fe`. Database check:
+  `SELECT count(*) FROM operations.workflow_executions` stayed at **2** — the
+  retry wrote no new row.
+- **Rejection paths proven live** (all recorded in
+  `operations.ingestion_receipts` with safe codes only):
+  - `stale_timestamp` — Execute-step retries reusing evidence older than the
+    ±5 minute `publishedAt` window are rejected with a receipt and no row.
+  - `unknown_field` — a payload with fields outside the Phase 0 section 7.3
+    contract (finding counts) was rejected; after removing them and adding the
+    required `outcome` field, the identical record was accepted.
+- **Receipts are append-only audit evidence**: every attempt — accepted,
+  duplicate or rejected — appears in `operations.ingestion_receipts` with
+  result, counts and a safe code, and nothing else.
+- Ingestion authentication proven: unsigned/incorrect requests cannot pass the
+  service's HMAC check (401 in local smoke; the production path only accepts
+  correctly signed batches from the known publisher).
+
 ## Production acceptance (server) — pending owner
 
 Deploy evidence (GitHub Actions "Deploy to Hetzner" on master):
@@ -84,24 +115,23 @@ Checklist:
 
 - [x] Portal-only Phase 4 commits pushed to master; deploy workflow green
       with the private ingest service healthy.
-- [ ] Owner generates one long random publisher secret (no `$`) and adds it
-      to `infra/postgres/.env` as
-      `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N`. The ingest
-      service and the n8n container both read that file (n8n's Compose has an
-      explicit `env_file` for it); the n8n container must be recreated after
-      adding it (`docker compose -f infra/n8n/docker-compose.yml up -d`).
-- [ ] Deploy workflow green; the deploy log shows
+- [x] Owner generated the publisher secret (no `$`) and added it to
+      `infra/postgres/.env` as
+      `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N`; the database
+      publisher row exists (salted hash) and production batches authenticate —
+      proven by the accepted receipts above.
+- [x] Deploy workflow green; the deploy log shows
       `operations-ingest is healthy` and the ensure step reporting the
       Cavetta catalogue seeded.
-- [ ] Owner imports `infra/n8n/workflows/cloudit-publish-operations-evidence.json`
-      into n8n and wires ONE existing workflow to call it (the Automation
-      Watchdog summary or workflow executions are the suggested first
-      publisher), per the README in `infra/n8n/workflows/`.
-- [ ] Gate (approved plan): compare every published Cavetta record with its
-      n8n source, retry the ingestion and prove no duplicate record is
-      created (receipt replay returns the original receipt; row counts do not
-      grow on retry).
-- [ ] Confirm the operations database remains the only new/changed database;
+- [x] Owner imported the sub-workflow (v2, "CloudIT - Publish Operations
+      Evidence v2") into n8n and wired the Automation Watchdog to call it via
+      the "Publish Evidence" Execute Workflow node, per the README in
+      `infra/n8n/workflows/`.
+- [x] Gate (approved plan): the published record matches its n8n source; the
+      ingestion retry returned `duplicates: 1` with **no duplicate row**
+      (`workflow_executions` count unchanged at 2) — see "Production gate
+      evidence" above.
+- [x] Confirm the operations database remains the only new/changed database;
       the n8n database is untouched by the portal.
 - [ ] Owner explicitly approves Phase 4.
 

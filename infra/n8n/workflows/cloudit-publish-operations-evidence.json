@@ -26,7 +26,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// CloudIT Operations Portal — Phase 4 evidence publishing (Phase 0 spec section 7).\n//\n// Input (from the calling workflow):\n//   records      array of sanitized envelope objects (contractVersion 1.0)\n//   publisherKey publisher key; defaults to the Cavetta production publisher\n//\n// Validates batch limits (500 records / 1 MiB) and builds the canonical\n// request pieces. The HMAC-SHA256 signature is computed by the \"Sign Request\"\n// Crypto node using the \"Operations Publisher Signing\" n8n credential, so the\n// publisher secret never enters workflow data, env lookups, or Code-node\n// execution. The same secret is stored salted-hashed in the operations\n// database and in the operations-ingest service configuration.\n\nconst crypto = require('crypto');\n\nconst input = $input.first().json;\nconst publisherKey = input.publisherKey || 'cavetta-production-n8n';\n\nconst records = input.records;\nif (!Array.isArray(records) || records.length === 0) {\n  throw new Error('records must be a non-empty array');\n}\nif (records.length > 500) {\n  throw new Error('batch too large: ' + records.length + ' records (max 500)');\n}\n\nconst bodyText = JSON.stringify(records);\nif (Buffer.byteLength(bodyText, 'utf8') > 1048576) {\n  throw new Error('batch too large: over 1 MiB');\n}\n\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst nonce = crypto.randomBytes(16).toString('base64url');\nconst digest = crypto.createHash('sha256').update(bodyText, 'utf8').digest('hex');\n\nreturn [{\n  json: {\n    bodyText,\n    publisherKey,\n    timestamp,\n    nonce,\n    digest\n  }\n}];"
+        "jsCode": "// CloudIT Operations Portal — Phase 4 evidence publishing (Phase 0 spec section 7).\n//\n// Input (from the calling workflow):\n//   records      array of sanitized envelope objects (contractVersion 1.0)\n//   publisherKey publisher key; defaults to the Cavetta production publisher\n//\n// Validates batch limits (500 records / 1 MiB) and builds the canonical\n// request pieces. The HMAC-SHA256 signature is computed by the \"Sign Request\"\n// Crypto node using the \"Operations Publisher Signing\" n8n credential, so the\n// publisher secret never enters workflow data, env lookups, or Code-node\n// execution. The same secret is stored salted-hashed in the operations\n// database and in the operations-ingest service configuration.\n\nconst crypto = require('crypto');\n\nconst input = $input.first().json;\nconst publisherKey = input.publisherKey || 'cavetta-production-n8n';\n\n// Callers pass records as a JSON string (Execute Workflow inputs are mustache\n// templates, so passing the raw array is unreliable); tolerate both forms.\nconst records = typeof input.records === 'string' ? JSON.parse(input.records) : input.records;\nif (!Array.isArray(records) || records.length === 0) {\n  throw new Error('records must be a non-empty array');\n}\nif (records.length > 500) {\n  throw new Error('batch too large: ' + records.length + ' records (max 500)');\n}\n\nconst bodyText = JSON.stringify(records);\nif (Buffer.byteLength(bodyText, 'utf8') > 1048576) {\n  throw new Error('batch too large: over 1 MiB');\n}\n\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst nonce = crypto.randomBytes(16).toString('base64url');\nconst digest = crypto.createHash('sha256').update(bodyText, 'utf8').digest('hex');\n\nreturn [{\n  json: {\n    bodyText,\n    publisherKey,\n    timestamp,\n    nonce,\n    digest\n  }\n}];"
       },
       "id": "8a1d2e3f-4b5c-6d7e-8f9a-0b1c2d3e4f05",
       "name": "Prepare Request",
@@ -94,11 +94,6 @@
         "contentType": "raw",
         "body": "={{ $json.bodyText }}",
         "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          },
           "timeout": 30000
         }
       },

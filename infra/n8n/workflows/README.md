@@ -58,11 +58,37 @@ publishes them to the private operations ingestion endpoint
   whose **Hmac Secret** equals `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N`
   from the protected server env file. If the credential field offers
   "Take from environment variable", select that variable so the secret is
-  never typed or stored in the workflow.
+  never typed or stored in the workflow; otherwise paste the secret manually
+  (never commit or chat it).
 
 **Caller wiring (the Execute Workflow node in the calling workflow):**
-- `records` = `={{ $json.records }}` (from the caller's Build Evidence node)
-- `publisherKey` = `={{ $json.publisherKey }}` (optional)
+- Workflow inputs on the trigger: `records` type **Allow Any Type**,
+  `publisherKey` type **String**.
+- `records` = `{{ JSON.stringify($json.records) }}` — mustache only, **no
+  leading `=`** (a leading `=` becomes literal text in Execute Workflow input
+  fields, e.g. `=[object Object]`).
+- `publisherKey` = `{{ $json.publisherKey }}` (optional).
+- Keep **Attempt To Convert Types** ON.
+- The HTTP node must have **no** response-format/file/stream options (a
+  "Download"/stream option makes the response unreadable to the Assert code);
+  leave Options empty apart from timeout.
+
+**Caller record contract (workflow_execution example, proven 2026-09-11):**
+Envelope: `contractVersion` "1.0", `recordType`, `idempotencyKey`,
+`environmentKey` (must match the publisher's scope), `sourceSystem`, `observedAt`,
+`publishedAt` (within ±5 minutes of ingestion — n8n **Execute step** reuses old
+data and goes stale; always test with a full **Execute Workflow** run),
+`freshUntil`, `status`, `severity`, optional `correlationKey`, `payload`.
+The `workflow_execution` payload allows only: `workflowKey`, `executionKey`,
+`triggerKind`, `scheduledFor`, `startedAt`, `finishedAt`, `durationMs`,
+`scheduleDelayMs`, `outcome` (**required**: success/failure/cancelled/waiting/missed),
+`failureCategory`, `failureCode`, `attempt`, `sourceRevisionKey`. Extra fields
+(e.g. finding counts) are rejected with `unknown_field`; the workflow key must
+exist in `operations.workflow_definitions` (seeded by migration 0006).
+
+**Idempotent retry behaviour:** re-sending the same record within the freshness
+window returns `result: "accepted"` with `duplicates: 1` and writes **no** new
+row (verified: row count unchanged after an Execute-step retry).
 
 **Required environment variables in n8n (protected server env file):**
 - `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N` — must equal the value
@@ -71,11 +97,11 @@ publishes them to the private operations ingestion endpoint
 - `OPERATIONS_INGEST_URL` — optional; defaults to `http://operations-ingest:3020`.
 
 **Required n8n service configuration:**
-- `NODE_FUNCTION_ALLOW_BUILTIN=crypto` — the "Build Signed Request" Code node
-  uses Node's built-in `crypto` module, which n8n disallows by default.
-- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` — the calling workflow's Execute
-  Workflow node resolves the `publisherSecret` input via `$env`, which n8n
-  blocks by default.
+- `NODE_FUNCTION_ALLOW_BUILTIN=crypto` — the "Prepare Request" Code node uses
+  Node's built-in `crypto` module, which n8n disallows by default.
+- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` was required by the superseded v1
+  template; v2 reads the secret from a credential instead, so this is no
+  longer needed but is kept set (harmless).
 Both are set in `infra/n8n/docker-compose.yml`; after changing them the n8n
 container must be recreated (`docker compose up -d` recreates it).
 
