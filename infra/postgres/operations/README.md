@@ -34,6 +34,12 @@ port. The n8n database and every other application database are never used.
   and payload validation plus the per-record writers for the Phase 0 section
   7 publishing contract. Tenant identity always comes from the authenticated
   publisher, never from the request body.
+- `migrations/0006_seed_cavetta.sql` — Phase 4 owner-visible catalogue seed:
+  the Cavetta client, production environment and `cavetta.mt` domain, the
+  five registered public endpoints, the ten documented n8n workflow catalogue
+  entries and the Phase 0 section 7.4 metric registry. The Cavetta publisher
+  row is created only when `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N`
+  is provisioned in the protected server env (stored as a salted hash).
 
 ## Provisioning
 

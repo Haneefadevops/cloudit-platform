@@ -226,6 +226,12 @@ log "Ensuring application databases exist..."
 log "Ensuring the operations portal database, roles and schema exist..."
 "$PROJECT_ROOT/infra/scripts/ensure-operations-database.sh"
 
+log "Building and starting the private operations ingest service..."
+tag_previous_image "operations-ingest"
+build_service "operations-ingest"
+docker compose -f infra/operations-ingest/docker-compose.yml up -d
+wait_for_service operations-ingest
+
 log "Running pre-deployment checks and migrations..."
 "$PROJECT_ROOT/infra/scripts/predeploy.sh"
 

@@ -1,0 +1,53 @@
+services:
+  operations-ingest:
+    build:
+      context: ../..
+      dockerfile: infra/operations-ingest/Dockerfile
+    image: cloudit/operations-ingest:latest
+    container_name: operations-ingest
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Secrets and publisher credentials come from the same protected server
+    # file the rest of the platform uses. Values pass through literally;
+    # never put `$` in any value in this file.
+    env_file:
+      - ../postgres/.env
+    environment:
+      - NODE_ENV=production
+      - PORT=3020
+      - OPERATIONS_DB_HOST=postgres
+      - OPERATIONS_DB_PORT=5432
+      - OPERATIONS_DB_NAME=operations
+      - OPERATIONS_DB_USER=operations_ingest
+    networks:
+      - cloudit
+    # Private ingestion endpoint: no published port and no reverse-proxy
+    # route. Only containers on the cloudit network (n8n) can reach it.
+    ports: []
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3020/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+networks:
+  cloudit:
+    external: true

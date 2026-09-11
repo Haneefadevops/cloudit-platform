@@ -30,6 +30,35 @@ Runs daily at 9:00 AM to remind guests checking in today.
 - `WHATSAPP_API_URL` — URL of your WhatsApp Business API gateway
 - `WHATSAPP_API_KEY` — API key for the WhatsApp gateway
 
+### `cloudit-publish-operations-evidence.json`
+
+Reusable sub-workflow for the CloudIT Operations Portal (Phase 4). Existing
+workflows call it with normalized, sanitized evidence records; it signs and
+publishes them to the private operations ingestion endpoint
+(`operations-ingest:3020` on the Docker network — no public route).
+
+**Flow:**
+1. **When Executed by Another Workflow** receives `records` (array of Phase 0
+   section 7 envelopes) and optionally `publisherKey`.
+2. **Build Signed Request** validates batch limits (500 records / 1 MiB),
+   computes the HMAC-SHA256 transport signature
+   (`timestamp.nonce.sha256(body)`), reading the publisher secret from the
+   n8n container environment (`OPERATIONS_PUBLISHER_SECRET_<KEY>`).
+3. **Publish To Operations Ingest** POSTs the raw JSON body with the signed
+   headers.
+4. **Assert Accepted** throws on any rejection so the caller's error handling
+   fires.
+
+**Required environment variables in n8n (protected server env file):**
+- `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N` — must equal the value
+  provisioned in `infra/postgres/.env` (stored salted-hashed in the
+  operations database and used by the operations-ingest service).
+- `OPERATIONS_INGEST_URL` — optional; defaults to `http://operations-ingest:3020`.
+
+The endpoint never receives secrets in the body; forbidden fields (tokens,
+stack traces, request/response bodies, customer data) must be stripped by the
+caller before invoking this sub-workflow, per Phase 0 section 7.5.
+
 ## Importing into n8n
 
 1. Open your n8n instance.

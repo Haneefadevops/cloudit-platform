@@ -1,0 +1,142 @@
+{
+  "name": "CloudIT - Publish Operations Evidence",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "records"
+            },
+            {
+              "name": "publisherKey"
+            }
+          ]
+        }
+      },
+      "id": "3f6c7b1a-2d8e-4a5b-9c1d-7e2f4a6b8d01",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// CloudIT Operations Portal — Phase 4 evidence publishing (Phase 0 spec section 7).\n//\n// Input (from the calling workflow):\n//   records      array of sanitized envelope objects (contractVersion 1.0)\n//   publisherKey publisher key; defaults to the Cavetta production publisher\n//\n// The publisher secret is read from the n8n container environment. The same\n// value is stored (salted-hashed) in the operations database and in the\n// operations-ingest service configuration; it is never written to any Data\n// Table or execution payload.\n\nconst crypto = require('crypto');\n\nconst input = $input.first().json;\nconst publisherKey = input.publisherKey || 'cavetta-production-n8n';\nconst envName = 'OPERATIONS_PUBLISHER_SECRET_' + publisherKey.toUpperCase().replace(/[^A-Z0-9]+/g, '_');\nconst secret = $env[envName];\nif (!secret) {\n  throw new Error('publisher secret environment variable missing: ' + envName);\n}\n\nconst records = input.records;\nif (!Array.isArray(records) || records.length === 0) {\n  throw new Error('records must be a non-empty array');\n}\nif (records.length > 500) {\n  throw new Error('batch too large: ' + records.length + ' records (max 500)');\n}\n\nconst bodyText = JSON.stringify(records);\nif (Buffer.byteLength(bodyText, 'utf8') > 1048576) {\n  throw new Error('batch too large: over 1 MiB');\n}\n\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst nonce = crypto.randomBytes(16).toString('base64url');\nconst digest = crypto.createHash('sha256').update(bodyText, 'utf8').digest('hex');\nconst signature = crypto.createHmac('sha256', secret)\n  .update(timestamp + '.' + nonce + '.' + digest)\n  .digest('hex');\n\nreturn [{\n  json: {\n    bodyText,\n    publisherKey,\n    timestamp,\n    nonce,\n    signature\n  }\n}];"
+      },
+      "id": "8a1d2e3f-4b5c-6d7e-8f9a-0b1c2d3e4f05",
+      "name": "Build Signed Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.OPERATIONS_INGEST_URL || 'http://operations-ingest:3020') + '/v1/batches' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-publisher-key",
+              "value": "={{ $json.publisherKey }}"
+            },
+            {
+              "name": "x-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-nonce",
+              "value": "={{ $json.nonce }}"
+            },
+            {
+              "name": "x-signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.bodyText }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "c4d5e6f7-8a9b-4c5d-9e0f-1a2b3c4d5e06",
+      "name": "Publish To Operations Ingest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Treat only accepted / duplicate_batch as success so the caller's\n// error handling sees every rejection or transport failure.\nconst r = $input.first().json;\nif (r.result !== 'accepted' && r.result !== 'duplicate_batch') {\n  throw new Error('operations ingest rejected the batch: ' + (r.code || r.result || 'unknown'));\n}\nreturn $input.all();"
+      },
+      "id": "d7e8f9a0-b1c2-4d3e-9f0a-2b3c4d5e6f07",
+      "name": "Assert Accepted",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Build Signed Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Signed Request": {
+      "main": [
+        [
+          {
+            "node": "Publish To Operations Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish To Operations Ingest": {
+      "main": [
+        [
+          {
+            "node": "Assert Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Malta"
+  },
+  "staticData": null,
+  "tags": []
+}

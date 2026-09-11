@@ -72,11 +72,15 @@ fi
 # Apply migrations in explicit numeric order. The glob order is locale
 # dependent (under en_US.UTF-8, "0004_ingest_records" sorts before
 # "0004_ingest" because punctuation is ignored), so sort with LC_ALL=C.
+# publisher_secret_cavetta seeds the Cavetta publisher row (0006); an empty
+# value leaves the publisher uncreated and prints the warning below.
 while IFS= read -r migration; do
   name="$(basename "$migration")"
   echo "[ensure-operations-database] Applying ${name}..."
   docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$OPERATIONS_DB" \
-    -v ON_ERROR_STOP=1 -q -f - < "$migration"
+    -v ON_ERROR_STOP=1 -q \
+    -v publisher_secret_cavetta="${OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N:-}" \
+    -f - < "$migration"
 done < <(printf '%s\n' "${MIGRATIONS_DIR}"/*.sql | LC_ALL=C sort)
 
 if [ -n "${OPERATIONS_DB_OWNER_PASSWORD:-}" ]; then
@@ -103,11 +107,21 @@ else
   echo "[ensure-operations-database]          Provision it before Phase 4 publishing."
 fi
 
-# Smoke check: roles exist, schema present, no data seeded.
+if [ -n "${OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N:-}" ]; then
+  echo "[ensure-operations-database] Cavetta publisher secret present (publisher row ensured by 0006)"
+else
+  echo "[ensure-operations-database] WARNING: OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N not set;"
+  echo "[ensure-operations-database]          the Cavetta publisher row stays uncreated."
+  echo "[ensure-operations-database]          Provision it in ${POSTGRES_ENV_FILE} before wiring n8n."
+fi
+
+# Smoke check: roles exist, schema present, catalogue seeded.
 roles_ok="$(docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$OPERATIONS_DB" -tAc \
   "SELECT count(*) FROM pg_roles WHERE rolname IN ('operations_anon','operations_owner','operations_ingest','operations_maintenance')")"
 tables_ok="$(docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$OPERATIONS_DB" -tAc \
   "SELECT count(*) FROM information_schema.tables WHERE table_schema='operations' AND table_type='BASE TABLE'")"
+client_ok="$(docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$OPERATIONS_DB" -tAc \
+  "SELECT count(*) FROM operations.clients WHERE client_key='cavetta'")"
 
 if [ "$roles_ok" != "4" ]; then
   echo "[ensure-operations-database] ERROR: expected 4 operations roles, found ${roles_ok}"
@@ -117,5 +131,9 @@ if [ "$tables_ok" -lt 20 ]; then
   echo "[ensure-operations-database] ERROR: expected at least 20 operations tables, found ${tables_ok}"
   exit 1
 fi
+if [ "$client_ok" != "1" ]; then
+  echo "[ensure-operations-database] ERROR: expected the Cavetta client row, found ${client_ok}"
+  exit 1
+fi
 
-echo "[ensure-operations-database] OK: ${roles_ok} roles, ${tables_ok} tables, migrations applied"
+echo "[ensure-operations-database] OK: ${roles_ok} roles, ${tables_ok} tables, Cavetta catalogue seeded"
