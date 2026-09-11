@@ -39,15 +39,27 @@ publishes them to the private operations ingestion endpoint
 
 **Flow:**
 1. **When Executed by Another Workflow** receives `records` (array of Phase 0
-   section 7 envelopes) and optionally `publisherKey`.
+   section 7 envelopes), optionally `publisherKey`, and `publisherSecret`.
 2. **Build Signed Request** validates batch limits (500 records / 1 MiB),
    computes the HMAC-SHA256 transport signature
-   (`timestamp.nonce.sha256(body)`), reading the publisher secret from the
-   n8n container environment (`OPERATIONS_PUBLISHER_SECRET_<KEY>`).
+   (`timestamp.nonce.sha256(body)`). The secret arrives as the
+   `publisherSecret` workflow input; it is never read via `$env` inside a
+   Code node (task-runner sandboxes do not reliably receive the container
+   environment).
 3. **Publish To Operations Ingest** POSTs the raw JSON body with the signed
    headers.
 4. **Assert Accepted** throws on any rejection so the caller's error handling
    fires.
+
+**Caller wiring (the Execute Workflow node in the calling workflow):**
+- `records` = `={{ $json.records }}` (from the caller's Build Evidence node)
+- `publisherKey` = `={{ $json.publisherKey }}` (optional)
+- `publisherSecret` = `={{ $env.OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N }}`
+
+  The `$env` expression is resolved by the n8n main process when the Execute
+  Workflow node starts the sub-workflow — this is the documented,
+  reliable way to read env vars. The secret then travels as sub-workflow
+  input data only; it never appears in the published evidence.
 
 **Required environment variables in n8n (protected server env file):**
 - `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N` — must equal the value
@@ -58,8 +70,9 @@ publishes them to the private operations ingestion endpoint
 **Required n8n service configuration:**
 - `NODE_FUNCTION_ALLOW_BUILTIN=crypto` — the "Build Signed Request" Code node
   uses Node's built-in `crypto` module, which n8n disallows by default.
-- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` — the same node reads the publisher
-  secret via `$env`, which n8n blocks by default.
+- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` — the calling workflow's Execute
+  Workflow node resolves the `publisherSecret` input via `$env`, which n8n
+  blocks by default.
 Both are set in `infra/n8n/docker-compose.yml`; after changing them the n8n
 container must be recreated (`docker compose up -d` recreates it).
 
