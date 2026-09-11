@@ -1,6 +1,6 @@
 {
-  "name": "CloudIT - Publish Operations Evidence",
-  "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "name": "CloudIT - Publish Operations Evidence v2",
+  "id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
   "nodes": [
     {
       "parameters": {
@@ -11,9 +11,6 @@
             },
             {
               "name": "publisherKey"
-            },
-            {
-              "name": "publisherSecret"
             }
           ]
         }
@@ -29,10 +26,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// CloudIT Operations Portal — Phase 4 evidence publishing (Phase 0 spec section 7).\n//\n// Input (from the calling workflow):\n//   records         array of sanitized envelope objects (contractVersion 1.0)\n//   publisherKey    publisher key; defaults to the Cavetta production publisher\n//   publisherSecret the publisher secret. The CALLER supplies it with\n//                   ={{ $env.OPERATIONS_PUBLISHER_SECRET_<KEY> }} so the value\n//                   is resolved by the n8n main process — Code-node sandboxes\n//                   do not reliably receive the container environment, so this\n//                   node must never read $env itself.\n//\n// The same secret value is stored (salted-hashed) in the operations database\n// and in the operations-ingest service configuration; it is never written to\n// any Data Table or evidence payload, and it is not part of this node's output.\n\nconst crypto = require('crypto');\n\nconst input = $input.first().json;\nconst publisherKey = input.publisherKey || 'cavetta-production-n8n';\nconst secret = input.publisherSecret;\nif (!secret) {\n  throw new Error('publisherSecret workflow input missing; the caller must pass ={{ $env.OPERATIONS_PUBLISHER_SECRET_' + publisherKey.toUpperCase().replace(/[^A-Z0-9]+/g, '_') + ' }}');\n}\n\nconst records = input.records;\nif (!Array.isArray(records) || records.length === 0) {\n  throw new Error('records must be a non-empty array');\n}\nif (records.length > 500) {\n  throw new Error('batch too large: ' + records.length + ' records (max 500)');\n}\n\nconst bodyText = JSON.stringify(records);\nif (Buffer.byteLength(bodyText, 'utf8') > 1048576) {\n  throw new Error('batch too large: over 1 MiB');\n}\n\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst nonce = crypto.randomBytes(16).toString('base64url');\nconst digest = crypto.createHash('sha256').update(bodyText, 'utf8').digest('hex');\nconst signature = crypto.createHmac('sha256', secret)\n  .update(timestamp + '.' + nonce + '.' + digest)\n  .digest('hex');\n\nreturn [{\n  json: {\n    bodyText,\n    publisherKey,\n    timestamp,\n    nonce,\n    signature\n  }\n}];"
+        "jsCode": "// CloudIT Operations Portal — Phase 4 evidence publishing (Phase 0 spec section 7).\n//\n// Input (from the calling workflow):\n//   records      array of sanitized envelope objects (contractVersion 1.0)\n//   publisherKey publisher key; defaults to the Cavetta production publisher\n//\n// Validates batch limits (500 records / 1 MiB) and builds the canonical\n// request pieces. The HMAC-SHA256 signature is computed by the \"Sign Request\"\n// Crypto node using the \"Operations Publisher Signing\" n8n credential, so the\n// publisher secret never enters workflow data, env lookups, or Code-node\n// execution. The same secret is stored salted-hashed in the operations\n// database and in the operations-ingest service configuration.\n\nconst crypto = require('crypto');\n\nconst input = $input.first().json;\nconst publisherKey = input.publisherKey || 'cavetta-production-n8n';\n\nconst records = input.records;\nif (!Array.isArray(records) || records.length === 0) {\n  throw new Error('records must be a non-empty array');\n}\nif (records.length > 500) {\n  throw new Error('batch too large: ' + records.length + ' records (max 500)');\n}\n\nconst bodyText = JSON.stringify(records);\nif (Buffer.byteLength(bodyText, 'utf8') > 1048576) {\n  throw new Error('batch too large: over 1 MiB');\n}\n\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst nonce = crypto.randomBytes(16).toString('base64url');\nconst digest = crypto.createHash('sha256').update(bodyText, 'utf8').digest('hex');\n\nreturn [{\n  json: {\n    bodyText,\n    publisherKey,\n    timestamp,\n    nonce,\n    digest\n  }\n}];"
       },
       "id": "8a1d2e3f-4b5c-6d7e-8f9a-0b1c2d3e4f05",
-      "name": "Build Signed Request",
+      "name": "Prepare Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -42,11 +39,39 @@
     },
     {
       "parameters": {
+        "action": "hmac",
+        "binaryData": false,
+        "type": "SHA256",
+        "value": "={{ $json.timestamp + '.' + $json.nonce + '.' + $json.digest }}",
+        "dataPropertyName": "signature",
+        "encoding": "hex"
+      },
+      "credentials": {
+        "crypto": {
+          "id": "",
+          "name": "Operations Publisher Signing"
+        }
+      },
+      "id": "9b2c3d4e-5f6a-7b8c-9d0e-1f2a3b4c5d06",
+      "name": "Sign Request",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
-        "url": "={{ ($env.OPERATIONS_INGEST_URL || 'http://operations-ingest:3020') + '/v1/batches' }}",
+        "url": "http://operations-ingest:3020/v1/batches",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            },
             {
               "name": "x-publisher-key",
               "value": "={{ $json.publisherKey }}"
@@ -66,9 +91,8 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "json",
-        "jsonBody": "={{ $json.bodyText }}",
+        "contentType": "raw",
+        "body": "={{ $json.bodyText }}",
         "options": {
           "response": {
             "response": {
@@ -83,7 +107,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        680,
+        900,
         300
       ]
     },
@@ -96,7 +120,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        900,
+        1120,
         300
       ]
     }
@@ -106,14 +130,25 @@
       "main": [
         [
           {
-            "node": "Build Signed Request",
+            "node": "Prepare Request",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Signed Request": {
+    "Prepare Request": {
+      "main": [
+        [
+          {
+            "node": "Sign Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign Request": {
       "main": [
         [
           {

@@ -39,27 +39,30 @@ publishes them to the private operations ingestion endpoint
 
 **Flow:**
 1. **When Executed by Another Workflow** receives `records` (array of Phase 0
-   section 7 envelopes), optionally `publisherKey`, and `publisherSecret`.
-2. **Build Signed Request** validates batch limits (500 records / 1 MiB),
-   computes the HMAC-SHA256 transport signature
-   (`timestamp.nonce.sha256(body)`). The secret arrives as the
-   `publisherSecret` workflow input; it is never read via `$env` inside a
-   Code node (task-runner sandboxes do not reliably receive the container
-   environment).
-3. **Publish To Operations Ingest** POSTs the raw JSON body with the signed
-   headers.
-4. **Assert Accepted** throws on any rejection so the caller's error handling
+   section 7 envelopes) and optionally `publisherKey`.
+2. **Prepare Request** validates batch limits (500 records / 1 MiB) and
+   builds the canonical request pieces (body, timestamp, nonce, SHA-256 body
+   digest).
+3. **Sign Request** computes the HMAC-SHA256 transport signature
+   (`timestamp.nonce.digest`) via n8n's Crypto node. The secret comes from
+   the **Operations Publisher Signing** n8n credential — never from `$env`,
+   because task-runner sandboxes and workflow expressions cannot reliably
+   read container env vars on all n8n builds.
+4. **Publish To Operations Ingest** POSTs the raw JSON body (exact bytes —
+   the signature covers them) with the signed headers.
+5. **Assert Accepted** throws on any rejection so the caller's error handling
    fires.
+
+**Required n8n credential:**
+- Create a **Crypto** credential named exactly `Operations Publisher Signing`
+  whose **Hmac Secret** equals `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N`
+  from the protected server env file. If the credential field offers
+  "Take from environment variable", select that variable so the secret is
+  never typed or stored in the workflow.
 
 **Caller wiring (the Execute Workflow node in the calling workflow):**
 - `records` = `={{ $json.records }}` (from the caller's Build Evidence node)
 - `publisherKey` = `={{ $json.publisherKey }}` (optional)
-- `publisherSecret` = `={{ $env.OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N }}`
-
-  The `$env` expression is resolved by the n8n main process when the Execute
-  Workflow node starts the sub-workflow — this is the documented,
-  reliable way to read env vars. The secret then travels as sub-workflow
-  input data only; it never appears in the published evidence.
 
 **Required environment variables in n8n (protected server env file):**
 - `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N` — must equal the value
