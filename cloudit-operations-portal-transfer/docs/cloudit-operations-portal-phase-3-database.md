@@ -184,7 +184,7 @@ Checklist:
       production `operations` database; result `ALL TESTS PASSED`.
 - [x] Confirm no other database was modified: only `operations` appears as
       new; the n8n database and all application databases are untouched.
-- [ ] Owner explicitly approves Phase 3.
+- [x] Owner explicitly approves Phase 3 (10 September 2026).
 
 ## Notes for Phase 4
 
@@ -201,5 +201,5 @@ Checklist:
 
 ## Gate
 
-Per the approved plan, Phase 3 stops here. Phase 4 (sanitized n8n
-publishing) begins only after the owner explicitly approves this gate.
+Phase 3 approved by the owner on 10 September 2026. Phase 4 (sanitized n8n
+publishing) is authorized to begin.
