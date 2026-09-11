@@ -18,6 +18,8 @@ ENV NODE_ENV=production
 ENV PORT=3020
 ENV HOSTNAME=0.0.0.0
 RUN apk add --no-cache curl && addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nodejs
+COPY --from=builder --chown=nodejs:nodejs /workspace/node_modules ./node_modules
+COPY --from=builder --chown=nodejs:nodejs /workspace/apps/operations-ingest/node_modules ./apps/operations-ingest/node_modules
 COPY --from=builder --chown=nodejs:nodejs /workspace/apps/operations-ingest/dist ./dist
 USER nodejs
 EXPOSE 3020
