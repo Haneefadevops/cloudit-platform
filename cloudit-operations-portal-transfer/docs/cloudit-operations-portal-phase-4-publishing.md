@@ -84,10 +84,12 @@ Checklist:
 
 - [x] Portal-only Phase 4 commits pushed to master; deploy workflow green
       with the private ingest service healthy.
-- [ ] Owner generates one long random publisher secret (no `$`) and puts the
-      SAME value in both places: `infra/postgres/.env` as
-      `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N` and the n8n
-      container environment (protected env file on the server).
+- [ ] Owner generates one long random publisher secret (no `$`) and adds it
+      to `infra/postgres/.env` as
+      `OPERATIONS_PUBLISHER_SECRET_CAVETTA_PRODUCTION_N8N`. The ingest
+      service and the n8n container both read that file (n8n's Compose has an
+      explicit `env_file` for it); the n8n container must be recreated after
+      adding it (`docker compose -f infra/n8n/docker-compose.yml up -d`).
 - [ ] Deploy workflow green; the deploy log shows
       `operations-ingest is healthy` and the ensure step reporting the
       Cavetta catalogue seeded.

@@ -10,6 +10,10 @@ services:
         max-file: "3"
     ports:
       - "127.0.0.1:5678:5678"
+    # Operations portal publisher secrets live in the shared protected env
+    # file; values pass through literally (never put `$` in them).
+    env_file:
+      - ../postgres/.env
     environment:
       - N8N_HOST=${N8N_HOST:-n8n.cloudit.lk}
       - N8N_PORT=5678
