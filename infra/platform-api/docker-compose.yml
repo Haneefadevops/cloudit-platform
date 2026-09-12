@@ -13,9 +13,17 @@ services:
         max-file: "3"
     env_file:
       - ../../apps/platform-api/.env
+      # Operations role password and internal API token come from the same
+      # protected server file the ingest service uses. Values pass through
+      # literally; never put `$` in any value in this file.
+      - ../postgres/.env
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - OPERATIONS_DB_HOST=postgres
+      - OPERATIONS_DB_PORT=5432
+      - OPERATIONS_DB_NAME=operations
+      - OPERATIONS_DB_USER=operations_owner
     networks:
       - cloudit
     labels:

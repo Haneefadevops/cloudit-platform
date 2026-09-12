@@ -14,7 +14,14 @@ export class TransformInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<Request>();
     const path = request.url;
 
-    const skipPaths = ['/api/health', '/api/docs', '/health'];
+    // Operations endpoints return their own documented envelope; do not
+    // wrap them in the generic { success, data } transform.
+    const skipPaths = [
+      '/api/health',
+      '/api/docs',
+      '/api/operations',
+      '/health',
+    ];
     if (skipPaths.some((skip) => path.startsWith(skip))) {
       return next.handle();
     }

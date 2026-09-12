@@ -21,6 +21,7 @@ import { EmailModule } from './email/email.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
+import { OperationsModule } from './operations/operations.module';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -70,6 +71,7 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
     OnboardingModule,
     CustomFieldsModule,
     FeatureFlagsModule,
+    OperationsModule,
   ],
   controllers: [AppController],
   providers: [

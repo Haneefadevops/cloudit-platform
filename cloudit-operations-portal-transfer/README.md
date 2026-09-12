@@ -14,7 +14,12 @@ Operations Portal planned for `operations.cloudit.lk`.
 - Phase 3 (operations database): approved by the owner on 10 September 2026.
   Production acceptance passed (isolation suite 89/89 on the server). See
   `docs/cloudit-operations-portal-phase-3-database.md`.
-- Phase 4 (sanitized n8n publishing): in progress.
+- Phase 4 (sanitized n8n publishing): approved by the owner on 11 September
+  2026. Production gate evidence recorded in
+  `docs/cloudit-operations-portal-phase-4-publishing.md`.
+- Phase 5 (overview and workflow visualization): implemented, not deployed;
+  awaiting owner acceptance at the Phase 5 gate. See
+  `docs/cloudit-operations-portal-phase-5-overview.md`.
 - The scheduled 1 October 2026 Phase 5E acceptance remains pending and its real
   report must remain `DRAFT` during review.
 - `ticketing_enabled` must remain `false`.
