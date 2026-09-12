@@ -1,8 +1,9 @@
 # CloudIT Operations Portal — Phase 5 acceptance: overview and workflow visualization
 
 Date: 12 September 2026
-Status: implemented in `.worktrees/master-portal` (branch `master`, uncommitted);
-awaiting owner acceptance at the Phase 5 gate
+Status: deployed to production (master `b3905df`, deploy run 34691767576
+green 12 Sep 2026 ~12:02 UTC); live verification passed; awaiting owner
+sign-off at the Phase 5 gate
 
 ## Scope delivered (approved plan, Phase 5)
 
@@ -142,13 +143,31 @@ rather than hiding it.
   auth/users/organizations etc.) is untouched and unrelated; all new files are
   lint-clean.
 
+## Live production verification — 12 September 2026 (Europe/Malta)
+
+- Deploy run 34691767576 green; `operations-web` and `platform-api`
+  recreated with the new build; all health checks passed; anonymous `/`
+  still redirects to `/login`; `/api/health` 200.
+- Root cause of the initial stale view: both n8n workflows (`Cavetta -
+  Automation Watchdog` and the `CloudIT - Publish Operations Evidence v2`
+  sub-workflow) were unpublished, so no evidence had flowed since the
+  11 Sep gate tests. The portal correctly rendered that as AMBER
+  "Stale evidence" and OVERDUE — the freshness logic was proven against
+  reality, not against a mock.
+- After the owner published both workflows, the next scheduled run
+  published end-to-end: new execution row 12 Sep 2026 14:15:17
+  Europe/Malta (12:15:17 UTC), outcome success, 1.5 s duration, count
+  2 → 3, success 24 h/7 d/30 d 100 %, environment health GREEN,
+  OVERDUE → ON TIME, next expected run 14:30 (exactly one `*/15` step).
+  Owner screenshots captured: overview (GREEN), workflow catalogue
+  (ON TIME), and watchdog detail (3 execution rows, idempotent retry
+  from 11 Sep still absent — no duplicate row).
+
 ## Notes for the owner
 
-- Not deployed. Deploy checklist for the approved push: provision
-  `OPERATIONS_INTERNAL_API_TOKEN` (shared by `infra/postgres/.env` and the
-  operations-web env) and confirm `OPERATIONS_DB_OWNER_PASSWORD` is present;
-  then the normal master deploy brings up the read path. Deploy/push happens
-  only with explicit owner approval.
+- Production publishing note: the other nine catalogue workflows show
+  NO DATA until each gains its success-publication point in n8n (Phase 0
+  §6 item 4 — part of the later evidence rollout, not Phase 5).
 - After deploy, the final live check repeats the comparison above against the
   real two watchdog rows now in production (and any rows published since).
 - `OPERATIONS_MFA_REQUIRED` remains `false`; TOTP must be enabled no later
