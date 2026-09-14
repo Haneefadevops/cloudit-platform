@@ -79,6 +79,9 @@ function TrafficSparkline({ traffic }: { traffic: OperationsVercelTraffic }) {
     pageviews: point.pageviews,
   }));
   const values = series.flatMap((point) => [point.visitors, point.pageviews]).filter((value): value is number => value !== null);
+  if (series.length < 2) {
+    return <p className="ops-empty-note">Trend chart appears after 2 or more days of evidence ({series.length} day collected).</p>;
+  }
   if (values.length < 2) {
     return <p className="ops-empty-note">No trend data (NO DATA).</p>;
   }
