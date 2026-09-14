@@ -1325,7 +1325,10 @@ export class OperationsService {
             FROM operations.metric_samples AS ms
             WHERE ms.client_id = md.client_id
               AND ms.metric_definition_id = md.id
-            ORDER BY ms.observed_at DESC
+            -- ImageKit storage values are start-of-range snapshots, so
+            -- prefer the sample whose period ends most recently (the
+            -- freshest snapshot) over an equally fresh month-start sample.
+            ORDER BY ms.observed_at DESC, ms.period_end DESC
             LIMIT 1
           ) AS latest ON true
           WHERE md.metric_key LIKE 'imagekit.%'
