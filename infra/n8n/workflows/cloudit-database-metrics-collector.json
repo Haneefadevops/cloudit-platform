@@ -1,0 +1,202 @@
+{
+  "name": "CloudIT - Database Metrics Collector",
+  "id": "d5e6f7a8-b9c0-4d1e-7f2a-3b4c5d6e7f02",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "f8a9b0c1-d2e3-4f4a-8b1c-2d3e4f5a6b01",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// CloudIT Operations Portal — Phase 6 database metrics collector.\n//\n// Computes the shared time constants for the run. All timestamps are computed\n// at RUN TIME — never hardcode a test clock: publishedAt must be within\n// ±5 minutes of ingestion (0004 stale_timestamp).\n//\n// The sampling window is the CURRENT 15-minute bucket (floor to :00/:15/:30/:45)\n// and the idempotency bucket is the same window rendered as YYYY-MM-DDTHHMM in\n// UTC (opaque; only uniqueness matters). freshUntil is observedAt + 1800s, the\n// seeded 30-minute freshness for the 15-minute PostgreSQL metrics.\n\nconst now = new Date();\nconst nowMs = now.getTime();\nconst WINDOW_MS = 15 * 60 * 1000;\nconst windowStart = new Date(Math.floor(nowMs / WINDOW_MS) * WINDOW_MS);\nconst windowEnd = new Date(windowStart.getTime() + WINDOW_MS);\nconst pad = (n) => String(n).padStart(2, '0');\nconst bucket =\n  windowStart.getUTCFullYear() + '-' + pad(windowStart.getUTCMonth() + 1) + '-' +\n  pad(windowStart.getUTCDate()) + 'T' + pad(windowStart.getUTCHours()) + pad(windowStart.getUTCMinutes());\n\nreturn [{\n  json: {\n    projectRef: 'kcnsztexllifcjurvtvz',\n    windowStart: windowStart.toISOString(),\n    windowEnd: windowEnd.toISOString(),\n    observedAt: now.toISOString(),\n    publishedAt: now.toISOString(),\n    freshUntil: new Date(nowMs + 1800 * 1000).toISOString(),\n    bucket\n  }\n}];"
+      },
+      "id": "f8a9b0c1-d2e3-4f4a-8b1c-2d3e4f5a6b02",
+      "name": "Load Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.supabase.com/v1/projects/{{ $json.projectRef }}/analytics/endpoints/metrics",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "",
+          "name": "Supabase Analytics Read Only"
+        }
+      },
+      "id": "f8a9b0c1-d2e3-4f4a-8b1c-2d3e4f5a6b03",
+      "name": "Get Supabase Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// CloudIT Operations Portal — Phase 6 database metrics collector (CRITICAL NODE).\n//\n// LIVE-FORMAT NOTE (2026-09-14): the Supabase analytics metrics endpoint returns\n// PROMETHEUS TEXT EXPOSITION FORMAT — one big string of lines:\n//   # HELP [name] [doc]          [- comments, skipped\n//   # TYPE [name] [type]         [- comments, skipped\n//   [name]{label=\"v\",...} 1      [- a sample: series name, optional labels, value\n//   [name] 9.883792e+06          [- samples may omit labels\n// This parser reads EVERY sample into name -] latest value, then maps the 13\n// seeded metric_keys. A seeded metric whose series is absent resolves to null\n// and is OMITTED from the batch (we never guess) — absence shows as NO_DATA\n// in the portal, never as a wrong number, and can never poison the batch.\n//\n// SERIES_MAP candidates marked VERIFY were unconfirmed at author time; the\n// node's `seriesFound.allNames` output lists every series the endpoint\n// returned — compare against SERIES_MAP to correct any unmatched name.\n\nconst text = $input.first().json.data;\nconst config = $('Load Config').first().json;\n\n// --- Prometheus text parser -------------------------------------------------\n// Robust to label commas, escaped quotes, and scientific-notation values.\nconst samples = {};\nif (typeof text === 'string' && text.length > 0) {\n  for (const rawLine of text.split('\\n')) {\n    const line = rawLine.trim();\n    if (line === '' || line.startsWith('#')) continue;\n    const m = line.match(/^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\\{[^}]*\\})?\\s+(-?[0-9.eE+-]+)(?:\\s+\\d+)?$/);\n    if (!m) continue;\n    const value = parseFloat(m[2]);\n    if (Number.isFinite(value)) samples[m[1]] = value; // last sample wins\n  }\n}\n\n// --- SERIES_MAP: seeded metric_key -] candidate series names (first hit wins)\nconst SERIES_MAP = {\n  'postgresql.up': ['pg_up'],\n  'postgresql.database_size_bytes': ['pg_database_size_bytes'],\n  'postgresql.connections_direct': ['pg_stat_database_num_backends', 'pg_stat_activity_count'],\n  'postgresql.connections_supavisor': ['supavisor_connections_active', 'supavisor_pool_connections'],\n  // CONFIRMED LIVE 2026-09-14: pgbouncer_used_clients exists in the response.\n  'postgresql.connections_pgbouncer': ['pgbouncer_used_clients', 'pgbouncer_pools_client_active_connections'],\n  'postgresql.waiting_connections': ['pgbouncer_pools_client_waiting_connections', 'pgrst_db_pool_requests_waiting'],\n  'postgresql.filesystem_read_only': ['node_filesystem_readonly'],\n  'postgresql.oom_kill_count': ['node_vmstat_oom_kill'],\n};\n\nfunction pick(candidates) {\n  for (const name of candidates) {\n    if (Object.prototype.hasOwnProperty.call(samples, name)) return samples[name];\n  }\n  return null;\n}\n\n// --- Resolve direct metrics --------------------------------------------------\nconst resolved = {};\nfor (const [metricKey, candidates] of Object.entries(SERIES_MAP)) {\n  resolved[metricKey] = pick(candidates);\n}\n\n// node_exporter memory: modern builds export _bytes suffixed gauges.\nconst memTotal = pick(['node_memory_MemTotal_bytes', 'node_memory_MemTotal']);\nconst memAvail = pick(['node_memory_MemAvailable_bytes', 'node_memory_MemAvailable', 'node_memory_MemFree_bytes']);\nresolved['postgresql.memory_usage_percent'] =\n  memTotal !== null && memAvail !== null && memTotal > 0\n    ? Math.round(((memTotal - memAvail) / memTotal) * 1000) / 10\n    : null;\n\n// Disk: node filesystem series carry one sample per mount; pick the LARGEST\n// size (the root filesystem) and pair it with its own availability series.\nconst sizeNames = Object.keys(samples).filter((n) => n === 'node_filesystem_size_bytes' || n.endsWith('_node_filesystem_size_bytes'));\nlet diskPercent = null;\nif (Object.prototype.hasOwnProperty.call(samples, 'node_filesystem_size_bytes')) {\n  // Single aggregate series exposed by Supabase — pair directly.\n  const size = samples['node_filesystem_size_bytes'];\n  const avail = pick(['node_filesystem_avail_bytes', 'node_filesystem_free_bytes']);\n  if (size > 0 && avail !== null) diskPercent = Math.round(((size - avail) / size) * 1000) / 10;\n} else if (sizeNames.length > 0) {\n  // Fallback: per-mount suffixed names — largest wins.\n  const sizeName = sizeNames.reduce((a, b) => (samples[a] >= samples[b] ? a : b));\n  const availName = sizeName.replace('_node_filesystem_size_bytes', '_node_filesystem_avail_bytes');\n  const size = samples[sizeName];\n  const avail = Object.prototype.hasOwnProperty.call(samples, availName) ? samples[availName] : null;\n  if (size > 0 && avail !== null) diskPercent = Math.round(((size - avail) / size) * 1000) / 10;\n}\nresolved['postgresql.disk_usage_percent'] = diskPercent;\n\n// --- Restart detection ------------------------------------------------------\n// The metrics endpoint exposes no restart counter, but it does expose\n// node_boot_time_seconds (VM boot time). A CHANGE between windows means the\n// database host restarted during this window. The previous boot time is kept\n// in the workflow static data between runs (no fixed clock, no guessing).\nconst bootTime = pick(['node_boot_time_seconds']);\nlet restartCount = null;\ntry {\n  const staticData = $getWorkflowStaticData('global');\n  const prev = staticData.lastBootTimeSeconds;\n  if (bootTime !== null && Number.isFinite(bootTime)) {\n    restartCount = typeof prev === 'number' && prev !== bootTime ? 1 : 0;\n    staticData.lastBootTimeSeconds = bootTime;\n  }\n} catch (e) {\n  restartCount = null; // static data unavailable — omit rather than guess\n}\nresolved['postgresql.restart_count'] = restartCount;\n\n// --- Type shaping per seeded value_type (migration 0006) ---------------------\nconst BOOLEAN_METRICS = new Set(['postgresql.up', 'postgresql.filesystem_read_only']);\nconst metrics = {};\nfor (const [metricKey, raw] of Object.entries(resolved)) {\n  if (raw === null || raw === undefined) continue; // omit — never guess\n  if (BOOLEAN_METRICS.has(metricKey)) {\n    metrics[metricKey] = { valueBoolean: raw !== 0, unit: metricKey === 'postgresql.up' ? 'up' : 'flag' };\n  } else {\n    const rounded = Number.isInteger(raw) ? raw : Math.round(raw * 100) / 100;\n    metrics[metricKey] = { valueNumber: rounded, unit: metricKey.endsWith('_bytes') ? 'bytes' : metricKey.endsWith('_percent') ? 'percent' : 'count' };\n  }\n}\n\n// --- Status rollup (Phase 0 section 11.2 thresholds) --------------------------\nconst RED =\n  metrics['postgresql.up']?.valueBoolean === false ||\n  metrics['postgresql.filesystem_read_only']?.valueBoolean === true ||\n  (metrics['postgresql.oom_kill_count']?.valueNumber ?? 0) > 0;\nconst AMBER =\n  (metrics['postgresql.disk_usage_percent']?.valueNumber ?? 0) >= 85 ||\n  (metrics['postgresql.memory_usage_percent']?.valueNumber ?? 0) >= 85 ||\n  (metrics['postgresql.pgbouncer_utilization_percent']?.valueNumber ?? 0) >= 80 ||\n  (metrics['postgresql.restart_count']?.valueNumber ?? 0) >= 1;\n\nreturn [{\n  json: {\n    metrics,\n    seriesFound: {\n      allNames: Object.keys(samples).sort(),\n      matched: Object.keys(metrics),\n      unmatched: Object.keys(resolved).filter((k) => !(k in metrics)),\n    },\n    projectRef: config.projectRef,\n    windowStart: config.windowStart,\n    windowEnd: config.windowEnd,\n    observedAt: config.observedAt,\n    publishedAt: config.publishedAt,\n    freshUntil: config.freshUntil,\n    bucket: config.bucket,\n    rollupStatus: RED ? 'RED' : AMBER ? 'AMBER' : 'GREEN',\n  },\n}];\n\n"
+      },
+      "id": "f8a9b0c1-d2e3-4f4a-8b1c-2d3e4f5a6b04",
+      "name": "Normalize Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Assembles ONE publish batch: one metric_sample envelope per metric that\n// resolved to a non-null value in Normalize Metrics. Null metrics are OMITTED\n// (absence = portal shows stale/NO_DATA later; we never guess a value).\n//\n// Payload keys are the strict allowlist of operations_ingest.insert_metric_sample\n// (migration 0005): any extra key rejects the WHOLE batch with unknown_field.\n// Units and value types below repeat the seed (migration 0006) and MUST match\n// it exactly — the ingest rejects a unit_mismatch.\n//\n// Envelope status per metric (Phase 6 design):\n//   RED/critical : up === false, filesystem_read_only === true, oom_kill_count > 0\n//   AMBER/warning: disk >= 85, memory >= 85, pgbouncer_util >= 80, restart_count >= 1,\n//                  waiting_connections >= 1\n//   GREEN/info   : everything else (including healthy booleans)\n\nconst input = $input.first().json;\n\nconst DEFS = {\n  'postgresql.up':                            { unit: 'up',      kind: 'boolean' },\n  'postgresql.database_size_bytes':           { unit: 'bytes',   kind: 'number'  },\n  'postgresql.connections_direct':            { unit: 'count',   kind: 'number'  },\n  'postgresql.connections_supavisor':         { unit: 'count',   kind: 'number'  },\n  'postgresql.connections_pgbouncer':         { unit: 'count',   kind: 'number'  },\n  'postgresql.pgbouncer_max_clients':         { unit: 'count',   kind: 'number'  },\n  'postgresql.pgbouncer_utilization_percent': { unit: 'percent', kind: 'number'  },\n  'postgresql.waiting_connections':           { unit: 'count',   kind: 'number'  },\n  'postgresql.disk_usage_percent':            { unit: 'percent', kind: 'number'  },\n  'postgresql.memory_usage_percent':          { unit: 'percent', kind: 'number'  },\n  'postgresql.filesystem_read_only':          { unit: 'flag',    kind: 'boolean' },\n  'postgresql.oom_kill_count':                { unit: 'count',   kind: 'number'  },\n  'postgresql.restart_count':                 { unit: 'count',   kind: 'number'  }\n};\n\nfunction statusFor(key, value) {\n  if ((key === 'postgresql.up' && value === false) ||\n      (key === 'postgresql.filesystem_read_only' && value === true) ||\n      (key === 'postgresql.oom_kill_count' && value > 0)) {\n    return { status: 'RED', severity: 'critical' };\n  }\n  if ((key === 'postgresql.disk_usage_percent' && value >= 85) ||\n      (key === 'postgresql.memory_usage_percent' && value >= 85) ||\n      (key === 'postgresql.pgbouncer_utilization_percent' && value >= 80) ||\n      (key === 'postgresql.restart_count' && value >= 1) ||\n      (key === 'postgresql.waiting_connections' && value >= 1)) {\n    return { status: 'AMBER', severity: 'warning' };\n  }\n  return { status: 'GREEN', severity: 'info' };\n}\n\nconst records = [];\nfor (const [key, def] of Object.entries(DEFS)) {\n  const m = input.metrics[key];\n  if (!m) continue; // null / unresolved — omitted, never guessed\n\n  const payload = {\n    metricKey: key,\n    sampledAt: input.observedAt,\n    unit: def.unit,\n    periodStart: input.windowStart,\n    periodEnd: input.windowEnd,\n    coverage: 'full',\n    dimensions: {}\n  };\n  let value;\n  if (def.kind === 'boolean') {\n    payload.valueBoolean = m.valueBoolean;\n    value = m.valueBoolean;\n  } else {\n    payload.valueNumber = m.valueNumber;\n    value = m.valueNumber;\n  }\n\n  records.push({\n    contractVersion: '1.0',\n    recordType: 'metric_sample',\n    idempotencyKey: 'db-' + key + '-' + input.bucket,\n    environmentKey: 'production',\n    sourceSystem: 'supabase',\n    observedAt: input.observedAt,\n    publishedAt: input.publishedAt,\n    freshUntil: input.freshUntil,\n    ...statusFor(key, value),\n    correlationKey: null,\n    payload\n  });\n}\n\nreturn [{\n  json: {\n    records,\n    recordCount: records.length,\n    publisherKey: 'cavetta-production-n8n',\n    seriesFound: input.seriesFound\n  }\n}];"
+      },
+      "id": "f8a9b0c1-d2e3-4f4a-8b1c-2d3e4f5a6b05",
+      "name": "Build Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "CloudIT - Publish Operations Evidence v2"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "records": "{{ JSON.stringify($json.records) }}",
+            "publisherKey": "{{ $json.publisherKey }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "records",
+              "displayName": "records",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "any",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "publisherKey",
+              "displayName": "publisherKey",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        }
+      },
+      "id": "f8a9b0c1-d2e3-4f4a-8b1c-2d3e4f5a6b07",
+      "name": "Publish Evidence",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1560,
+        220
+      ]
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Load Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Config": {
+      "main": [
+        [
+          {
+            "node": "Get Supabase Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Supabase Metrics": {
+      "main": [
+        [
+          {
+            "node": "Normalize Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Metrics": {
+      "main": [
+        [
+          {
+            "node": "Build Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Records": {
+      "main": [
+        [
+          {
+            "node": "Publish Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Malta"
+  },
+  "staticData": null,
+  "tags": []
+}

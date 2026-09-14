@@ -1,4 +1,8 @@
-import { computeEnvironmentHealth } from './health.util';
+import {
+  computeDatabaseRollupStatus,
+  computeEnvironmentHealth,
+  deriveEndpointStatus,
+} from './health.util';
 
 const NOW = Date.parse('2025-06-01T12:00:00.000Z');
 const STALE_MS = 45 * 60 * 1_000; // 45 minutes
@@ -103,5 +107,85 @@ describe('computeEnvironmentHealth', () => {
       STALE_MS,
     );
     expect(health.level).toBe('GREEN');
+  });
+});
+
+describe('deriveEndpointStatus', () => {
+  it('marks a down endpoint RED', () => {
+    expect(deriveEndpointStatus(false, 503, 120)).toBe('RED');
+    expect(deriveEndpointStatus(false, null, null)).toBe('RED');
+  });
+
+  it('marks a 5xx endpoint AMBER when still available', () => {
+    expect(deriveEndpointStatus(true, 503, 120)).toBe('AMBER');
+    expect(deriveEndpointStatus(true, 200, 120)).toBe('GREEN');
+  });
+
+  it('marks a slow endpoint AMBER', () => {
+    expect(deriveEndpointStatus(true, 200, 3001)).toBe('AMBER');
+    expect(deriveEndpointStatus(true, 200, 3000)).toBe('GREEN');
+  });
+
+  it('treats missing status/timing data as GREEN when up', () => {
+    expect(deriveEndpointStatus(true, null, null)).toBe('GREEN');
+  });
+});
+
+describe('computeDatabaseRollupStatus', () => {
+  it('is GREEN when everything is healthy', () => {
+    expect(
+      computeDatabaseRollupStatus({
+        'postgresql.up': true,
+        'postgresql.disk_usage_percent': 40,
+        'postgresql.memory_usage_percent': 60,
+        'postgresql.pgbouncer_utilization_percent': 10,
+        'postgresql.restart_count': 0,
+        'postgresql.filesystem_read_only': false,
+        'postgresql.oom_kill_count': 0,
+      }),
+    ).toBe('GREEN');
+  });
+
+  it('is RED when the database is down', () => {
+    expect(computeDatabaseRollupStatus({ 'postgresql.up': false })).toBe('RED');
+  });
+
+  it('is RED on read-only filesystem or OOM kills', () => {
+    expect(
+      computeDatabaseRollupStatus({ 'postgresql.filesystem_read_only': true }),
+    ).toBe('RED');
+    expect(
+      computeDatabaseRollupStatus({ 'postgresql.oom_kill_count': 2 }),
+    ).toBe('RED');
+  });
+
+  it('is AMBER at the disk/memory/pgbouncer/restart thresholds', () => {
+    expect(
+      computeDatabaseRollupStatus({ 'postgresql.disk_usage_percent': 85 }),
+    ).toBe('AMBER');
+    expect(
+      computeDatabaseRollupStatus({ 'postgresql.memory_usage_percent': 90 }),
+    ).toBe('AMBER');
+    expect(
+      computeDatabaseRollupStatus({
+        'postgresql.pgbouncer_utilization_percent': 80,
+      }),
+    ).toBe('AMBER');
+    expect(computeDatabaseRollupStatus({ 'postgresql.restart_count': 1 })).toBe(
+      'AMBER',
+    );
+  });
+
+  it('is GREEN with no data at all (zero rows handled upstream)', () => {
+    expect(computeDatabaseRollupStatus({})).toBe('GREEN');
+  });
+
+  it('ignores null values', () => {
+    expect(
+      computeDatabaseRollupStatus({
+        'postgresql.up': null,
+        'postgresql.disk_usage_percent': null,
+      }),
+    ).toBe('GREEN');
   });
 });

@@ -29,6 +29,14 @@ export class OperationsController {
     return this.operationsService.getOverview();
   }
 
+  @Get('infrastructure')
+  @ApiOperation({
+    summary: 'Infrastructure health: endpoints and database (read-only)',
+  })
+  async getInfrastructure() {
+    return this.operationsService.getInfrastructure();
+  }
+
   @Get('workflows')
   @ApiOperation({ summary: 'Workflow catalogue with window statistics' })
   async getWorkflows(@Query('window') window?: string) {

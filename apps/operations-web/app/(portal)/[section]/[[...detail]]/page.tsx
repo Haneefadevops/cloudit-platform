@@ -3,6 +3,7 @@ import { FoundationPage } from "../../../../components/foundation-page";
 import { OverviewPage } from "../../../../components/overview-page";
 import { WorkflowsPage } from "../../../../components/workflows-page";
 import { WorkflowDetailPage } from "../../../../components/workflow-detail-page";
+import { InfrastructurePage } from "../../../../components/infrastructure-page";
 import type { WorkflowsWindow } from "../../../../lib/operations-api";
 
 const sections = new Set(["overview", "clients", "workflows", "infrastructure", "vercel", "imagekit", "backups", "reports", "incidents", "audit-log", "settings"]);
@@ -17,6 +18,7 @@ export default async function ProtectedSectionPage({
 }) {
   if (!sections.has(params.section)) notFound();
   if (params.section === "overview") return <OverviewPage />;
+  if (params.section === "infrastructure") return <InfrastructurePage />;
   if (params.section === "workflows") {
     const workflowKey = params.detail?.[0];
     if (workflowKey) return <WorkflowDetailPage workflowKey={workflowKey} />;

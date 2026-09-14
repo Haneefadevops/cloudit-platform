@@ -109,6 +109,135 @@ The endpoint never receives secrets in the body; forbidden fields (tokens,
 stack traces, request/response bodies, customer data) must be stripped by the
 caller before invoking this sub-workflow, per Phase 0 section 7.5.
 
+## Phase 6 — evidence collectors (operations portal)
+
+Two new scheduled workflows publish sanitized evidence through the proven
+Phase 4 pipeline above (`CloudIT - Publish Operations Evidence v2` →
+`operations-ingest` → `operations` DB). They are new and independent: no
+existing workflow is modified. Design:
+`cloudit-operations-portal-transfer/docs/cloudit-operations-portal-phase-6-collector-design.md`.
+
+### `cloudit-endpoint-evidence-collector.json` — every 5 minutes
+
+- Schedule `*/5 * * * *` (Europe/Malta, from workflow settings).
+- **Fully sequential design (v2, rewritten after the first live test):** a
+  single straight line of 20 nodes — Prepare Checks, then five identical
+  blocks of `T0 <name>` → `Check <name>` (HTTP) → `Observe <name>` (Code),
+  then Build Records → Validate Records → Publish Evidence. There is no Split
+  In Batches, no Switch, no Merge, and no references to nodes inside a loop.
+  Reason: the first version (batch loop + switch + merge + `$('Mark Start')`
+  cross-references) lost all fields except `endpointKey`/`confirmationState`
+  in the live run — n8n HTTP nodes do not pass input fields through on either
+  output, so anything that depended on passthrough or loop-scoped references
+  produced `undefined` and the ingest service rejected the batch with
+  `missing_field`.
+- Each Observe node therefore: hardcodes its `endpointKey` literal, reads the
+  wall-clock start from its own `T0 <name>` node, and re-reads the accumulated
+  state (`observations` + timestamps) from the **previous Observe node** —
+  never from the HTTP output.
+- The four cavetta.mt checks run unauthenticated; `Check Public API` carries
+  header auth (see credentials below). All HTTP nodes use **Continue (using
+  error output)** so a failed check flows through as an AMBER observation
+  instead of stopping the run; a missing status code means `available: false`,
+  `httpStatus: null`.
+- The collector HTTP nodes deliberately enable the Response option **Include
+  Response Data** so the Observe nodes can read `statusCode` (verified to
+  import and render correctly on n8n Cloud 2.27.4). This is NOT the forbidden
+  file/stream/download option: the body stays readable at `json.body`, and
+  the trap above only applies to the ingest POST whose Assert reads the raw
+  response body. Without this option n8n discards the status code entirely.
+- `responseTimeMs` is wall-clock through the T0 → HTTP → Observe chain, an
+  approximate latency, not a socket measurement.
+- **Build Records is defensive:** required payload fields are coerced so they
+  can never be `undefined` (`available: o.available === true`, null fallbacks
+  for status fields, `responseTimeMs` only when an integer) — an uncheckable
+  observation degrades to `available:false` / null fields, never to a
+  rejected batch.
+- **Validate Records fails loudly** (a descriptive Error in the n8n run, no
+  secrets) if the batch is not exactly 5 records or any required
+  envelope/payload field is missing or an idempotency key is illegal —
+  converting a silent ingest 422 into an obvious workflow error.
+- `confirmationState` is always `"unconfirmed"`; confirmed outages continue to
+  come from the Incident Monitor (Phase 0 §11.2). `tlsDaysRemaining` is omitted
+  (follow-up). Failed checks still publish AMBER records; only a
+  workflow-level failure ends quietly (stale evidence → portal AMBER, by
+  design).
+
+#### Endpoint collector — re-import procedure (owner action, v2)
+
+The first imported version must be **deleted** and the corrected JSON
+imported fresh:
+
+1. Delete the imported `CloudIT - Endpoint Evidence Collector` workflow.
+2. Import `cloudit-endpoint-evidence-collector.json` (it imports INACTIVE).
+3. In **Publish Evidence**, the workflow selector imports EMPTY by design:
+   pick `CloudIT - Publish Operations Evidence v2` from the dropdown. After
+   selecting, **confirm the two workflow inputs survived** —
+   `records` = `{{ JSON.stringify($json.records) }}` (Allow Any Type) and
+   `publisherKey` = `{{ $json.publisherKey }}` (String), Attempt To Convert
+   Types ON; if the dropdown wiped them, re-enter them (mustache only, no
+   leading `=`).
+4. Re-link the credential when prompted: `Check Public API` → existing
+   **Header Auth account 4**.
+5. Test with ONE full **Execute Workflow run** (never step re-runs —
+   `publishedAt` goes stale within ±5 minutes).
+6. Expect an `accepted` receipt with **5** records in
+   `operations.ingestion_receipts`, then activate.
+
+### `cloudit-database-metrics-collector.json` — every 15 minutes
+
+- Schedule `*/15 * * * *` (Europe/Malta).
+- Reads `GET https://api.supabase.com/v1/projects/{projectRef}/analytics/endpoints/metrics`
+  and normalizes up to 13 `postgresql.*` `metric_sample` records matching the
+  seeded metric definitions exactly (units must equal the seed,
+  `dimensions: {}`). `periodStart`/`periodEnd` are the current 15-minute
+  window; `sampledAt` is the run time.
+- **VERIFY-ON-FIRST-RUN series map:** the exact Prometheus series names in the
+  Supabase response could not be confirmed from this repository (they live in
+  the Weekly Health Check workflow, never exported here). The `Normalize
+  Metrics` Code node carries an explicit, commented `SERIES_MAP` from each
+  seeded metric key to candidate series names (first match wins). On the first
+  run: execute the workflow once (full run, see below), open the ingest
+  receipt in `operations.ingestion_receipts`, and compare the node's
+  `seriesFound` output against the 13 seeded keys in migration 0006. Fix any
+  unmatched names in `SERIES_MAP`. A wrong/absent name simply **omits** that
+  metric — it cannot poison the batch (batch acceptance is all-or-nothing, so
+  nothing is ever guessed).
+- `postgresql.pgbouncer_utilization_percent`, `disk_usage_percent` and
+  `memory_usage_percent` are derived from sibling series (see the node
+  comments); utilization is omitted when `max_client_conn` cannot be read.
+- If the metrics request fails or **zero** metrics resolve, the run ends
+  quietly without publishing (the `Has Records` guard); stale evidence →
+  portal NO_DATA/AMBER later, by design.
+- Envelope status per metric: RED for `up === false`, filesystem read-only, or
+  OOM kills; AMBER at the documented warning levels (disk 85%, memory 85%,
+  PgBouncer utilization 80%, restart/waiting present); else GREEN.
+
+### Activation procedure (owner action)
+
+**Endpoint collector:** follow the "Endpoint collector — re-import procedure"
+steps above (delete old, import v2, pick the sub-workflow from the dropdown,
+confirm the two workflow inputs survived, test run, expect `accepted: 5`).
+
+**Metrics collector:**
+1. Import `cloudit-database-metrics-collector.json` — it exports with
+   `active: false` and stays inactive.
+2. Re-link the credential on import if prompted: `Get Supabase Metrics` →
+   existing **Supabase Analytics Read Only** OAuth2 credential (same source
+   the Weekly Health Check uses). API request counts are NOT attempted — the
+   usage endpoint rejects this credential (already verified in the handover).
+3. Test with ONE manual **full Execute Workflow run** — never step re-runs:
+   `publishedAt` must be within ±5 minutes of ingestion and step re-runs reuse
+   stale data (see the caller trap above). Confirm the receipt in
+   `operations.ingestion_receipts` (`accepted`, up to 13 records) and check
+   `seriesFound` for the VERIFY-ON-FIRST-RUN series names.
+4. Activate only after the test receipt is clean.
+
+### Rollback
+
+Deactivate and delete both workflows — this restores the pre-Phase-6 state
+exactly. No existing data or workflow is modified.
+
 ## Importing into n8n
 
 1. Open your n8n instance.

@@ -1,0 +1,596 @@
+{
+  "name": "CloudIT - Endpoint Evidence Collector",
+  "id": "c6d7e8f9-a0b1-4c2d-8e3f-4a5b6c7d8e01",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/5 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c01",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// CloudIT Operations Portal — Phase 6 endpoint evidence collector.\n//\n// Computes the shared run-time constants. Run Once for Each Item: returns the\n// JSON for one item directly. All timestamps are computed at RUN TIME — never\n// hardcode a test clock: publishedAt must be within ±5 minutes of ingestion\n// (0004 stale_timestamp).\n//\n// `observations` seeds the accumulator that each Observe node appends to and\n// re-reads from the PREVIOUS Observe node (never from an HTTP output — n8n\n// HTTP nodes do not pass input fields through).\n\nconst now = new Date();\nconst nowMs = now.getTime();\nconst BUCKET_MS = 5 * 60 * 1000; // five-minute idempotency bucket\nconst bucketStart = new Date(Math.floor(nowMs / BUCKET_MS) * BUCKET_MS);\nconst pad = (n) => String(n).padStart(2, '0');\n// UTC bucket label, e.g. 2026-09-12T0945 — opaque; only uniqueness matters.\nconst bucket =\n  bucketStart.getUTCFullYear() + '-' + pad(bucketStart.getUTCMonth() + 1) + '-' +\n  pad(bucketStart.getUTCDate()) + 'T' + pad(bucketStart.getUTCHours()) + pad(bucketStart.getUTCMinutes());\n\nreturn {\n  observedAt: now.toISOString(),\n  publishedAt: now.toISOString(),\n  freshUntil: new Date(nowMs + 1200 * 1000).toISOString(), // seeded 20-minute freshness\n  bucket,\n  observations: []\n};"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c02",
+      "name": "Prepare Checks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Wall-clock start for the responseTimeMs of the Check that follows; read\n// back by the Observe node after the HTTP request.\nreturn { t0: Date.now() };"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c03",
+      "name": "T0 Website",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://cavetta.mt/",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c04",
+      "name": "Check Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Builds the cavetta.website observation and appends it to the accumulator\n// that flows through the Observe nodes.\n//\n// The HTTP output ($json) carries ONLY the check result — n8n HTTP nodes do\n// not pass input fields through on either output (success or error) — so:\n//   - the endpoint key is hardcoded (no dependence on input passthrough),\n//   - the wall-clock start comes from the T0 Website node,\n//   - the accumulated state (timestamps + prior observations) is re-read from\n//     the Prepare Checks node, NEVER from the HTTP output.\n// Fully sequential, single-shot execution makes these references reliable.\n//\n// \"Include Response Data\" is ON, so a SUCCESS item is\n// { body, headers, statusCode, statusMessage }. A FAILED check arrives as\n// { error: ... } which may carry error.statusCode for HTTP-level rejections\n// but never for network/timeout errors — anything that is not a confirmed 2xx\n// status counts as unavailable.\n\nconst http = $json;\nconst t0Node = $('T0 Website').first().json;\nconst prev = $('Prepare Checks').first().json;\n\nconst err = http && typeof http.error === 'object' && http.error ? http.error : {};\nconst candidates = [http.statusCode, err.statusCode, http.details && http.details.statusCode];\nlet status = null;\nfor (const c of candidates) {\n  const n = typeof c === 'string' ? parseInt(c, 10) : c;\n  if (Number.isInteger(n) && n >= 100 && n <= 599) { status = n; break; }\n}\n\nconst observation = {\n  endpointKey: 'cavetta.website',\n  available: status !== null && status >= 200 && status <= 299,\n  httpStatus: status,\n  httpStatusClass: status === null ? null : Math.floor(status / 100),\n  // Wall-clock through the T0 -> HTTP -> Observe chain; APPROXIMATE latency.\n  responseTimeMs: Number.isInteger(t0Node.t0) ? Math.max(0, Math.min(120000, Math.round(Date.now() - t0Node.t0))) : null,\n  checkedAt: new Date().toISOString()\n};\n\nreturn {\n  observedAt: prev.observedAt,\n  publishedAt: prev.publishedAt,\n  freshUntil: prev.freshUntil,\n  bucket: prev.bucket,\n  observations: [...(Array.isArray(prev.observations) ? prev.observations : []), observation]\n};"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c05",
+      "name": "Observe Website",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Wall-clock start for the responseTimeMs of the Check that follows; read\n// back by the Observe node after the HTTP request.\nreturn { t0: Date.now() };"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c06",
+      "name": "T0 Listings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://cavetta.mt/properties",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c07",
+      "name": "Check Listings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Builds the cavetta.listings observation and appends it to the accumulator.\n// See Observe Website for the full rationale: HTTP outputs carry no input\n// fields, so the endpoint key is hardcoded, t0 comes from T0 Listings, and\n// the accumulated state is re-read from Observe Website — NEVER from the\n// HTTP output.\n\nconst http = $json;\nconst t0Node = $('T0 Listings').first().json;\nconst prev = $('Observe Website').first().json;\n\nconst err = http && typeof http.error === 'object' && http.error ? http.error : {};\nconst candidates = [http.statusCode, err.statusCode, http.details && http.details.statusCode];\nlet status = null;\nfor (const c of candidates) {\n  const n = typeof c === 'string' ? parseInt(c, 10) : c;\n  if (Number.isInteger(n) && n >= 100 && n <= 599) { status = n; break; }\n}\n\nconst observation = {\n  endpointKey: 'cavetta.listings',\n  available: status !== null && status >= 200 && status <= 299,\n  httpStatus: status,\n  httpStatusClass: status === null ? null : Math.floor(status / 100),\n  // Wall-clock through the T0 -> HTTP -> Observe chain; APPROXIMATE latency.\n  responseTimeMs: Number.isInteger(t0Node.t0) ? Math.max(0, Math.min(120000, Math.round(Date.now() - t0Node.t0))) : null,\n  checkedAt: new Date().toISOString()\n};\n\nreturn {\n  observedAt: prev.observedAt,\n  publishedAt: prev.publishedAt,\n  freshUntil: prev.freshUntil,\n  bucket: prev.bucket,\n  observations: [...(Array.isArray(prev.observations) ? prev.observations : []), observation]\n};"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c08",
+      "name": "Observe Listings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Wall-clock start for the responseTimeMs of the Check that follows; read\n// back by the Observe node after the HTTP request.\nreturn { t0: Date.now() };"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c09",
+      "name": "T0 Robots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://cavetta.mt/robots.txt",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c10",
+      "name": "Check Robots",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2220,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Builds the cavetta.robots observation and appends it to the accumulator.\n// See Observe Website for the full rationale: HTTP outputs carry no input\n// fields, so the endpoint key is hardcoded, t0 comes from T0 Robots, and the\n// accumulated state is re-read from Observe Listings — NEVER from the HTTP\n// output.\n\nconst http = $json;\nconst t0Node = $('T0 Robots').first().json;\nconst prev = $('Observe Listings').first().json;\n\nconst err = http && typeof http.error === 'object' && http.error ? http.error : {};\nconst candidates = [http.statusCode, err.statusCode, http.details && http.details.statusCode];\nlet status = null;\nfor (const c of candidates) {\n  const n = typeof c === 'string' ? parseInt(c, 10) : c;\n  if (Number.isInteger(n) && n >= 100 && n <= 599) { status = n; break; }\n}\n\nconst observation = {\n  endpointKey: 'cavetta.robots',\n  available: status !== null && status >= 200 && status <= 299,\n  httpStatus: status,\n  httpStatusClass: status === null ? null : Math.floor(status / 100),\n  // Wall-clock through the T0 -> HTTP -> Observe chain; APPROXIMATE latency.\n  responseTimeMs: Number.isInteger(t0Node.t0) ? Math.max(0, Math.min(120000, Math.round(Date.now() - t0Node.t0))) : null,\n  checkedAt: new Date().toISOString()\n};\n\nreturn {\n  observedAt: prev.observedAt,\n  publishedAt: prev.publishedAt,\n  freshUntil: prev.freshUntil,\n  bucket: prev.bucket,\n  observations: [...(Array.isArray(prev.observations) ? prev.observations : []), observation]\n};"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c11",
+      "name": "Observe Robots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Wall-clock start for the responseTimeMs of the Check that follows; read\n// back by the Observe node after the HTTP request.\nreturn { t0: Date.now() };"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c12",
+      "name": "T0 Sitemap",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://cavetta.mt/sitemap.xml",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c13",
+      "name": "Check Sitemap",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2880,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Builds the cavetta.sitemap observation and appends it to the accumulator.\n// See Observe Website for the full rationale: HTTP outputs carry no input\n// fields, so the endpoint key is hardcoded, t0 comes from T0 Sitemap, and the\n// accumulated state is re-read from Observe Robots — NEVER from the HTTP\n// output.\n\nconst http = $json;\nconst t0Node = $('T0 Sitemap').first().json;\nconst prev = $('Observe Robots').first().json;\n\nconst err = http && typeof http.error === 'object' && http.error ? http.error : {};\nconst candidates = [http.statusCode, err.statusCode, http.details && http.details.statusCode];\nlet status = null;\nfor (const c of candidates) {\n  const n = typeof c === 'string' ? parseInt(c, 10) : c;\n  if (Number.isInteger(n) && n >= 100 && n <= 599) { status = n; break; }\n}\n\nconst observation = {\n  endpointKey: 'cavetta.sitemap',\n  available: status !== null && status >= 200 && status <= 299,\n  httpStatus: status,\n  httpStatusClass: status === null ? null : Math.floor(status / 100),\n  // Wall-clock through the T0 -> HTTP -> Observe chain; APPROXIMATE latency.\n  responseTimeMs: Number.isInteger(t0Node.t0) ? Math.max(0, Math.min(120000, Math.round(Date.now() - t0Node.t0))) : null,\n  checkedAt: new Date().toISOString()\n};\n\nreturn {\n  observedAt: prev.observedAt,\n  publishedAt: prev.publishedAt,\n  freshUntil: prev.freshUntil,\n  bucket: prev.bucket,\n  observations: [...(Array.isArray(prev.observations) ? prev.observations : []), observation]\n};"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c14",
+      "name": "Observe Sitemap",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Wall-clock start for the responseTimeMs of the Check that follows; read\n// back by the Observe node after the HTTP request.\nreturn { t0: Date.now() };"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c15",
+      "name": "T0 Public API",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://kcnsztexllifcjurvtvz.supabase.co/rest/v1/public_properties?select=id&limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Header Auth account 4"
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c16",
+      "name": "Check Public API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3540,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Builds the cavetta.public_api observation and appends it to the\n// accumulator (final block).\n// See Observe Website for the full rationale: HTTP outputs carry no input\n// fields, so the endpoint key is hardcoded, t0 comes from T0 Public API, and\n// the accumulated state is re-read from Observe Sitemap — NEVER from the\n// HTTP output.\n\nconst http = $json;\nconst t0Node = $('T0 Public API').first().json;\nconst prev = $('Observe Sitemap').first().json;\n\nconst err = http && typeof http.error === 'object' && http.error ? http.error : {};\nconst candidates = [http.statusCode, err.statusCode, http.details && http.details.statusCode];\nlet status = null;\nfor (const c of candidates) {\n  const n = typeof c === 'string' ? parseInt(c, 10) : c;\n  if (Number.isInteger(n) && n >= 100 && n <= 599) { status = n; break; }\n}\n\nconst observation = {\n  endpointKey: 'cavetta.public_api',\n  available: status !== null && status >= 200 && status <= 299,\n  httpStatus: status,\n  httpStatusClass: status === null ? null : Math.floor(status / 100),\n  // Wall-clock through the T0 -> HTTP -> Observe chain; APPROXIMATE latency.\n  responseTimeMs: Number.isInteger(t0Node.t0) ? Math.max(0, Math.min(120000, Math.round(Date.now() - t0Node.t0))) : null,\n  checkedAt: new Date().toISOString()\n};\n\nreturn {\n  observedAt: prev.observedAt,\n  publishedAt: prev.publishedAt,\n  freshUntil: prev.freshUntil,\n  bucket: prev.bucket,\n  observations: [...(Array.isArray(prev.observations) ? prev.observations : []), observation]\n};"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c17",
+      "name": "Observe Public API",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Assembles ONE publish batch of five endpoint_observation envelopes from\n// the accumulator left by Observe Public API.\n//\n// Payload keys are the strict allowlist of\n// operations_ingest.insert_endpoint_observation (migration 0005): any extra\n// key rejects the WHOLE batch with unknown_field. monitorKey and\n// tlsDaysRemaining are intentionally omitted (subset is allowed; TLS\n// inspection is a follow-up per the Phase 6 design). confirmationState is\n// \"unconfirmed\": this collector does not do the two-minute recheck —\n// confirmed outages continue to come from the Incident Monitor (Phase 0 11.2).\n//\n// DEFENSIVE: required payload fields are coerced so they can never be\n// undefined (undefined = a silent missing_field 422 from the ingest service).\n// An uncheckable observation degrades to available:false / null fields, never\n// to a rejected batch.\n\nconst acc = $('Observe Public API').first().json;\nconst observations = Array.isArray(acc.observations) ? acc.observations : [];\n\nconst records = observations.map((o) => ({\n  contractVersion: '1.0',\n  recordType: 'endpoint_observation',\n  idempotencyKey: 'endpoint-' + (o.endpointKey || 'unknown') + '-' + acc.bucket,\n  environmentKey: 'production',\n  sourceSystem: 'n8n',\n  observedAt: acc.observedAt,\n  publishedAt: acc.publishedAt,\n  freshUntil: acc.freshUntil,\n  status: o.available === true ? 'GREEN' : 'AMBER',\n  severity: o.available === true ? 'none' : 'warning',\n  correlationKey: null,\n  payload: {\n    endpointKey: o.endpointKey || 'unknown',\n    checkedAt: o.checkedAt || acc.observedAt,\n    available: o.available === true,\n    httpStatusClass: o.httpStatusClass != null ? o.httpStatusClass : null,\n    httpStatus: o.httpStatus != null ? o.httpStatus : null,\n    responseTimeMs: Number.isInteger(o.responseTimeMs) ? o.responseTimeMs : null,\n    confirmationState: 'unconfirmed'\n  }\n}));\n\n// NOTE (owner): if you re-select the sub-workflow in the Publish Evidence\n// node and n8n wipes the two workflow inputs, re-enter them:\n//   records      = {{ JSON.stringify($json.records) }}   (Allow Any Type)\n//   publisherKey = {{ $json.publisherKey }}              (String)\n// Keep Attempt To Convert Types ON. Mustache only — never a leading '='.\n\nreturn { records, publisherKey: 'cavetta-production-n8n' };"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c18",
+      "name": "Build Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Fails LOUDLY (a descriptive Error, visible in the n8n run, no secrets)\n// instead of letting the ingest service reject the batch with a cryptic 422.\n// Catches exactly the failure mode seen in the first live test: records\n// arriving with undefined payload fields.\n\nconst records = $json.records;\nconst REQUIRED_ENVELOPE = ['contractVersion', 'recordType', 'idempotencyKey', 'environmentKey', 'sourceSystem', 'observedAt', 'publishedAt', 'freshUntil', 'status', 'severity'];\nconst REQUIRED_PAYLOAD = ['endpointKey', 'checkedAt', 'available', 'confirmationState'];\n\nif (!Array.isArray(records) || records.length !== 5) {\n  throw new Error('Validate Records: expected exactly 5 endpoint_observation records, got ' + (Array.isArray(records) ? records.length : typeof records));\n}\n\nfor (let i = 0; i < records.length; i++) {\n  const r = records[i];\n  for (const k of REQUIRED_ENVELOPE) {\n    if (r[k] === undefined || r[k] === null) {\n      throw new Error('Validate Records: record ' + i + ' (endpointKey ' + (r.payload && r.payload.endpointKey) + ') is missing envelope field \"' + k + '\"');\n    }\n  }\n  if (typeof r.payload !== 'object' || r.payload === null) {\n    throw new Error('Validate Records: record ' + i + ' has no payload object');\n  }\n  for (const k of REQUIRED_PAYLOAD) {\n    if (r.payload[k] === undefined || r.payload[k] === null) {\n      throw new Error('Validate Records: record ' + i + ' (' + r.payload.endpointKey + ') is missing payload field \"' + k + '\"');\n    }\n  }\n  if (typeof r.payload.available !== 'boolean') {\n    throw new Error('Validate Records: record ' + i + ' (' + r.payload.endpointKey + ') has a non-boolean \"available\"');\n  }\n  if (r.idempotencyKey.length > 160 || r.idempotencyKey.includes('@') || r.idempotencyKey.includes('://')) {\n    throw new Error('Validate Records: record ' + i + ' (' + r.payload.endpointKey + ') has an illegal idempotencyKey \"' + r.idempotencyKey + '\"');\n  }\n}\n\nreturn $json;"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c19",
+      "name": "Validate Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "records": "{{ JSON.stringify($json.records) }}",
+            "publisherKey": "{{ $json.publisherKey }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "records",
+              "displayName": "records",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "any",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "publisherKey",
+              "displayName": "publisherKey",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c20",
+      "name": "Publish Evidence",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        4420,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Prepare Checks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Checks": {
+      "main": [
+        [
+          {
+            "node": "T0 Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "T0 Website": {
+      "main": [
+        [
+          {
+            "node": "Check Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Website": {
+      "main": [
+        [
+          {
+            "node": "Observe Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Observe Website": {
+      "main": [
+        [
+          {
+            "node": "T0 Listings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "T0 Listings": {
+      "main": [
+        [
+          {
+            "node": "Check Listings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Listings": {
+      "main": [
+        [
+          {
+            "node": "Observe Listings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Observe Listings": {
+      "main": [
+        [
+          {
+            "node": "T0 Robots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "T0 Robots": {
+      "main": [
+        [
+          {
+            "node": "Check Robots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Robots": {
+      "main": [
+        [
+          {
+            "node": "Observe Robots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Observe Robots": {
+      "main": [
+        [
+          {
+            "node": "T0 Sitemap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "T0 Sitemap": {
+      "main": [
+        [
+          {
+            "node": "Check Sitemap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Sitemap": {
+      "main": [
+        [
+          {
+            "node": "Observe Sitemap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Observe Sitemap": {
+      "main": [
+        [
+          {
+            "node": "T0 Public API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "T0 Public API": {
+      "main": [
+        [
+          {
+            "node": "Check Public API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Public API": {
+      "main": [
+        [
+          {
+            "node": "Observe Public API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Observe Public API": {
+      "main": [
+        [
+          {
+            "node": "Build Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Records": {
+      "main": [
+        [
+          {
+            "node": "Validate Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Records": {
+      "main": [
+        [
+          {
+            "node": "Publish Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Malta"
+  },
+  "staticData": null,
+  "tags": []
+}

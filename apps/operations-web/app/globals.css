@@ -104,3 +104,20 @@ button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visibl
   .ops-def-list { grid-template-columns:1fr; }.ops-stat-grid { grid-template-columns:1fr; }.skeleton-grid { grid-template-columns:1fr; }
   .ops-card { padding:18px; }.ops-updated { margin-top:-8px; }
 }
+/* Phase 6 · infrastructure page */
+.visually-hidden { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+.infra-env-badges { display:flex; gap:8px; flex-wrap:wrap; flex:0 0 auto; }
+.infra-host { margin:-6px 0 14px; }
+.ops-endpoint-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.ops-spark { display:block; width:100%; height:auto; }
+.ops-spark .spark-line { stroke:var(--blue); }
+.ops-spark .spark-up { fill:var(--green); }
+.ops-spark .spark-down { fill:var(--pink); }
+.ops-metric-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:16px; }
+.ops-metric { min-width:0; padding:18px; border:1px solid var(--line); border-radius:18px; background:var(--surface); }
+.ops-metric h3 { margin:0 0 8px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.ops-metric-value { margin:0 0 10px; font-size:22px; font-weight:700; overflow-wrap:anywhere; }
+.ops-metric-value.is-empty { color:var(--muted); font-size:14px; font-weight:500; }
+@media (max-width: 760px) {
+  .ops-endpoint-grid { grid-template-columns:1fr; }.ops-metric-grid { grid-template-columns:1fr; }
+}

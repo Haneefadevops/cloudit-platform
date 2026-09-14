@@ -2,7 +2,11 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { OperationsDataService } from './operations-data.service';
 import { operationsConfig } from './operations.config';
 import { nextCronRun } from './cron.util';
-import { computeEnvironmentHealth } from './health.util';
+import {
+  computeDatabaseRollupStatus,
+  computeEnvironmentHealth,
+  deriveEndpointStatus,
+} from './health.util';
 
 type WorkflowWindow = '24h' | '7d' | '30d';
 
@@ -145,6 +149,46 @@ interface WorkflowDetailSuccessRow {
   success_7d: number;
   total_30d: number;
   success_30d: number;
+}
+
+interface InfrastructureEndpointRow {
+  client_key: string;
+  environment_key: string;
+  endpoint_key: string;
+  display_name: string;
+  domain_name: string | null;
+}
+
+interface InfrastructureEndpointLatestRow {
+  client_key: string;
+  environment_key: string;
+  endpoint_key: string;
+  checked_at: Date;
+  available: boolean;
+  http_status: number | null;
+  response_time_ms: number | null;
+}
+
+interface InfrastructureEndpointSeriesRow {
+  client_key: string;
+  environment_key: string;
+  endpoint_key: string;
+  checked_at: Date;
+  available: boolean;
+  response_time_ms: number | null;
+}
+
+interface InfrastructureMetricCatalogueRow {
+  metric_key: string;
+}
+
+interface InfrastructureMetricSampleRow {
+  metric_key: string;
+  environment_key: string | null;
+  value_number: number | null;
+  value_boolean: boolean | null;
+  unit: string;
+  observed_at: Date;
 }
 
 /**
@@ -629,5 +673,213 @@ export class OperationsService {
     );
 
     return matches.length === 1 ? matches[0] : matches;
+  }
+
+  async getInfrastructure(): Promise<unknown> {
+    const [
+      endpointRows,
+      latestRows,
+      endpointSeriesRows,
+      metricCatalogueRows,
+      metricSampleRows,
+    ] = await Promise.all([
+      this.data.query<InfrastructureEndpointRow>(`
+          SELECT cl.client_key, en.environment_key, ep.endpoint_key, ep.display_name,
+                 d.domain_name
+          FROM operations.endpoints AS ep
+          JOIN operations.clients AS cl ON cl.id = ep.client_id AND cl.state = 'active'
+          JOIN operations.environments AS en
+            ON en.client_id = ep.client_id AND en.id = ep.environment_id
+          LEFT JOIN operations.domains AS d
+            ON d.client_id = ep.client_id AND d.id = ep.domain_id
+          ORDER BY cl.client_key, en.environment_key, ep.endpoint_key
+        `),
+      this.data.query<InfrastructureEndpointLatestRow>(`
+          SELECT cl.client_key, en.environment_key, ep.endpoint_key,
+                 latest.checked_at, latest.available, latest.http_status, latest.response_time_ms
+          FROM operations.endpoints AS ep
+          JOIN operations.clients AS cl ON cl.id = ep.client_id AND cl.state = 'active'
+          JOIN operations.environments AS en
+            ON en.client_id = ep.client_id AND en.id = ep.environment_id
+          LEFT JOIN LATERAL (
+            SELECT eo.checked_at, eo.available, eo.http_status, eo.response_time_ms
+            FROM operations.endpoint_observations AS eo
+            WHERE eo.client_id = ep.client_id AND eo.endpoint_id = ep.id
+            ORDER BY eo.checked_at DESC
+            LIMIT 1
+          ) AS latest ON true
+        `),
+      this.data.query<InfrastructureEndpointSeriesRow>(`
+          SELECT cl.client_key, en.environment_key, ep.endpoint_key,
+                 eo.checked_at, eo.available, eo.response_time_ms
+          FROM operations.endpoints AS ep
+          JOIN operations.clients AS cl ON cl.id = ep.client_id AND cl.state = 'active'
+          JOIN operations.environments AS en
+            ON en.client_id = ep.client_id AND en.id = ep.environment_id
+          JOIN operations.endpoint_observations AS eo
+            ON eo.client_id = ep.client_id AND eo.endpoint_id = ep.id
+          WHERE eo.checked_at >= now() - interval '24 hours'
+          ORDER BY cl.client_key, en.environment_key, ep.endpoint_key, eo.checked_at
+        `),
+      this.data.query<InfrastructureMetricCatalogueRow>(`
+          SELECT DISTINCT md.metric_key
+          FROM operations.metric_definitions AS md
+          JOIN operations.clients AS cl ON cl.id = md.client_id AND cl.state = 'active'
+          WHERE md.metric_key LIKE 'postgresql.%'
+          ORDER BY md.metric_key
+        `),
+      this.data.query<InfrastructureMetricSampleRow>(`
+          SELECT md.metric_key, en.environment_key,
+                 ms.value_number::float8 AS value_number, ms.value_boolean,
+                 ms.unit, ms.observed_at
+          FROM operations.metric_samples AS ms
+          JOIN operations.metric_definitions AS md
+            ON md.client_id = ms.client_id AND md.id = ms.metric_definition_id
+          JOIN operations.clients AS cl ON cl.id = ms.client_id AND cl.state = 'active'
+          LEFT JOIN operations.environments AS en
+            ON en.client_id = ms.client_id AND en.id = ms.environment_id
+          WHERE md.metric_key LIKE 'postgresql.%'
+            AND ms.observed_at >= now() - interval '24 hours'
+          ORDER BY md.metric_key, ms.observed_at
+        `),
+    ]);
+
+    const endpointKey = (row: {
+      client_key: string;
+      environment_key: string;
+      endpoint_key: string;
+    }): string =>
+      compositeKey(row.client_key, row.environment_key, row.endpoint_key);
+
+    const latestByEndpoint = new Map<string, InfrastructureEndpointLatestRow>();
+    for (const row of latestRows.rows) {
+      if (row.checked_at !== null) {
+        latestByEndpoint.set(endpointKey(row), row);
+      }
+    }
+
+    const seriesByEndpoint = new Map<
+      string,
+      InfrastructureEndpointSeriesRow[]
+    >();
+    for (const row of endpointSeriesRows.rows) {
+      const key = endpointKey(row);
+      const list = seriesByEndpoint.get(key);
+      if (list) {
+        list.push(row);
+      } else {
+        seriesByEndpoint.set(key, [row]);
+      }
+    }
+
+    const endpoints = endpointRows.rows.map((endpoint) => {
+      const key = endpointKey(endpoint);
+      const latest = latestByEndpoint.get(key) ?? null;
+      const series = seriesByEndpoint.get(key) ?? [];
+      return {
+        endpointKey: endpoint.endpoint_key,
+        displayLabel: endpoint.display_name,
+        environmentKey: endpoint.environment_key,
+        urlHost: endpoint.domain_name,
+        latest:
+          latest === null
+            ? null
+            : {
+                availability: latest.available ? 'up' : 'down',
+                httpStatus: latest.http_status,
+                responseTimeMs: latest.response_time_ms,
+                checkedAt: iso(latest.checked_at),
+                status: deriveEndpointStatus(
+                  latest.available,
+                  latest.http_status,
+                  latest.response_time_ms,
+                ),
+              },
+        series24h: series.map((sample) => ({
+          checkedAt: iso(sample.checked_at),
+          availability: sample.available ? 'up' : 'down',
+          responseTimeMs: sample.response_time_ms,
+        })),
+      };
+    });
+
+    // Database card: every catalogue key appears in the rollup (null when it
+    // has no samples in the window); series are the last 24h per key.
+    const rollupMetrics: Record<
+      string,
+      { value: number | boolean | null; unit: string }
+    > = {};
+    const seriesByMetric: Record<
+      string,
+      { observedAt: string | null; value: number | boolean | null }[]
+    > = {};
+    for (const row of metricCatalogueRows.rows) {
+      rollupMetrics[row.metric_key] = { value: null, unit: '' };
+      seriesByMetric[row.metric_key] = [];
+    }
+
+    const latestSampleByMetric = new Map<
+      string,
+      InfrastructureMetricSampleRow
+    >();
+    for (const row of metricSampleRows.rows) {
+      const series = seriesByMetric[row.metric_key];
+      if (series) {
+        series.push({
+          observedAt: iso(row.observed_at),
+          value: row.value_boolean ?? row.value_number,
+        });
+      }
+      const current = latestSampleByMetric.get(row.metric_key);
+      if (
+        !current ||
+        row.observed_at.getTime() > current.observed_at.getTime()
+      ) {
+        latestSampleByMetric.set(row.metric_key, row);
+      }
+    }
+
+    const rollupValues: Record<string, number | boolean | null> = {};
+    let databaseObservedAtMs: number | null = null;
+    let databaseEnvironmentKey: string | null = null;
+    for (const [metricKey, sample] of latestSampleByMetric) {
+      rollupMetrics[metricKey] = {
+        value: sample.value_boolean ?? sample.value_number,
+        unit: sample.unit,
+      };
+      rollupValues[metricKey] = sample.value_boolean ?? sample.value_number;
+      const atMs = sample.observed_at.getTime();
+      if (databaseObservedAtMs === null || atMs > databaseObservedAtMs) {
+        databaseObservedAtMs = atMs;
+      }
+      if (databaseEnvironmentKey === null && sample.environment_key) {
+        databaseEnvironmentKey = sample.environment_key;
+      }
+    }
+
+    const hasDatabaseEvidence = latestSampleByMetric.size > 0;
+
+    return {
+      generatedAt: new Date().toISOString(),
+      endpoints,
+      database: {
+        environmentKey: databaseEnvironmentKey ?? 'production',
+        latest: hasDatabaseEvidence
+          ? {
+              up:
+                typeof rollupValues['postgresql.up'] === 'boolean'
+                  ? rollupValues['postgresql.up']
+                  : null,
+              status: computeDatabaseRollupStatus(rollupValues),
+              observedAt:
+                databaseObservedAtMs === null
+                  ? null
+                  : new Date(databaseObservedAtMs).toISOString(),
+              rollupMetrics,
+            }
+          : null,
+        series: seriesByMetric,
+      },
+    };
   }
 }

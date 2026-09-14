@@ -188,3 +188,57 @@ export async function getWorkflowDetail(workflowKey: string): Promise<WorkflowDe
   );
   return Array.isArray(data) ? data : [data];
 }
+
+export interface EndpointLatest {
+  availability: boolean | string | null;
+  httpStatus: number | null;
+  responseTimeMs: number | null;
+  checkedAt: string | null;
+  status: HealthStatus;
+}
+
+export interface EndpointSeriesPoint {
+  checkedAt: string;
+  availability: boolean | string | null;
+  responseTimeMs: number | null;
+}
+
+export interface MonitoredEndpoint {
+  endpointKey: string;
+  displayLabel: string;
+  environmentKey: string;
+  urlHost: string;
+  latest: EndpointLatest | null;
+  series24h: EndpointSeriesPoint[];
+}
+
+export interface RollupMetric {
+  value: number | boolean | null;
+  unit: string;
+}
+
+export interface MetricSeriesPoint {
+  observedAt: string;
+  value: number | boolean | null;
+}
+
+export interface DatabaseEvidence {
+  environmentKey: string;
+  latest: {
+    up: boolean | null;
+    status: HealthStatus;
+    observedAt: string | null;
+    rollupMetrics: Record<string, RollupMetric>;
+  } | null;
+  series: Record<string, MetricSeriesPoint[]>;
+}
+
+export interface OperationsInfrastructure {
+  generatedAt: string;
+  endpoints: MonitoredEndpoint[];
+  database: DatabaseEvidence;
+}
+
+export async function getOperationsInfrastructure(): Promise<OperationsInfrastructure> {
+  return fetchOperations<OperationsInfrastructure>("/infrastructure");
+}
