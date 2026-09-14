@@ -116,7 +116,7 @@ function EndpointCard({ endpoint, now }: { endpoint: MonitoredEndpoint; now: Dat
       <h3 id={`endpoint-${sparklineId}`}>{endpoint.displayLabel}</h3>
       {endpoint.latest ? <HealthPill status={endpoint.latest.status} /> : <HealthPill status="NO_DATA" />}
     </div>
-    <p className="ops-sub infra-host">{endpoint.urlHost} · {endpoint.environmentKey}</p>
+    <p className="ops-sub infra-host">{endpoint.urlHost ? `${endpoint.urlHost} · ` : ""}{endpoint.environmentKey}</p>
     {endpoint.latest ? <dl className="ops-def-list">
       <div><dt>Availability</dt><dd>{formatAvailability(endpoint.latest.availability)}</dd></div>
       <div><dt>HTTP status</dt><dd>{endpoint.latest.httpStatus ?? "NO DATA"}</dd></div>
