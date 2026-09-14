@@ -328,7 +328,10 @@ pre-Phase-7 state exactly. No existing data or workflow is modified.
 - Schedule `7 * * * *` (Europe/Malta). freshUntil = observedAt + 3h (seeded
   hourly freshness). Idempotency base is the current UTC hour, so each run
   upserts fresh rows.
-- `GET /v13/deployments?teamId&projectId&limit=20` plus
+- `GET /v7/deployments?teamId&projectId&limit=20` plus (LIVE-CORRECTED
+  2026-09-14: v13 was retired by Vercel with "Invalid API version"; v6/v7 are
+  the currently accepted versions. v7 returns epoch-ms `created`/`ready`,
+  which the Normalize node converts)
   `GET /v9/projects/{projectId}/domains`. Only deployments whose `target`
   field EXISTS and === `production` are kept. One `deployment_summary` per
   kept deployment: `state` mapped to the ingest enum (ERROR→failed,
@@ -341,7 +344,7 @@ pre-Phase-7 state exactly. No existing data or workflow is modified.
   dimensions `{domain}`, today's UTC day) per domain whose lowercased name
   matches `^[a-z0-9.-]+\.[a-z]{2,}$`. Plus the `provider_connection`
   (`rest-api`) — on any call error only the failure connection is published.
-- **VERIFY-ON-FIRST-RUN:** if the live `/v13/deployments` schema omits the
+- **VERIFY-ON-FIRST-RUN:** if the live `/v7/deployments` schema omits the
   `target` field entirely, `diagnostics.deploymentsOmittedNonTarget` counts
   those items — confirm the schema before trusting the deployment counts.
   Also confirm the deployments/domains envelope field names against

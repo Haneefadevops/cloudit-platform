@@ -39,7 +39,10 @@ dead definitions (defensively: only while no samples reference them).
     projects need `teamId`; aggregate queries are bounded by the plan's
     reporting/retention window (plan-dependent — confirmed at the gate);
     production data only.
-- Deployments: `GET /v13/deployments?teamId&projectId&limit=20` (token
+- Deployments: `GET /v7/deployments?teamId&projectId&limit=20` — v13 was
+  retired by Vercel ("Invalid API version", live-discovered 2026-09-14);
+  v6/v7 are the accepted versions. v7 returns epoch-ms `created`/`ready`,
+  normalized to ISO by the collector (token
   permission: read deployments). State mapped to the contract enum
   (ERROR→failed, CANCELED→cancelled, READY→ready,
   BUILDING/INITIALIZING/QUEUED→building, else unknown). Only
