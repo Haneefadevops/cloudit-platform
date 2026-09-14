@@ -226,3 +226,30 @@ workflow needs the same node code pasted in, then one manual run publishes
 the corrected values under new idempotency keys (prior wrong values age
 out of the portal's 24 h window naturally). Gate re-verification of the
 database size against the dashboard is pending after that run.
+
+### Gate re-verification PASSED (14 Sep 2026)
+
+After the owner saved the v4 Normalize code into the live n8n workflow,
+the scheduled collector published a fresh bucket and the portal flipped
+to the corrected values. Screenshot evidence from
+`https://operations.cloudit.lk/infrastructure` (observed 14 Sep 2026,
+13:00 Europe/Malta):
+
+- **Database Size: 87.0 MB** — matches 91,208,501 B from the summed
+  `pg_database_size_bytes` series (sparkline shows the old ~7.4 MB v3
+  points flat, then the jump; they age out of the 24 h window naturally).
+  Supabase dashboard shows 91 MB for the same database; both are the
+  same magnitude, counted at slightly different boundaries.
+- **PgBouncer Max Clients: 200** and **PgBouncer Utilization: 0.5 %** —
+  both previously dataless seeded keys now live.
+- Connections Direct 12, PgBouncer 1, Supavisor 20; Memory 65.6 %;
+  Disk 17.8 %; OOM Kill 0; Restart 0; state Up, health GREEN.
+
+Idempotency proven again in the same session: a manual full-run replay of
+an already-published bucket returned receipt
+`2006566b-fefd-4557-b21a-18eee6eacbd1` with `accepted: 0, duplicates: 13,
+rejected: 0` — zero rows inserted for 13 replayed keys.
+
+Phase 6 gate: **met**. Remaining pending commits on worktree master:
+`bb9ef51` (collector v4) and `b875c96` (portal cosmetic urlHost fix),
+to be pushed together with the Phase 7 batch on owner approval.
