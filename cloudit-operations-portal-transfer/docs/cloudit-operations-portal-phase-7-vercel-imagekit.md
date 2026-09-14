@@ -190,6 +190,47 @@ delete; no existing data or workflow is modified.
 - End-to-end read-path test against a throwaway database with synthetic
   Phase 7 evidence: see "Gate verification" below.
 
+## Live activation record (14 September 2026)
+
+Fixes applied during live n8n activation testing (all deployed, master
+`57a03d1`):
+
+- **Deployments collector**: Vercel accepts only API versions `/v6` and
+  `/v7` for the deployments endpoint (v8–v15 → 400 "Invalid API
+  version"); template corrected from `/v13` to `/v7`. The v7 response
+  carries `uid`, `state`, `target`, `created`/`ready` as epoch
+  milliseconds, and in practice no `alias` field, so
+  `payload.publicDomainKey` is omitted (omit-never-guess); the current
+  production deployment is derived from the deployments list ordering
+  (first production `READY` deployment), not from an alias. First live
+  run published 21 records (18 deployments, 2 domain samples, 1
+  connection), receipt `943642a0-b006-42c5-8ab9-20554c323626`.
+- **Traffic collector**: the Web Analytics `insights/stats` endpoints
+  return rows under `data`, not `rows` — every run normalized to
+  NO_DATA while the API returned real numbers. Normalize now reads
+  `data` (with `rows` as a harmless fallback), matches the bucket day
+  by the row's `timestamp` date prefix instead of array position (a
+  window wider than one day must never attribute another day's numbers
+  to a bucket), and reads the top-path dimension defensively
+  (`requestPath || path || key`). Harness-verified against the real
+  14 Sep response. Live run: Sep 13 = 19 visitors / 55 pageviews,
+  receipt `7d3a440d-b3af-4592-b66b-25486d136eb7` (traffic_summary
+  accepted; connection counted `duplicates: 1` because the same
+  idempotency key was published by an earlier NO_DATA test run —
+  append-only idempotency working as designed).
+- **Rollup pill (platform-api)**: connectivity is now assessed per
+  `connection_key` (`DISTINCT ON (connection_key) ... ORDER BY
+  connection_key, observed_at DESC`). Previously the single latest
+  Vercel connection row of any kind drove the pill, so a web-analytics
+  collector failure marked the whole provider RED. Now RED only when
+  the `rest-api` row is unreachable or the current production
+  deployment failed; a `web-analytics`-only failure is AMBER. The
+  response `connectivity` block still reports the `rest-api` row.
+- **Sparkline (operations-web)**: the daily-traffic chart guard counted
+  metric values, so a single day (visitors + pageviews) passed and
+  rendered invisible one-point paths; it now guards on the number of
+  days and tells the reader when the trend chart will appear.
+
 ## Gate verification (pending owner)
 
 1. Owner provisions credentials in n8n: fine-grained **Vercel** token
