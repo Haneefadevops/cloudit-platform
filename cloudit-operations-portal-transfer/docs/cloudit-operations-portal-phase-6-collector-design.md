@@ -196,3 +196,33 @@ work is portal-side: `/infrastructure` page consuming
 `endpoint_observation` + `metric_sample` read-only, then the
 identical-period gate comparison (portal values vs Supabase dashboard and
 direct endpoint probes for the same windows).
+
+### Gate comparison finding and collector correction (14 Sep 2026, v4)
+
+First identical-period comparison against the Supabase dashboard found
+**database size wrong**: portal showed 7.4 MB, dashboard shows 91 MB.
+Root cause confirmed from a live endpoint capture:
+
+- `pg_database_size_bytes` is **per-database** (`{datname="..."}` label):
+  postgres 75,934,867 B + template0 7,520,783 B + template1 7,752,851 B.
+  The v3 parser kept one sample per series name (last wins), i.e. one
+  ~7.5 MB template database. The v4 parser **sums every sample of the
+  series**: 91,208,501 B ≈ 87 MB, consistent with the endpoint's own
+  aggregate `pg_database_size_mb` (86.98 MB) and the dashboard's 91 MB
+  (dashboard counts at a slightly different boundary). No other metric
+  deviated.
+- The same capture confirmed `pgbouncer_config_max_client_connections`
+  (200) exists, so the two previously dataless seeded keys are now wired:
+  `pgbouncer_max_clients` reads it directly and
+  `pgbouncer_utilization_percent` = `pgbouncer_used_clients / max × 100`
+  (0.5 % at capture time). The "dropped" note in item 4 above is
+  superseded by this wiring.
+- Harness-verified with the captured lines: size sum, max clients = 200,
+  utilization = 0.5, restart detection intact (0 → 1 → 0 on boot change),
+  unmatched list contains only series absent from the capture.
+
+The v4 Normalize code ships in the collector template; the live n8n
+workflow needs the same node code pasted in, then one manual run publishes
+the corrected values under new idempotency keys (prior wrong values age
+out of the portal's 24 h window naturally). Gate re-verification of the
+database size against the dashboard is pending after that run.
