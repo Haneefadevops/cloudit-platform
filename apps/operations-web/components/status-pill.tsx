@@ -24,3 +24,22 @@ export function HealthPill({ status }: { status: HealthStatus }) {
     </span>
   );
 }
+
+export function BooleanPill({
+  value,
+  trueLabel,
+  falseLabel,
+}: {
+  value: boolean | null;
+  trueLabel: string;
+  falseLabel: string;
+}) {
+  const className = value === null ? "no-data" : value ? "green" : "red";
+  const label = value === null ? "NO DATA" : value ? trueLabel : falseLabel;
+  return (
+    <span className={`status-pill ${className}`}>
+      <span />
+      {label}
+    </span>
+  );
+}

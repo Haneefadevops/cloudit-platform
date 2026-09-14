@@ -121,3 +121,8 @@ button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visibl
 @media (max-width: 760px) {
   .ops-endpoint-grid { grid-template-columns:1fr; }.ops-metric-grid { grid-template-columns:1fr; }
 }
+/* Phase 7 · vercel + imagekit evidence pages */
+.ops-spark .spark-line-b { stroke:var(--green); }
+.ops-quota-bar { display:block; height:6px; margin:12px 0 8px; border-radius:999px; background:var(--line); overflow:hidden; }
+.ops-quota-bar-fill { display:block; height:100%; border-radius:999px; background:var(--blue); }
+.ops-quota-bar-fill.is-low { background:var(--amber); }

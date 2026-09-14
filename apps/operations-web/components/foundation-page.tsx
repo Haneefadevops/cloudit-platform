@@ -5,8 +5,6 @@ const content: Record<string, { title: string; description: string }> = {
   clients: { title: "Clients", description: "Tenants, environments and publishing status" },
   workflows: { title: "Workflow health", description: "Curated automation status · never an editable n8n canvas" },
   infrastructure: { title: "Infrastructure", description: "Website, PostgreSQL and connection evidence" },
-  vercel: { title: "Vercel analytics", description: "Supported API evidence only" },
-  imagekit: { title: "ImageKit analytics", description: "Usage, quota and delivery health" },
   backups: { title: "Backup centre", description: "Encrypted archive and isolated restore evidence" },
   reports: { title: "Reports", description: "Private monthly maintenance reports" },
   incidents: { title: "Incidents", description: "Active and resolved operational findings" },

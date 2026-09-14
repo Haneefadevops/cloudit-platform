@@ -242,3 +242,70 @@ export interface OperationsInfrastructure {
 export async function getOperationsInfrastructure(): Promise<OperationsInfrastructure> {
   return fetchOperations<OperationsInfrastructure>("/infrastructure");
 }
+
+export interface OperationsVercelTraffic {
+  timezone: string;
+  boundary: string;
+  daily: { periodStart: string; visitors: number | null; pageviews: number | null }[];
+  totals: { visitors: number | null; pageviews: number | null };
+  topRoutes: { path: string; views: number }[];
+  lastTrafficAt: string | null;
+}
+
+export interface OperationsVercelDeployment {
+  deploymentKey: string;
+  state: string;
+  createdAt: string | null;
+  readyAt: string | null;
+  durationMs: number | null;
+  isCurrentProduction?: boolean;
+}
+
+export interface OperationsVercel {
+  generatedAt: string;
+  rollupStatus: HealthStatus;
+  traffic: OperationsVercelTraffic | null;
+  deployments: {
+    current: OperationsVercelDeployment | null;
+    recent: OperationsVercelDeployment[];
+    lastDeploymentAt: string | null;
+  };
+  domains: { domain: string; verified: boolean | null; observedAt: string }[];
+  connectivity: {
+    reachable: boolean | null;
+    lastSuccessfulAt: string | null;
+    failureCategory: string | null;
+  };
+}
+
+export async function getOperationsVercel(): Promise<OperationsVercel> {
+  return fetchOperations<OperationsVercel>("/vercel");
+}
+
+export interface OperationsImagekitQuota {
+  metricKey: string;
+  displayName: string;
+  unit: string;
+  used: number | null;
+  quota: number | null;
+  remainingPercent: number | null;
+  trend: { periodStart: string; value: number | null }[];
+  lastSampleAt: string | null;
+}
+
+export interface OperationsImagekit {
+  generatedAt: string;
+  rollupStatus: HealthStatus;
+  quotas: OperationsImagekitQuota[];
+  utilizationPercent: number | null;
+  connectivity: {
+    reachable: boolean | null;
+    lastSuccessfulAt: string | null;
+    failureCategory: string | null;
+  };
+  warningThresholds: { state: "NO_DATA"; note: string };
+}
+
+export async function getOperationsImagekit(): Promise<OperationsImagekit> {
+  return fetchOperations<OperationsImagekit>("/imagekit");
+}
