@@ -199,6 +199,7 @@ describe('computeVercelRollupStatus', () => {
   const base = {
     connectivityReachable: null,
     hasConnectivity: false,
+    webAnalyticsReachable: null,
     currentDeploymentState: null,
     hasUnverifiedDomain: false,
     hasTraffic: false,
@@ -342,6 +343,40 @@ describe('computeVercelRollupStatus', () => {
         TRAFFIC_STALE_MS,
       ),
     ).toBe('GREEN');
+  });
+
+  it('is AMBER (not RED) when only the web-analytics connection is unreachable', () => {
+    expect(
+      computeVercelRollupStatus(
+        {
+          ...base,
+          connectivityReachable: true,
+          hasConnectivity: true,
+          webAnalyticsReachable: false,
+          currentDeploymentState: 'ready',
+          hasDeployments: true,
+        },
+        NOW,
+        TRAFFIC_STALE_MS,
+      ),
+    ).toBe('AMBER');
+  });
+
+  it('is RED when the rest-api connection is unreachable, regardless of web-analytics', () => {
+    expect(
+      computeVercelRollupStatus(
+        {
+          ...base,
+          connectivityReachable: false,
+          hasConnectivity: true,
+          webAnalyticsReachable: true,
+          currentDeploymentState: 'ready',
+          hasDeployments: true,
+        },
+        NOW,
+        TRAFFIC_STALE_MS,
+      ),
+    ).toBe('RED');
   });
 });
 

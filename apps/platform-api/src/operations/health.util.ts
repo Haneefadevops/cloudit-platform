@@ -155,9 +155,18 @@ export type AnalyticsRollupStatus =
   'GREEN' | 'AMBER' | 'RED' | 'NO_DATA' | 'UNKNOWN';
 
 export interface VercelAnalyticsEvidence {
+  /** Latest provider_connections row for connection_key 'rest-api'. */
   connectivityReachable: boolean | null;
-  /** False when no provider_connections row exists for 'vercel' at all. */
+  /** False when no 'rest-api' provider_connections row exists for 'vercel'. */
   hasConnectivity: boolean;
+  /**
+   * Latest provider_connections row for connection_key 'web-analytics'
+   * (the traffic collector); null when that collector has never published.
+   * Assessed separately from the REST API: a traffic-collection outage
+   * must not mark the whole provider RED while deployments/domains stay
+   * healthy.
+   */
+  webAnalyticsReachable: boolean | null;
   currentDeploymentState: string | null;
   hasUnverifiedDomain: boolean;
   hasTraffic: boolean;
@@ -168,12 +177,14 @@ export interface VercelAnalyticsEvidence {
 
 /**
  * Phase 7 Vercel rollup:
- *   RED     — connectivity unreachable, or the current production
- *             deployment failed;
- *   AMBER   — an unverified domain exists, traffic evidence is older than
+ *   RED     — the 'rest-api' connectivity row is unreachable, or the current
+ *             production deployment failed;
+ *   AMBER   — the 'web-analytics' connectivity row is unreachable, an
+ *             unverified domain exists, traffic evidence is older than
  *             staleTrafficMs while traffic exists, or any recent deployment
  *             failed;
- *   NO_DATA — no traffic, no deployments and no connectivity evidence;
+ *   NO_DATA — no traffic, no deployments and no 'rest-api' connectivity
+ *             evidence;
  *   GREEN   — everything else.
  */
 export function computeVercelRollupStatus(
@@ -186,6 +197,9 @@ export function computeVercelRollupStatus(
     evidence.currentDeploymentState === 'failed'
   ) {
     return 'RED';
+  }
+  if (evidence.webAnalyticsReachable === false) {
+    return 'AMBER';
   }
   if (evidence.hasUnverifiedDomain) {
     return 'AMBER';

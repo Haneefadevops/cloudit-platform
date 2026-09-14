@@ -277,6 +277,7 @@ interface AnalyticsDeploymentRow {
 }
 
 interface AnalyticsConnectivityRow {
+  connection_key: string;
   reachable: boolean;
   last_successful_at: Date | null;
   failure_category: string | null;
@@ -1104,12 +1105,13 @@ export class OperationsService {
           LIMIT 15
         `),
       this.data.query<AnalyticsConnectivityRow>(`
-          SELECT pc.reachable, pc.last_successful_at, pc.failure_category
+          SELECT DISTINCT ON (pc.connection_key)
+                 pc.connection_key, pc.reachable, pc.last_successful_at,
+                 pc.failure_category
           FROM operations.provider_connections AS pc
           JOIN operations.clients AS cl ON cl.id = pc.client_id AND cl.state = 'active'
           WHERE pc.provider = 'vercel'
-          ORDER BY pc.observed_at DESC
-          LIMIT 1
+          ORDER BY pc.connection_key, pc.observed_at DESC
         `),
     ]);
 
@@ -1241,12 +1243,21 @@ export class OperationsService {
         observedAt: row.observed_at.toISOString(),
       }));
 
-    const connectivityRow = connectivityRows.rows[0] ?? null;
+    // Connectivity is assessed per connection_key: the card reports and
+    // rolls up on the 'rest-api' row (deployments/domains), while a
+    // 'web-analytics' failure only degrades the rollup to AMBER.
+    const connectivityRow =
+      connectivityRows.rows.find((r) => r.connection_key === 'rest-api') ??
+      null;
+    const webAnalyticsRow =
+      connectivityRows.rows.find((r) => r.connection_key === 'web-analytics') ??
+      null;
 
     const rollupStatus = computeVercelRollupStatus(
       {
         connectivityReachable: connectivityRow?.reachable ?? null,
         hasConnectivity: connectivityRow !== null,
+        webAnalyticsReachable: webAnalyticsRow?.reachable ?? null,
         currentDeploymentState: currentRow?.state ?? null,
         hasUnverifiedDomain: domains.some((d) => d.verified === false),
         hasTraffic,
