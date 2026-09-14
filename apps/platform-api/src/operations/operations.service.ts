@@ -3,8 +3,11 @@ import { OperationsDataService } from './operations-data.service';
 import { operationsConfig } from './operations.config';
 import { nextCronRun } from './cron.util';
 import {
+  AnalyticsRollupStatus,
   computeDatabaseRollupStatus,
   computeEnvironmentHealth,
+  computeImagekitRollupStatus,
+  computeVercelRollupStatus,
   deriveEndpointStatus,
 } from './health.util';
 
@@ -189,6 +192,157 @@ interface InfrastructureMetricSampleRow {
   value_boolean: boolean | null;
   unit: string;
   observed_at: Date;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 analytics (Vercel / ImageKit)
+// ---------------------------------------------------------------------------
+
+// The Vercel Web Analytics boundary is a calendar day; metric_samples does
+// not store timezone/boundary, so they are contract constants.
+const VERCEL_TRAFFIC_TIMEZONE = 'UTC';
+const VERCEL_TRAFFIC_BOUNDARY = 'web_analytics_day';
+// Traffic older than 48h while traffic evidence exists makes the Vercel
+// card AMBER (daily collector cadence, not the 45-minute watchdog window).
+const VERCEL_STALE_TRAFFIC_MS = 48 * 60 * 60 * 1_000;
+
+const IMAGEKIT_QUOTA_KEYS: readonly {
+  metricKey: string;
+  quotaKey: string | null;
+  unit: 'bytes' | 'units';
+}[] = [
+  {
+    metricKey: 'imagekit.bandwidth_bytes',
+    quotaKey: 'imagekit.bandwidth_quota_bytes',
+    unit: 'bytes',
+  },
+  {
+    metricKey: 'imagekit.media_library_storage_bytes',
+    quotaKey: 'imagekit.media_library_storage_quota_bytes',
+    unit: 'bytes',
+  },
+  {
+    metricKey: 'imagekit.video_processing_units',
+    quotaKey: 'imagekit.video_processing_units_quota',
+    unit: 'units',
+  },
+  {
+    metricKey: 'imagekit.extension_units',
+    quotaKey: 'imagekit.extension_units_quota',
+    unit: 'units',
+  },
+  {
+    metricKey: 'imagekit.original_cache_storage_bytes',
+    quotaKey: null,
+    unit: 'bytes',
+  },
+];
+
+interface AnalyticsLatestSampleRow {
+  metric_key: string;
+  display_name: string;
+  value_number: number | null;
+  value_boolean: boolean | null;
+  observed_at: Date | null;
+}
+
+interface AnalyticsDailySampleRow {
+  metric_key: string;
+  period_start: Date;
+  value_number: number | null;
+  observed_at: Date;
+}
+
+interface AnalyticsTopRouteRow {
+  period_start: Date;
+  path: string | null;
+  value_number: number | null;
+  observed_at: Date;
+}
+
+interface AnalyticsDomainRow {
+  domain: string | null;
+  value_boolean: boolean | null;
+  observed_at: Date;
+}
+
+interface AnalyticsDeploymentRow {
+  deployment_key: string;
+  state: string;
+  created_at: Date | null;
+  ready_at: Date | null;
+  duration_ms: number | null;
+  is_current_production: boolean;
+  observed_at: Date;
+}
+
+interface AnalyticsConnectivityRow {
+  reachable: boolean;
+  last_successful_at: Date | null;
+  failure_category: string | null;
+}
+
+export interface VercelAnalyticsResponse {
+  generatedAt: string;
+  rollupStatus: AnalyticsRollupStatus;
+  traffic: {
+    timezone: string;
+    boundary: string;
+    daily: {
+      periodStart: string;
+      visitors: number | null;
+      pageviews: number | null;
+    }[];
+    totals: { visitors: number | null; pageviews: number | null };
+    topRoutes: { path: string; views: number }[];
+    lastTrafficAt: string | null;
+  } | null;
+  deployments: {
+    current: {
+      deploymentKey: string;
+      state: string;
+      createdAt: string | null;
+      readyAt: string | null;
+      durationMs: number | null;
+    } | null;
+    recent: {
+      deploymentKey: string;
+      state: string;
+      createdAt: string | null;
+      readyAt: string | null;
+      durationMs: number | null;
+      isCurrentProduction: boolean;
+    }[];
+    lastDeploymentAt: string | null;
+  };
+  domains: { domain: string; verified: boolean | null; observedAt: string }[];
+  connectivity: {
+    reachable: boolean | null;
+    lastSuccessfulAt: string | null;
+    failureCategory: string | null;
+  };
+}
+
+export interface ImagekitAnalyticsResponse {
+  generatedAt: string;
+  rollupStatus: AnalyticsRollupStatus;
+  quotas: {
+    metricKey: string;
+    displayName: string;
+    unit: 'bytes' | 'units';
+    used: number | null;
+    quota: number | null;
+    remainingPercent: number | null;
+    trend: { periodStart: string; value: number | null }[];
+    lastSampleAt: string | null;
+  }[];
+  utilizationPercent: number | null;
+  connectivity: {
+    reachable: boolean | null;
+    lastSuccessfulAt: string | null;
+    failureCategory: string | null;
+  };
+  warningThresholds: { state: 'NO_DATA'; note: string };
 }
 
 /**
@@ -879,6 +1033,421 @@ export class OperationsService {
             }
           : null,
         series: seriesByMetric,
+      },
+    };
+  }
+
+  async getVercelAnalytics(): Promise<VercelAnalyticsResponse> {
+    const nowMs = Date.now();
+    const [
+      trafficRows,
+      topRouteRows,
+      domainRows,
+      currentDeploymentRows,
+      recentDeploymentRows,
+      connectivityRows,
+    ] = await Promise.all([
+      this.data.query<AnalyticsDailySampleRow>(`
+          SELECT md.metric_key, ms.period_start,
+                 ms.value_number::float8 AS value_number, ms.observed_at
+          FROM operations.metric_samples AS ms
+          JOIN operations.metric_definitions AS md
+            ON md.client_id = ms.client_id AND md.id = ms.metric_definition_id
+          JOIN operations.clients AS cl ON cl.id = ms.client_id AND cl.state = 'active'
+          WHERE md.metric_key IN ('vercel.traffic.visitors', 'vercel.traffic.pageviews')
+            AND ms.source_record_type IN ('traffic_summary', 'metric_sample')
+            AND ms.period_start >= now() - interval '31 days'
+            AND ms.period_end - ms.period_start >= interval '23 hours'
+            AND ms.period_end - ms.period_start <= interval '25 hours'
+          ORDER BY md.metric_key, ms.period_start, ms.observed_at
+        `),
+      this.data.query<AnalyticsTopRouteRow>(`
+          SELECT ms.period_start, ms.dimensions->>'path' AS path,
+                 ms.value_number::float8 AS value_number, ms.observed_at
+          FROM operations.metric_samples AS ms
+          JOIN operations.metric_definitions AS md
+            ON md.client_id = ms.client_id AND md.id = ms.metric_definition_id
+          JOIN operations.clients AS cl ON cl.id = ms.client_id AND cl.state = 'active'
+          WHERE md.metric_key = 'vercel.traffic.top_route'
+            AND ms.period_start >= now() - interval '31 days'
+          ORDER BY ms.period_start DESC, ms.value_number DESC
+        `),
+      this.data.query<AnalyticsDomainRow>(`
+          SELECT DISTINCT ON (ms.dimensions->>'domain')
+                 ms.dimensions->>'domain' AS domain,
+                 ms.value_boolean, ms.observed_at
+          FROM operations.metric_samples AS ms
+          JOIN operations.metric_definitions AS md
+            ON md.client_id = ms.client_id AND md.id = ms.metric_definition_id
+          JOIN operations.clients AS cl ON cl.id = ms.client_id AND cl.state = 'active'
+          WHERE md.metric_key = 'vercel.domain.verified'
+            AND ms.observed_at >= now() - interval '30 days'
+          ORDER BY ms.dimensions->>'domain', ms.observed_at DESC
+        `),
+      this.data.query<AnalyticsDeploymentRow>(`
+          SELECT dep.deployment_key, dep.state, dep.created_at, dep.ready_at,
+                 dep.duration_ms, dep.is_current_production, dep.observed_at
+          FROM operations.deployments AS dep
+          JOIN operations.clients AS cl ON cl.id = dep.client_id AND cl.state = 'active'
+          WHERE dep.provider = 'vercel'
+            AND dep.is_current_production = true
+          ORDER BY dep.observed_at DESC
+          LIMIT 1
+        `),
+      this.data.query<AnalyticsDeploymentRow>(`
+          SELECT dep.deployment_key, dep.state, dep.created_at, dep.ready_at,
+                 dep.duration_ms, dep.is_current_production, dep.observed_at
+          FROM operations.deployments AS dep
+          JOIN operations.clients AS cl ON cl.id = dep.client_id AND cl.state = 'active'
+          WHERE dep.provider = 'vercel'
+          ORDER BY dep.created_at DESC NULLS LAST, dep.observed_at DESC
+          LIMIT 15
+        `),
+      this.data.query<AnalyticsConnectivityRow>(`
+          SELECT pc.reachable, pc.last_successful_at, pc.failure_category
+          FROM operations.provider_connections AS pc
+          JOIN operations.clients AS cl ON cl.id = pc.client_id AND cl.state = 'active'
+          WHERE pc.provider = 'vercel'
+          ORDER BY pc.observed_at DESC
+          LIMIT 1
+        `),
+    ]);
+
+    // Daily traffic: one entry per period_start; visitors/pageviews are
+    // independently nullable and the value comes from the latest sample of
+    // each metric for that day.
+    const dailyByPeriod = new Map<
+      string,
+      {
+        periodStart: string;
+        visitors: number | null;
+        pageviews: number | null;
+        visitorsObservedAtMs: number;
+        pageviewsObservedAtMs: number;
+      }
+    >();
+    for (const row of trafficRows.rows) {
+      const periodStart = row.period_start.toISOString();
+      let entry = dailyByPeriod.get(periodStart);
+      if (!entry) {
+        entry = {
+          periodStart,
+          visitors: null,
+          pageviews: null,
+          visitorsObservedAtMs: 0,
+          pageviewsObservedAtMs: 0,
+        };
+        dailyByPeriod.set(periodStart, entry);
+      }
+      // Latest sample wins per metric, tracked independently: a later
+      // partial correction for one metric must not erase the other.
+      if (row.metric_key === 'vercel.traffic.visitors') {
+        if (row.observed_at.getTime() >= entry.visitorsObservedAtMs) {
+          entry.visitorsObservedAtMs = row.observed_at.getTime();
+          entry.visitors = row.value_number;
+        }
+      } else if (row.observed_at.getTime() >= entry.pageviewsObservedAtMs) {
+        entry.pageviewsObservedAtMs = row.observed_at.getTime();
+        entry.pageviews = row.value_number;
+      }
+    }
+    const daily = [...dailyByPeriod.values()].sort((a, b) =>
+      a.periodStart.localeCompare(b.periodStart),
+    );
+
+    let visitorsTotal = 0;
+    let visitorsKnown = false;
+    let pageviewsTotal = 0;
+    let pageviewsKnown = false;
+    for (const entry of daily) {
+      if (entry.visitors !== null) {
+        visitorsTotal += entry.visitors;
+        visitorsKnown = true;
+      }
+      if (entry.pageviews !== null) {
+        pageviewsTotal += entry.pageviews;
+        pageviewsKnown = true;
+      }
+    }
+
+    // Top routes for the most recent day that has any top-route evidence.
+    let topRoutes: { path: string; views: number }[] = [];
+    let latestRoutePeriodMs: number | null = null;
+    for (const row of topRouteRows.rows) {
+      const atMs = row.period_start.getTime();
+      if (latestRoutePeriodMs === null || atMs > latestRoutePeriodMs) {
+        latestRoutePeriodMs = atMs;
+      }
+    }
+    if (latestRoutePeriodMs !== null) {
+      topRoutes = topRouteRows.rows
+        .filter((row) => row.period_start.getTime() === latestRoutePeriodMs)
+        .filter(
+          (
+            row,
+          ): row is AnalyticsTopRouteRow & {
+            path: string;
+            value_number: number;
+          } => row.path !== null && row.value_number !== null,
+        )
+        .map((row) => ({ path: row.path, views: row.value_number }))
+        .sort((a, b) => b.views - a.views)
+        .slice(0, 10);
+    }
+
+    let lastTrafficAtMs: number | null = null;
+    for (const row of trafficRows.rows) {
+      const atMs = row.observed_at.getTime();
+      if (lastTrafficAtMs === null || atMs > lastTrafficAtMs) {
+        lastTrafficAtMs = atMs;
+      }
+    }
+    for (const row of topRouteRows.rows) {
+      const atMs = row.observed_at.getTime();
+      if (lastTrafficAtMs === null || atMs > lastTrafficAtMs) {
+        lastTrafficAtMs = atMs;
+      }
+    }
+
+    const hasTraffic = daily.length > 0 || topRoutes.length > 0;
+
+    const currentRow = currentDeploymentRows.rows[0] ?? null;
+    const recent = recentDeploymentRows.rows.map((row) => ({
+      deploymentKey: row.deployment_key,
+      state: row.state,
+      createdAt: iso(row.created_at),
+      readyAt: iso(row.ready_at),
+      durationMs: row.duration_ms,
+      isCurrentProduction: row.is_current_production,
+    }));
+    const hasDeployments = recent.length > 0;
+    let lastDeploymentAtMs: number | null = null;
+    for (const row of recentDeploymentRows.rows) {
+      const atMs = (row.created_at ?? row.observed_at).getTime();
+      if (lastDeploymentAtMs === null || atMs > lastDeploymentAtMs) {
+        lastDeploymentAtMs = atMs;
+      }
+    }
+
+    const domains = domainRows.rows
+      .filter(
+        (row): row is AnalyticsDomainRow & { domain: string } =>
+          row.domain !== null,
+      )
+      .map((row) => ({
+        domain: row.domain,
+        verified: row.value_boolean,
+        // observed_at is NOT NULL in operations.metric_samples.
+        observedAt: row.observed_at.toISOString(),
+      }));
+
+    const connectivityRow = connectivityRows.rows[0] ?? null;
+
+    const rollupStatus = computeVercelRollupStatus(
+      {
+        connectivityReachable: connectivityRow?.reachable ?? null,
+        hasConnectivity: connectivityRow !== null,
+        currentDeploymentState: currentRow?.state ?? null,
+        hasUnverifiedDomain: domains.some((d) => d.verified === false),
+        hasTraffic,
+        lastTrafficAtMs,
+        hasDeployments,
+        anyRecentDeploymentFailed: recent.some((d) => d.state === 'failed'),
+      },
+      nowMs,
+      VERCEL_STALE_TRAFFIC_MS,
+    );
+
+    return {
+      generatedAt: new Date(nowMs).toISOString(),
+      rollupStatus,
+      traffic: hasTraffic
+        ? {
+            timezone: VERCEL_TRAFFIC_TIMEZONE,
+            boundary: VERCEL_TRAFFIC_BOUNDARY,
+            daily: daily.map((entry) => ({
+              periodStart: entry.periodStart,
+              visitors: entry.visitors,
+              pageviews: entry.pageviews,
+            })),
+            totals: {
+              visitors: visitorsKnown ? visitorsTotal : null,
+              pageviews: pageviewsKnown ? pageviewsTotal : null,
+            },
+            topRoutes,
+            lastTrafficAt:
+              lastTrafficAtMs === null
+                ? null
+                : new Date(lastTrafficAtMs).toISOString(),
+          }
+        : null,
+      deployments: {
+        current:
+          currentRow === null
+            ? null
+            : {
+                deploymentKey: currentRow.deployment_key,
+                state: currentRow.state,
+                createdAt: iso(currentRow.created_at),
+                readyAt: iso(currentRow.ready_at),
+                durationMs: currentRow.duration_ms,
+              },
+        recent,
+        lastDeploymentAt:
+          lastDeploymentAtMs === null
+            ? null
+            : new Date(lastDeploymentAtMs).toISOString(),
+      },
+      domains,
+      connectivity: {
+        reachable: connectivityRow?.reachable ?? null,
+        lastSuccessfulAt: iso(connectivityRow?.last_successful_at),
+        failureCategory: connectivityRow?.failure_category ?? null,
+      },
+    };
+  }
+
+  async getImagekitAnalytics(): Promise<ImagekitAnalyticsResponse> {
+    const nowMs = Date.now();
+    const staleEvidenceMs = operationsConfig.analyticsStaleEvidenceMs;
+    const usageKeyList = IMAGEKIT_QUOTA_KEYS.map(
+      (k) => `'${k.metricKey}'`,
+    ).join(', ');
+    const [latestRows, trendRows, connectivityRows] = await Promise.all([
+      this.data.query<AnalyticsLatestSampleRow>(`
+          SELECT md.metric_key, md.display_name,
+                 latest.value_number::float8 AS value_number,
+                 latest.value_boolean, latest.observed_at
+          FROM operations.metric_definitions AS md
+          JOIN operations.clients AS cl ON cl.id = md.client_id AND cl.state = 'active'
+          LEFT JOIN LATERAL (
+            SELECT ms.value_number, ms.value_boolean, ms.observed_at
+            FROM operations.metric_samples AS ms
+            WHERE ms.client_id = md.client_id
+              AND ms.metric_definition_id = md.id
+            ORDER BY ms.observed_at DESC
+            LIMIT 1
+          ) AS latest ON true
+          WHERE md.metric_key LIKE 'imagekit.%'
+        `),
+      this.data.query<AnalyticsDailySampleRow>(`
+          SELECT md.metric_key, ms.period_start,
+                 ms.value_number::float8 AS value_number, ms.observed_at
+          FROM operations.metric_samples AS ms
+          JOIN operations.metric_definitions AS md
+            ON md.client_id = ms.client_id AND md.id = ms.metric_definition_id
+          JOIN operations.clients AS cl ON cl.id = ms.client_id AND cl.state = 'active'
+          WHERE md.metric_key IN (${usageKeyList})
+            AND ms.period_start >= now() - interval '31 days'
+            AND ms.period_end - ms.period_start >= interval '23 hours'
+            AND ms.period_end - ms.period_start <= interval '25 hours'
+          ORDER BY md.metric_key, ms.period_start, ms.observed_at
+        `),
+      this.data.query<AnalyticsConnectivityRow>(`
+          SELECT pc.reachable, pc.last_successful_at, pc.failure_category
+          FROM operations.provider_connections AS pc
+          JOIN operations.clients AS cl ON cl.id = pc.client_id AND cl.state = 'active'
+          WHERE pc.provider = 'imagekit'
+          ORDER BY pc.observed_at DESC
+          LIMIT 1
+        `),
+    ]);
+
+    const latestByKey = new Map<string, AnalyticsLatestSampleRow>();
+    for (const row of latestRows.rows) {
+      latestByKey.set(row.metric_key, row);
+    }
+
+    const trendByKey = new Map<string, Map<string, AnalyticsDailySampleRow>>();
+    for (const row of trendRows.rows) {
+      let byPeriod = trendByKey.get(row.metric_key);
+      if (!byPeriod) {
+        byPeriod = new Map<string, AnalyticsDailySampleRow>();
+        trendByKey.set(row.metric_key, byPeriod);
+      }
+      const periodStart = row.period_start.toISOString();
+      const current = byPeriod.get(periodStart);
+      if (
+        !current ||
+        row.observed_at.getTime() >= current.observed_at.getTime()
+      ) {
+        byPeriod.set(periodStart, row);
+      }
+    }
+
+    let newestSampleAtMs: number | null = null;
+    const quotas = IMAGEKIT_QUOTA_KEYS.map((key) => {
+      const definition = latestByKey.get(key.metricKey) ?? null;
+      const used = definition?.value_number ?? null;
+      const quotaSample = key.quotaKey
+        ? (latestByKey.get(key.quotaKey) ?? null)
+        : null;
+      const quota = quotaSample?.value_number ?? null;
+      const remainingPercent =
+        used !== null && quota !== null && quota > 0
+          ? Math.round(((quota - used) / quota) * 1000) / 10
+          : null;
+      const trendPeriods = trendByKey.get(key.metricKey);
+      const trend = trendPeriods
+        ? [...trendPeriods.values()]
+            .sort((a, b) =>
+              a.period_start
+                .toISOString()
+                .localeCompare(b.period_start.toISOString()),
+            )
+            .map((row) => ({
+              periodStart: row.period_start.toISOString(),
+              value: row.value_number,
+            }))
+        : [];
+      const observedAtMs = definition?.observed_at?.getTime() ?? null;
+      if (observedAtMs !== null) {
+        newestSampleAtMs =
+          newestSampleAtMs === null || observedAtMs > newestSampleAtMs
+            ? observedAtMs
+            : newestSampleAtMs;
+      }
+      return {
+        metricKey: key.metricKey,
+        displayName: definition?.display_name ?? key.metricKey,
+        unit: key.unit,
+        used,
+        quota,
+        remainingPercent,
+        trend,
+        lastSampleAt: iso(definition?.observed_at),
+      };
+    });
+
+    const utilizationRow = latestByKey.get(
+      'imagekit.quota_utilization_percent',
+    );
+    const connectivityRow = connectivityRows.rows[0] ?? null;
+
+    const rollupStatus = computeImagekitRollupStatus(
+      {
+        connectivityReachable: connectivityRow?.reachable ?? null,
+        utilizationPercent: utilizationRow?.value_number ?? null,
+        hasSamples: newestSampleAtMs !== null,
+        newestSampleAtMs,
+      },
+      nowMs,
+      staleEvidenceMs,
+    );
+
+    return {
+      generatedAt: new Date(nowMs).toISOString(),
+      rollupStatus,
+      quotas,
+      utilizationPercent: utilizationRow?.value_number ?? null,
+      connectivity: {
+        reachable: connectivityRow?.reachable ?? null,
+        lastSuccessfulAt: iso(connectivityRow?.last_successful_at),
+        failureCategory: connectivityRow?.failure_category ?? null,
+      },
+      warningThresholds: {
+        state: 'NO_DATA',
+        note: 'ImageKit exposes no warning-threshold-history API — documented provider gap',
       },
     };
   }

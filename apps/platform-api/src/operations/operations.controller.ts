@@ -52,4 +52,20 @@ export class OperationsController {
     }
     return detail;
   }
+
+  @Get('vercel')
+  @ApiOperation({
+    summary: 'Vercel analytics: traffic, deployments, domains (read-only)',
+  })
+  async getVercelAnalytics() {
+    return this.operationsService.getVercelAnalytics();
+  }
+
+  @Get('imagekit')
+  @ApiOperation({
+    summary: 'ImageKit analytics: quota usage and utilization (read-only)',
+  })
+  async getImagekitAnalytics() {
+    return this.operationsService.getImagekitAnalytics();
+  }
 }

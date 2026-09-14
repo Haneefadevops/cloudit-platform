@@ -145,3 +145,111 @@ export function computeDatabaseRollupStatus(
   }
   return 'GREEN';
 }
+
+/**
+ * Phase 7 analytics rollups (Vercel/ImageKit cards). UNKNOWN is part of the
+ * contract enum but never produced by these rules; NO_DATA means the
+ * provider has published no evidence at all.
+ */
+export type AnalyticsRollupStatus =
+  'GREEN' | 'AMBER' | 'RED' | 'NO_DATA' | 'UNKNOWN';
+
+export interface VercelAnalyticsEvidence {
+  connectivityReachable: boolean | null;
+  /** False when no provider_connections row exists for 'vercel' at all. */
+  hasConnectivity: boolean;
+  currentDeploymentState: string | null;
+  hasUnverifiedDomain: boolean;
+  hasTraffic: boolean;
+  lastTrafficAtMs: number | null;
+  hasDeployments: boolean;
+  anyRecentDeploymentFailed: boolean;
+}
+
+/**
+ * Phase 7 Vercel rollup:
+ *   RED     — connectivity unreachable, or the current production
+ *             deployment failed;
+ *   AMBER   — an unverified domain exists, traffic evidence is older than
+ *             staleTrafficMs while traffic exists, or any recent deployment
+ *             failed;
+ *   NO_DATA — no traffic, no deployments and no connectivity evidence;
+ *   GREEN   — everything else.
+ */
+export function computeVercelRollupStatus(
+  evidence: VercelAnalyticsEvidence,
+  nowMs: number,
+  staleTrafficMs: number,
+): AnalyticsRollupStatus {
+  if (
+    evidence.connectivityReachable === false ||
+    evidence.currentDeploymentState === 'failed'
+  ) {
+    return 'RED';
+  }
+  if (evidence.hasUnverifiedDomain) {
+    return 'AMBER';
+  }
+  if (evidence.hasTraffic) {
+    const stale =
+      evidence.lastTrafficAtMs === null ||
+      nowMs - evidence.lastTrafficAtMs > staleTrafficMs;
+    if (stale) {
+      return 'AMBER';
+    }
+  }
+  if (evidence.anyRecentDeploymentFailed) {
+    return 'AMBER';
+  }
+  if (
+    !evidence.hasTraffic &&
+    !evidence.hasDeployments &&
+    !evidence.hasConnectivity
+  ) {
+    return 'NO_DATA';
+  }
+  return 'GREEN';
+}
+
+export interface ImagekitAnalyticsEvidence {
+  connectivityReachable: boolean | null;
+  utilizationPercent: number | null;
+  /** True when at least one of the five usage keys has any sample. */
+  hasSamples: boolean;
+  newestSampleAtMs: number | null;
+}
+
+/**
+ * Phase 7 ImageKit rollup:
+ *   RED     — connectivity unreachable;
+ *   AMBER   — quota utilization at or above 80 percent, or the newest
+ *             sample across the five usage keys is older than
+ *             staleEvidenceMs while some evidence exists;
+ *   NO_DATA — no samples at all across the five usage keys;
+ *   GREEN   — everything else.
+ */
+export function computeImagekitRollupStatus(
+  evidence: ImagekitAnalyticsEvidence,
+  nowMs: number,
+  staleEvidenceMs: number,
+): AnalyticsRollupStatus {
+  if (evidence.connectivityReachable === false) {
+    return 'RED';
+  }
+  if (
+    evidence.utilizationPercent !== null &&
+    evidence.utilizationPercent >= 80
+  ) {
+    return 'AMBER';
+  }
+  if (!evidence.hasSamples) {
+    return 'NO_DATA';
+  }
+  const stale =
+    evidence.newestSampleAtMs === null ||
+    nowMs - evidence.newestSampleAtMs > staleEvidenceMs;
+  if (stale) {
+    return 'AMBER';
+  }
+  return 'GREEN';
+}

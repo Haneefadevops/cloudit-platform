@@ -41,6 +41,10 @@ export const operationsConfig = {
   // rollup (Phase 0 rules): evidence older than this makes an environment
   // AMBER.
   staleEvidenceMs: 45 * 60 * 1_000,
+  // Phase 7 analytics (Vercel/ImageKit) rollup freshness threshold: those
+  // providers publish daily/6-hourly evidence, so staleness is judged
+  // against 24 hours rather than the 45-minute infrastructure window.
+  analyticsStaleEvidenceMs: 24 * 60 * 60 * 1_000,
 };
 
 export type OperationsConfig = typeof operationsConfig;

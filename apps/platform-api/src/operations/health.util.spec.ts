@@ -1,6 +1,8 @@
 import {
   computeDatabaseRollupStatus,
   computeEnvironmentHealth,
+  computeImagekitRollupStatus,
+  computeVercelRollupStatus,
   deriveEndpointStatus,
 } from './health.util';
 
@@ -8,6 +10,9 @@ const NOW = Date.parse('2025-06-01T12:00:00.000Z');
 const STALE_MS = 45 * 60 * 1_000; // 45 minutes
 const FRESH = NOW - 10 * 60 * 1_000; // 10 minutes ago
 const STALE = NOW - 60 * 60 * 1_000; // 1 hour ago
+// Phase 7 analytics windows
+const ANALYTICS_STALE_MS = 24 * 60 * 60 * 1_000; // 24 hours
+const TRAFFIC_STALE_MS = 48 * 60 * 60 * 1_000; // 48 hours
 
 describe('computeEnvironmentHealth', () => {
   it('returns NO_DATA with no reasons when there are no executions', () => {
@@ -186,6 +191,254 @@ describe('computeDatabaseRollupStatus', () => {
         'postgresql.up': null,
         'postgresql.disk_usage_percent': null,
       }),
+    ).toBe('GREEN');
+  });
+});
+
+describe('computeVercelRollupStatus', () => {
+  const base = {
+    connectivityReachable: null,
+    hasConnectivity: false,
+    currentDeploymentState: null,
+    hasUnverifiedDomain: false,
+    hasTraffic: false,
+    lastTrafficAtMs: null,
+    hasDeployments: false,
+    anyRecentDeploymentFailed: false,
+  };
+
+  it('is NO_DATA with no traffic, no deployments and no connectivity', () => {
+    expect(computeVercelRollupStatus(base, NOW, TRAFFIC_STALE_MS)).toBe(
+      'NO_DATA',
+    );
+  });
+
+  it('is RED when connectivity is unreachable', () => {
+    expect(
+      computeVercelRollupStatus(
+        { ...base, connectivityReachable: false, hasConnectivity: true },
+        NOW,
+        TRAFFIC_STALE_MS,
+      ),
+    ).toBe('RED');
+  });
+
+  it('is RED when the current production deployment failed', () => {
+    expect(
+      computeVercelRollupStatus(
+        {
+          ...base,
+          hasDeployments: true,
+          currentDeploymentState: 'failed',
+        },
+        NOW,
+        TRAFFIC_STALE_MS,
+      ),
+    ).toBe('RED');
+  });
+
+  it('RED (unreachable) wins over an unverified domain', () => {
+    expect(
+      computeVercelRollupStatus(
+        {
+          ...base,
+          connectivityReachable: false,
+          hasConnectivity: true,
+          hasUnverifiedDomain: true,
+          hasTraffic: true,
+          lastTrafficAtMs: FRESH,
+        },
+        NOW,
+        TRAFFIC_STALE_MS,
+      ),
+    ).toBe('RED');
+  });
+
+  it('is AMBER when an unverified domain exists', () => {
+    expect(
+      computeVercelRollupStatus(
+        {
+          ...base,
+          hasConnectivity: true,
+          hasUnverifiedDomain: true,
+          hasTraffic: true,
+          lastTrafficAtMs: FRESH,
+        },
+        NOW,
+        TRAFFIC_STALE_MS,
+      ),
+    ).toBe('AMBER');
+  });
+
+  it('is AMBER when traffic exists but is older than 48h', () => {
+    expect(
+      computeVercelRollupStatus(
+        {
+          ...base,
+          hasConnectivity: true,
+          hasTraffic: true,
+          lastTrafficAtMs: NOW - TRAFFIC_STALE_MS - 1,
+        },
+        NOW,
+        TRAFFIC_STALE_MS,
+      ),
+    ).toBe('AMBER');
+  });
+
+  it('treats traffic exactly at the 48h boundary as fresh', () => {
+    expect(
+      computeVercelRollupStatus(
+        {
+          ...base,
+          hasConnectivity: true,
+          hasTraffic: true,
+          lastTrafficAtMs: NOW - TRAFFIC_STALE_MS,
+        },
+        NOW,
+        TRAFFIC_STALE_MS,
+      ),
+    ).toBe('GREEN');
+  });
+
+  it('is AMBER when any recent deployment failed', () => {
+    expect(
+      computeVercelRollupStatus(
+        {
+          ...base,
+          hasConnectivity: true,
+          hasDeployments: true,
+          currentDeploymentState: 'ready',
+          anyRecentDeploymentFailed: true,
+        },
+        NOW,
+        TRAFFIC_STALE_MS,
+      ),
+    ).toBe('AMBER');
+  });
+
+  it('is GREEN with fresh traffic, ready deployments and connectivity', () => {
+    expect(
+      computeVercelRollupStatus(
+        {
+          ...base,
+          connectivityReachable: true,
+          hasConnectivity: true,
+          currentDeploymentState: 'ready',
+          hasTraffic: true,
+          lastTrafficAtMs: FRESH,
+          hasDeployments: true,
+        },
+        NOW,
+        TRAFFIC_STALE_MS,
+      ),
+    ).toBe('GREEN');
+  });
+
+  it('is GREEN with connectivity evidence only', () => {
+    expect(
+      computeVercelRollupStatus(
+        { ...base, connectivityReachable: true, hasConnectivity: true },
+        NOW,
+        TRAFFIC_STALE_MS,
+      ),
+    ).toBe('GREEN');
+  });
+});
+
+describe('computeImagekitRollupStatus', () => {
+  const base = {
+    connectivityReachable: null,
+    utilizationPercent: null,
+    hasSamples: false,
+    newestSampleAtMs: null,
+  };
+
+  it('is NO_DATA when no samples exist at all', () => {
+    expect(computeImagekitRollupStatus(base, NOW, ANALYTICS_STALE_MS)).toBe(
+      'NO_DATA',
+    );
+  });
+
+  it('is RED when connectivity is unreachable, even without samples', () => {
+    expect(
+      computeImagekitRollupStatus(
+        { ...base, connectivityReachable: false },
+        NOW,
+        ANALYTICS_STALE_MS,
+      ),
+    ).toBe('RED');
+  });
+
+  it('is AMBER at 80 percent utilization', () => {
+    expect(
+      computeImagekitRollupStatus(
+        {
+          ...base,
+          utilizationPercent: 80,
+          hasSamples: true,
+          newestSampleAtMs: FRESH,
+        },
+        NOW,
+        ANALYTICS_STALE_MS,
+      ),
+    ).toBe('AMBER');
+  });
+
+  it('is GREEN below 80 percent utilization with fresh evidence', () => {
+    expect(
+      computeImagekitRollupStatus(
+        {
+          ...base,
+          utilizationPercent: 79.9,
+          hasSamples: true,
+          newestSampleAtMs: FRESH,
+        },
+        NOW,
+        ANALYTICS_STALE_MS,
+      ),
+    ).toBe('GREEN');
+  });
+
+  it('is AMBER when the newest sample is older than 24h', () => {
+    expect(
+      computeImagekitRollupStatus(
+        {
+          ...base,
+          hasSamples: true,
+          newestSampleAtMs: NOW - ANALYTICS_STALE_MS - 1,
+        },
+        NOW,
+        ANALYTICS_STALE_MS,
+      ),
+    ).toBe('AMBER');
+  });
+
+  it('treats a sample exactly at the 24h boundary as fresh', () => {
+    expect(
+      computeImagekitRollupStatus(
+        {
+          ...base,
+          hasSamples: true,
+          newestSampleAtMs: NOW - ANALYTICS_STALE_MS,
+        },
+        NOW,
+        ANALYTICS_STALE_MS,
+      ),
+    ).toBe('GREEN');
+  });
+
+  it('is GREEN with fresh samples and reachable connectivity', () => {
+    expect(
+      computeImagekitRollupStatus(
+        {
+          ...base,
+          connectivityReachable: true,
+          hasSamples: true,
+          newestSampleAtMs: FRESH,
+        },
+        NOW,
+        ANALYTICS_STALE_MS,
+      ),
     ).toBe('GREEN');
   });
 });
