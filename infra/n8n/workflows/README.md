@@ -238,6 +238,143 @@ confirm the two workflow inputs survived, test run, expect `accepted: 5`).
 Deactivate and delete both workflows — this restores the pre-Phase-6 state
 exactly. No existing data or workflow is modified.
 
+## Phase 7 — Vercel & ImageKit evidence collectors (operations portal)
+
+Three new scheduled collectors publish Vercel and ImageKit evidence through
+the same proven Phase 4 pipeline (`CloudIT - Publish Operations Evidence v2` →
+`operations-ingest` → `operations` DB). They are new and independent: no
+existing workflow is modified. All three mirror the Phase 6 metrics
+collector's shape: a single Schedule Trigger, one straight line of nodes
+(Load Config → HTTP node(s) with Continue On Fail → Normalize → Build Records
+→ Publish Evidence), Europe/Malta timezone, and they import INACTIVE. Like
+Phase 6, the idempotency bucket is computed at run time and every payload key
+matches the strict allowlist of migration 0005 — any missing provider value is
+omitted, never guessed (absence shows as NO_DATA/stale in the portal, never
+as a wrong number, and can never poison the all-or-nothing batch).
+
+### Shared import procedure (owner action)
+
+1. Import the JSON — it exports with `active: false` and stays INACTIVE.
+2. Set the plain config constants in **Load Config** (these are NOT secrets):
+   - both Vercel collectors: `teamId` (`team_REPLACE_ME`) and `projectId`
+     (`project_REPLACE_ME`) — copy them from the Cavetta project's settings
+     in the Vercel dashboard.
+   - the ImageKit collector: `bandwidthQuotaBytes`, `storageQuotaBytes`,
+     `vpuQuota`, `extensionQuota` (all `0` in the template) — fill the real
+     plan quotas before activation. Quota metrics are published ONLY when
+     the matching constant is > 0, so the placeholders never publish a
+     guessed quota.
+3. Create the provider credential (below) BEFORE the test run and re-link it
+   on import when prompted.
+4. In **Publish Evidence**, if the workflow selector imports empty, pick
+   `CloudIT - Publish Operations Evidence v2` from the dropdown and confirm
+   the two workflow inputs survived — `records` =
+   `{{ JSON.stringify($json.records) }}` (Allow Any Type), `publisherKey` =
+   `{{ $json.publisherKey }}` (String), Attempt To Convert Types ON
+   (mustache only, no leading `=`).
+5. Test with ONE full **Execute Workflow run** — never step re-runs:
+   `publishedAt` must be within ±5 minutes of ingestion and step re-runs
+   reuse stale data.
+6. Check the receipt in `operations.ingestion_receipts` against the expected
+   record count below, then activate.
+
+Rollback for all three: deactivate and delete — this restores the
+pre-Phase-7 state exactly. No existing data or workflow is modified.
+
+### Provider credentials (owner creates; secrets never enter the workflow)
+
+- **Vercel API Read Only** (both Vercel collectors): n8n credential type
+  **Header Auth**; Name `Authorization`, Value `Bearer <token>`. Create a
+  fine-grained (scoped) Vercel API token with **read-only** access limited to
+  the Cavetta project (Web Analytics read + Deployments read + Domains read).
+  The token value lives only in the n8n credential — never in the workflow
+  JSON or Code nodes.
+- **ImageKit API Read Only**: n8n credential type **Header Auth**; Name
+  `Authorization`, Value `Basic <base64>` where `<base64>` is the base64 of
+  `<privateKey>:` (private key plus a trailing colon, no password) — compute
+  it once, e.g. `printf '%s:' '<privateKey>' | base64`. The ImageKit private
+  key never appears in the workflow JSON or Code nodes.
+
+### `cloudit-vercel-traffic-collector.json` — daily 00:40
+
+- Schedule `40 0 * * *` (Europe/Malta). freshUntil = observedAt + 48h
+  (seeded daily-traffic freshness).
+- Two GETs against
+  `api.vercel.com/v1/query/web-analytics/visits/aggregate` for YESTERDAY'S
+  UTC day: `by=day` (totals) and `by=requestPath&limit=10` (top paths).
+  Publishes ONE `traffic_summary` (provider `vercel`, timezone `UTC`,
+  boundary `web_analytics_day`) + one `provider_connection`
+  (`web-analytics`). Each top-route path is sanitized against the ingest
+  regex and the excluded prefixes (`/admin /agent /share /api /_next
+  /_vercel`, `/others`) — one bad path is skipped, never fatal; topRoutes is
+  capped at 20. visitors AND pageviews both absent → coverage `no_data` with
+  both omitted. On any HTTP/provider error only the failure
+  `provider_connection` is published (reachable false, authorizationState
+  `denied` on 401/403 else `unknown`, failureCategory from the closed
+  allowlist, `lastSuccessfulAt` omitted).
+- **VERIFY-ON-FIRST-RUN:** confirm the live row shape of both aggregate
+  responses (documented `{timestamp, pageviews, visitors}` for by=day;
+  `requestPath` + `pageviews` per row for by=requestPath). The Normalize
+  node reports `diagnostics` (fields present, routes seen vs kept) — a wrong
+  field name simply omits that value, it cannot poison the batch.
+- **Expected receipt:** `accepted` with **2** records on success (1
+  `traffic_summary` + 1 `provider_connection`) — the ingest expands the
+  traffic record server-side into `vercel.traffic.visitors`,
+  `vercel.traffic.pageviews` and up to 10 `vercel.traffic.top_route` metric
+  rows. Failure run: **1** record.
+
+### `cloudit-vercel-deployments-collector.json` — hourly at :07
+
+- Schedule `7 * * * *` (Europe/Malta). freshUntil = observedAt + 3h (seeded
+  hourly freshness). Idempotency base is the current UTC hour, so each run
+  upserts fresh rows.
+- `GET /v13/deployments?teamId&projectId&limit=20` plus
+  `GET /v9/projects/{projectId}/domains`. Only deployments whose `target`
+  field EXISTS and === `production` are kept. One `deployment_summary` per
+  kept deployment: `state` mapped to the ingest enum (ERROR→failed,
+  CANCELED→cancelled, READY→ready, BUILDING/INITIALIZING/QUEUED→building,
+  else unknown), `durationMs` = readyAt−createdAt only when both are known,
+  `publicDomainKey` = first alias matching the domain regex, else omitted,
+  `isCurrentProduction` = true only for the NEWEST ready production
+  deployment by createdAt, `failureCategory` = `provider_unavailable` only
+  on failed. One `vercel.domain.verified` `metric_sample` (unit `flag`,
+  dimensions `{domain}`, today's UTC day) per domain whose lowercased name
+  matches `^[a-z0-9.-]+\.[a-z]{2,}$`. Plus the `provider_connection`
+  (`rest-api`) — on any call error only the failure connection is published.
+- **VERIFY-ON-FIRST-RUN:** if the live `/v13/deployments` schema omits the
+  `target` field entirely, `diagnostics.deploymentsOmittedNonTarget` counts
+  those items — confirm the schema before trusting the deployment counts.
+  Also confirm the deployments/domains envelope field names against
+  `diagnostics`.
+- **Expected receipt:** `accepted` with **2 + kept deployments + domains**
+  records (at most 2 + 20 + n). Failure run: **1** record.
+
+### `cloudit-imagekit-usage-collector.json` — every 6 hours at :23
+
+- Schedule `23 */6 * * *` (Europe/Malta). freshUntil = observedAt + 12h
+  (matches the seeded 43200s freshness).
+- EXACTLY 8 GETs per run against
+  `https://api.imagekit.io/v1/accounts/usage` — one month-to-date
+  (first of the current UTC month → tomorrow 00:00 UTC) plus one per each of
+  the 7 most recent COMPLETED UTC days. The response is provider-cached ~6h
+  per account+date-range; do NOT add extra calls. Month-to-date publishes
+  the 5 usage metrics, the 4 quota metrics ONLY for quota constants > 0, and
+  `imagekit.quota_utilization_percent` (round1 of bandwidth/quota×100) ONLY
+  when the bandwidth quota is configured and bandwidthBytes is present; each
+  day publishes the usage metrics that response actually contains (absent
+  keys omitted, never guessed). Plus the `provider_connection` (`usage-api`)
+  — if ANY of the 8 requests fails, only the failure connection is
+  published (a partial window next to full ones would mislead).
+- **VERIFY-ON-FIRST-RUN:** confirm the live usage field names
+  (`bandwidthBytes`, `mediaLibraryStorageBytes`, `videoProcessingUnitsCount`,
+  `extensionUnitsCount`, `originalCacheStorageBytes` — snake_case fallbacks
+  are built in) via the Normalize node's `diagnostics` (matched keys per
+  call).
+- **Expected receipt:** `accepted` with **41** records with the placeholder
+  quotas (5 month-to-date + 7×5 daily + 1 connection); up to **46** once all
+  four quota constants are set (+4 quota, +1 utilization). Failure run:
+  **1** record.
+
 ## Importing into n8n
 
 1. Open your n8n instance.

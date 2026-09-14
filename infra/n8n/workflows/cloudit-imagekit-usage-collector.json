@@ -1,0 +1,461 @@
+{
+  "name": "CloudIT - ImageKit Usage Collector",
+  "id": "e4760fa4-eb64-4273-9fa3-d9eb2b4b8e54",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "23 */6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "2e4231ec-a201-4980-81f3-29d02b358c62",
+      "name": "Every 6 Hours at :23",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// CloudIT - ImageKit Usage Collector — Load Config.\n// Purpose: compute the shared run constants and hold the plan quota constants.\n// All timestamps are computed at RUN TIME — never hardcode a test clock:\n// publishedAt must be within ±5 minutes of ingestion (0004 stale_timestamp).\n// Partial-failure rule (omit, never guess): any value that cannot be read\n// from the provider response is OMITTED from the batch — absence shows as\n// NO_DATA/stale in the portal, never as a wrong number, and can never\n// poison the batch (batch acceptance is all-or-nothing).\n\n// The usage window is MONTH-TO-DATE [first of the current UTC month, tomorrow\n// 00:00 UTC) plus the 7 most recent COMPLETED UTC days (yesterday and the 6\n// days before it — completed days give stable idempotency keys). The\n// idempotency base is 'imagekit-mtd-' + the current UTC month. freshUntil is\n// observedAt + 12h (matches the seeded 43200s freshness). The four quota\n// constants are plan facts, NOT secrets — the owner fills the real plan\n// quotas before activation; quota metrics are published ONLY when the\n// matching constant is > 0 (a 0 placeholder never publishes a guessed quota).\n\nconst now = new Date();\nconst nowMs = now.getTime();\nconst DAY_MS = 24 * 60 * 60 * 1000;\nconst pad = (n) => String(n).padStart(2, '0');\nconst ymd = (d) => d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());\n\nconst monthStartDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));\nconst tomorrow = new Date(nowMs + DAY_MS);\nconst days = [];\nfor (let i = 1; i <= 7; i++) { // 7 completed UTC days, ending yesterday\n  const start = new Date(nowMs - i * DAY_MS);\n  days.push({ label: 'day-' + i, start: ymd(start), end: ymd(new Date(start.getTime() + DAY_MS)) });\n}\nconst monthBucket = ymd(now).slice(0, 7);\n\nreturn [{\n  json: {\n    bandwidthQuotaBytes: 0,\n    storageQuotaBytes: 0,\n    vpuQuota: 0,\n    extensionQuota: 0,\n    monthStart: monthStartDate.toISOString(),\n    monthEnd: ymd(tomorrow) + 'T00:00:00.000Z',\n    monthStartYmd: ymd(monthStartDate),\n    monthEndYmd: ymd(tomorrow),\n    monthBucket,\n    days,\n    observedAt: now.toISOString(),\n    publishedAt: now.toISOString(),\n    freshUntil: new Date(nowMs + 12 * 3600 * 1000).toISOString(),\n    base: 'imagekit-mtd-' + monthBucket\n  }\n}];"
+      },
+      "id": "7285d7d7-cebe-4a58-a669-4a1619d8872b",
+      "name": "Load Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.imagekit.io/v1/accounts/usage?startDate={{ $('Load Config').first().json.monthStartYmd }}&endDate={{ $('Load Config').first().json.monthEndYmd }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "ImageKit API Read Only"
+        }
+      },
+      "id": "a8928f81-16af-4901-bdd3-8ba67dec2601",
+      "name": "Get Usage Month To Date",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.imagekit.io/v1/accounts/usage?startDate={{ $('Load Config').first().json.days[0].start }}&endDate={{ $('Load Config').first().json.days[0].end }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "ImageKit API Read Only"
+        }
+      },
+      "id": "e9fa2fee-dc33-452e-b787-7fb0f305b6c2",
+      "name": "Get Usage Day 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.imagekit.io/v1/accounts/usage?startDate={{ $('Load Config').first().json.days[1].start }}&endDate={{ $('Load Config').first().json.days[1].end }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "ImageKit API Read Only"
+        }
+      },
+      "id": "2647e141-a158-4fc0-891c-d0e369e657fe",
+      "name": "Get Usage Day 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.imagekit.io/v1/accounts/usage?startDate={{ $('Load Config').first().json.days[2].start }}&endDate={{ $('Load Config').first().json.days[2].end }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "ImageKit API Read Only"
+        }
+      },
+      "id": "549ed204-886f-432e-9dc4-02c468de28f4",
+      "name": "Get Usage Day 3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.imagekit.io/v1/accounts/usage?startDate={{ $('Load Config').first().json.days[3].start }}&endDate={{ $('Load Config').first().json.days[3].end }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "ImageKit API Read Only"
+        }
+      },
+      "id": "24b26bca-4e91-4a4b-8860-be27eec0ce10",
+      "name": "Get Usage Day 4",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.imagekit.io/v1/accounts/usage?startDate={{ $('Load Config').first().json.days[4].start }}&endDate={{ $('Load Config').first().json.days[4].end }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "ImageKit API Read Only"
+        }
+      },
+      "id": "8428f8aa-98f4-4431-bb44-4efdb34bb387",
+      "name": "Get Usage Day 5",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1780,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.imagekit.io/v1/accounts/usage?startDate={{ $('Load Config').first().json.days[5].start }}&endDate={{ $('Load Config').first().json.days[5].end }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "ImageKit API Read Only"
+        }
+      },
+      "id": "46ff25a2-8a62-494d-a17c-9e48833a8dc2",
+      "name": "Get Usage Day 6",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.imagekit.io/v1/accounts/usage?startDate={{ $('Load Config').first().json.days[6].start }}&endDate={{ $('Load Config').first().json.days[6].end }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "ImageKit API Read Only"
+        }
+      },
+      "id": "775cb105-a46f-4961-9cfa-278e6cead9e0",
+      "name": "Get Usage Day 7",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2220,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// CloudIT - ImageKit Usage Collector — Normalize Usage.\n// Purpose: turn the 8 usage responses (month-to-date + 7 daily trend) into\n// metric_sample records plus the provider_connection — or, when ANY request\n// failed, into the single failure provider_connection.\n// Partial-failure rule (omit, never guess): any value that cannot be read\n// from the provider response is OMITTED from the batch — absence shows as\n// NO_DATA/stale in the portal, never as a wrong number, and can never\n// poison the batch (batch acceptance is all-or-nothing).\n\n// - Month-to-date publishes the 5 usage metrics, the quota metrics ONLY for\n//   quota constants > 0, and quota_utilization_percent\n//   (round1(bandwidthBytes / bandwidthQuotaBytes * 100)) ONLY when the\n//   bandwidth quota is configured AND bandwidthBytes is present.\n// - Each day publishes the 5 usage metrics that response actually contains.\n// - Exactly 8 GETs per run by design: the endpoint response is\n//   provider-cached ~6h per account+date-range; do NOT add extra calls.\n// - Any failed request -> only the failure provider_connection is published\n//   (a partial window would leave misleading gaps next to full ones).\n//\n// WIRING NOTE: this node reads each Get Usage node once via\n// $('...').first().json — safe because the chain is a single straight line\n// executed exactly once (the proven Phase 6 v2 pattern: n8n HTTP nodes do\n// not pass input fields through).\n\nconst config = $('Load Config').first().json;\nconst responses = {\n  mtd: $('Get Usage Month To Date').first().json,\n  d1: $('Get Usage Day 1').first().json,\n  d2: $('Get Usage Day 2').first().json,\n  d3: $('Get Usage Day 3').first().json,\n  d4: $('Get Usage Day 4').first().json,\n  d5: $('Get Usage Day 5').first().json,\n  d6: $('Get Usage Day 6').first().json,\n  d7: $('Get Usage Day 7').first().json\n};\n\n// --- failure inspection -----------------------------------------------------\n// A failed HTTP node (onError: continueRegularOutput) yields an item whose\n// json is an error object; a 200 whose body is a provider error document\n// carries an error field too. Anything that is not a confirmed healthy body\n// counts as a failure; the status code is best-effort (network/timeout\n// failures carry none -> category provider_unavailable, state unknown).\nfunction failureOf(item) {\n  if (!item || typeof item !== 'object' || Array.isArray(item)) {\n    return { failed: true, status: null, timedOut: false };\n  }\n  const err = item.error\n    ? (typeof item.error === 'object' ? item.error : { message: String(item.error) })\n    : null;\n  if (err === null) return { failed: false, status: null, timedOut: false };\n  const msg = String(err.message || '') + ' ' + String(err.description || '');\n  const timedOut = /timed?\\s*out|ETIMEDOUT|ESOCKETTIMEDOUT/i.test(msg) || err.code === 'ETIMEDOUT';\n  let status = null;\n  for (const c of [err.statusCode, err.httpCode, item.statusCode]) {\n    const n = typeof c === 'string' ? parseInt(c, 10) : c;\n    if (Number.isInteger(n) && n >= 100 && n <= 599) { status = n; break; }\n  }\n  if (status === null) {\n    const m = msg.match(/\\b([45][0-9]{2})\\b/);\n    if (m) status = parseInt(m[1], 10);\n  }\n  return { failed: true, status, timedOut };\n}\n\nfunction failureCategory(f) {\n  if (f.timedOut) return 'timeout';\n  if (f.status === 401) return 'authentication';\n  if (f.status === 403) return 'authorization';\n  if (f.status !== null && f.status >= 500) return 'http_5xx';\n  return 'provider_unavailable';\n}\n\nfunction failureConn(provider, connectionKey, base, f, times) {\n  const denied = f.status === 401 || f.status === 403;\n  return {\n    recordType: 'provider_connection',\n    idempotencyKey: base + ':conn',\n    status: denied ? 'RED' : 'AMBER',\n    severity: denied ? 'critical' : 'warning',\n    payload: {\n      provider,\n      connectionKey,\n      reachable: false,\n      authorizationState: denied ? 'denied' : 'unknown',\n      failureCategory: failureCategory(f)\n    }\n  };\n}\n\nfunction okConn(provider, connectionKey, base, observedAt) {\n  return {\n    recordType: 'provider_connection',\n    idempotencyKey: base + ':conn',\n    status: 'GREEN',\n    severity: 'none',\n    payload: {\n      provider,\n      connectionKey,\n      reachable: true,\n      authorizationState: 'ok',\n      lastSuccessfulAt: observedAt\n    }\n  };\n}\n\nlet failedCall = null;\nlet failedKey = null;\nfor (const key of ['mtd', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7']) {\n  const f = failureOf(responses[key]);\n  if (f.failed) { failedCall = f; failedKey = key; break; }\n}\n\nif (failedCall !== null) {\n  const record = failureConn('imagekit', 'usage-api', config.base, failedCall);\n  return [{\n    json: {\n      observedAt: config.observedAt,\n      publishedAt: config.publishedAt,\n      freshUntil: config.freshUntil,\n      records: [record],\n      diagnostics: { failedCall: failedKey, status: failedCall.status }\n    }\n  }];\n}\n\n// --- usage field pickers -----------------------------------------------------\n// VERIFY-ON-FIRST-RUN: confirm the live usage field names; snake_case\n// fallbacks are included and diagnostics reports matched/missing per call.\n// Any key absent from a response is OMITTED — never guessed.\nfunction num(v) {\n  if (typeof v === 'number' && Number.isFinite(v)) return v;\n  if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);\n  return null;\n}\nconst USAGE = [\n  { metricKey: 'imagekit.bandwidth_bytes',\n    unit: 'bytes',\n    pick: (r) => num(r.bandwidthBytes !== undefined ? r.bandwidthBytes : r.bandwidth_bytes) },\n  { metricKey: 'imagekit.media_library_storage_bytes',\n    unit: 'bytes',\n    pick: (r) => num(r.mediaLibraryStorageBytes !== undefined ? r.mediaLibraryStorageBytes : r.media_library_storage_bytes) },\n  { metricKey: 'imagekit.video_processing_units',\n    unit: 'units',\n    pick: (r) => num(r.videoProcessingUnitsCount !== undefined ? r.videoProcessingUnitsCount\n      : (r.videoProcessingUnits !== undefined ? r.videoProcessingUnits : r.video_processing_units)) },\n  { metricKey: 'imagekit.extension_units',\n    unit: 'units',\n    pick: (r) => num(r.extensionUnitsCount !== undefined ? r.extensionUnitsCount\n      : (r.extensionUnits !== undefined ? r.extensionUnits : r.extension_units)) },\n  { metricKey: 'imagekit.original_cache_storage_bytes',\n    unit: 'bytes',\n    pick: (r) => num(r.originalCacheStorageBytes !== undefined ? r.originalCacheStorageBytes : r.original_cache_storage_bytes) }\n];\n\nfunction sampleRecord(metricKey, unit, value, periodStart, periodEnd, idempotencyKey, sampledAt) {\n  return {\n    recordType: 'metric_sample',\n    idempotencyKey,\n    status: 'GREEN',\n    severity: 'info',\n    payload: {\n      metricKey,\n      sampledAt,\n      valueNumber: value,\n      unit,\n      periodStart,\n      periodEnd,\n      coverage: 'full',\n      dimensions: {}\n    }\n  };\n}\n\nconst records = [];\nconst monthIdem = (k) => 'imagekit-mtd-' + config.monthBucket + ':' + k;\nconst dayIso = (d) => d + 'T00:00:00.000Z';\n\n// --- month-to-date ------------------------------------------------------------\nconst mtdMatched = [];\nfor (const u of USAGE) {\n  const value = u.pick(responses.mtd);\n  if (value === null) continue;\n  mtdMatched.push(u.metricKey);\n  records.push(sampleRecord(u.metricKey, u.unit, value, config.monthStart, config.monthEnd,\n    monthIdem(u.metricKey), config.observedAt));\n}\nconst bandwidthBytes = USAGE[0].pick(responses.mtd);\n\n// --- quota metrics: ONLY when the config constant is > 0 (never a guess) ------\nconst quotaDefs = [\n  { metricKey: 'imagekit.bandwidth_quota_bytes', unit: 'bytes', value: num(config.bandwidthQuotaBytes) },\n  { metricKey: 'imagekit.media_library_storage_quota_bytes', unit: 'bytes', value: num(config.storageQuotaBytes) },\n  { metricKey: 'imagekit.video_processing_units_quota', unit: 'units', value: num(config.vpuQuota) },\n  { metricKey: 'imagekit.extension_units_quota', unit: 'units', value: num(config.extensionQuota) }\n];\nconst quotaMatched = [];\nfor (const q of quotaDefs) {\n  if (q.value === null || q.value <= 0) continue; // placeholder 0 -> omitted, never a guessed quota\n  quotaMatched.push(q.metricKey);\n  records.push(sampleRecord(q.metricKey, q.unit, q.value, config.monthStart, config.monthEnd,\n    monthIdem(q.metricKey), config.observedAt));\n}\nif (num(config.bandwidthQuotaBytes) > 0 && bandwidthBytes !== null) {\n  const pct = Math.round((bandwidthBytes / num(config.bandwidthQuotaBytes)) * 1000) / 10;\n  records.push(sampleRecord('imagekit.quota_utilization_percent', 'percent', pct,\n    config.monthStart, config.monthEnd, monthIdem('imagekit.quota_utilization_percent'), config.observedAt));\n}\n\n// --- daily trend (7 completed UTC days) ---------------------------------------\nconst dailyResponses = [responses.d1, responses.d2, responses.d3, responses.d4, responses.d5, responses.d6, responses.d7];\nconst dailyMatched = [];\nfor (let i = 0; i < 7; i++) {\n  const day = config.days[i];\n  const resp = dailyResponses[i];\n  let matched = 0;\n  for (const u of USAGE) {\n    const value = u.pick(resp);\n    if (value === null) continue; // absent key -> omitted, never guessed\n    matched++;\n    records.push(sampleRecord(u.metricKey, u.unit, value, dayIso(day.start), dayIso(day.end),\n      'imagekit-day-' + day.start + ':' + u.metricKey, config.observedAt));\n  }\n  dailyMatched.push({ day: day.start, matchedKeys: matched });\n}\n\nrecords.push(okConn('imagekit', 'usage-api', config.base, config.observedAt));\n\nreturn [{\n  json: {\n    observedAt: config.observedAt,\n    publishedAt: config.publishedAt,\n    freshUntil: config.freshUntil,\n    records,\n    diagnostics: {\n      monthToDateMatched: mtdMatched,\n      quotaMatched,\n      utilizationPublished: records.some((r) => r.payload.metricKey === 'imagekit.quota_utilization_percent'),\n      dailyMatched\n    }\n  }\n}];"
+      },
+      "id": "6b402a1d-501f-4130-8a4e-1b2a76b4fd32",
+      "name": "Normalize Usage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// CloudIT - ImageKit Usage Collector — Build Records.\n// Purpose: wrap the normalized records (produced by the Normalize node)\n// in the strict Phase 0 section 7 evidence envelopes and attach the\n// shared run timestamps from Load Config.\n// Partial-failure rule (omit, never guess): any value that cannot be read\n// from the provider response is OMITTED from the batch — absence shows as\n// NO_DATA/stale in the portal, never as a wrong number, and can never\n// poison the batch (batch acceptance is all-or-nothing).\n// Envelope keys are exactly the Phase 0 contract: contractVersion \"1.0\",\n// recordType, idempotencyKey (<=160 chars, opaque, unique per record),\n// environmentKey \"production\", sourceSystem \"imagekit\", observedAt,\n// publishedAt, freshUntil, status, severity, correlationKey null, payload.\n// Payload keys stay inside the strict allowlist of migration 0005 — any\n// extra key rejects the WHOLE batch with unknown_field.\n\nconst input = $input.first().json;\n\nconst records = (Array.isArray(input.records) ? input.records : []).map((r) => ({\n  contractVersion: '1.0',\n  recordType: r.recordType,\n  idempotencyKey: String(r.idempotencyKey),\n  environmentKey: 'production',\n  sourceSystem: 'imagekit',\n  observedAt: input.observedAt,\n  publishedAt: input.publishedAt,\n  freshUntil: input.freshUntil,\n  status: r.status,\n  severity: r.severity,\n  correlationKey: null,\n  payload: r.payload\n}));\n\nreturn [{\n  json: {\n    records,\n    recordCount: records.length,\n    publisherKey: 'cavetta-production-n8n'\n  }\n}];"
+      },
+      "id": "b274a88f-602d-4f51-a6ba-bffe116a3680",
+      "name": "Build Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "CloudIT - Publish Operations Evidence v2"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "records": "{{ JSON.stringify($json.records) }}",
+            "publisherKey": "{{ $json.publisherKey }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "records",
+              "displayName": "records",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "any",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "publisherKey",
+              "displayName": "publisherKey",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        }
+      },
+      "id": "bd84d073-d47a-4d1c-9cf8-32cab2f574f4",
+      "name": "Publish Evidence",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2880,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Every 6 Hours at :23": {
+      "main": [
+        [
+          {
+            "node": "Load Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Config": {
+      "main": [
+        [
+          {
+            "node": "Get Usage Month To Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Usage Month To Date": {
+      "main": [
+        [
+          {
+            "node": "Get Usage Day 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Usage Day 1": {
+      "main": [
+        [
+          {
+            "node": "Get Usage Day 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Usage Day 2": {
+      "main": [
+        [
+          {
+            "node": "Get Usage Day 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Usage Day 3": {
+      "main": [
+        [
+          {
+            "node": "Get Usage Day 4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Usage Day 4": {
+      "main": [
+        [
+          {
+            "node": "Get Usage Day 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Usage Day 5": {
+      "main": [
+        [
+          {
+            "node": "Get Usage Day 6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Usage Day 6": {
+      "main": [
+        [
+          {
+            "node": "Get Usage Day 7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Usage Day 7": {
+      "main": [
+        [
+          {
+            "node": "Normalize Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Usage": {
+      "main": [
+        [
+          {
+            "node": "Build Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Records": {
+      "main": [
+        [
+          {
+            "node": "Publish Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Malta"
+  },
+  "staticData": null,
+  "tags": []
+}
