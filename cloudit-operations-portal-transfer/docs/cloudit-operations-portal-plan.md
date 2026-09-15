@@ -292,19 +292,33 @@ cache and reporting-period rules.
 **Gate:** Compare an identical date range with the Vercel and ImageKit dashboards
 and document any provider-boundary or timezone differences.
 
-## Phase 8 - Google Drive backup visualization
+## Phase 8 - Backup centre (Cloudflare R2)
 
 The backup centre must visually represent the existing encrypted database-backup
 pipeline.
 
+> **Provider change (14 September 2026, owner-confirmed):** backups no longer go
+> to Google Drive. The encrypted archive and checksum now upload to a
+> Cloudflare R2 bucket, with the same file naming convention
+> (`cavetta-db-YYYY-MM-DDTHHMMSSZ.tar.gz.gpg` + `.sha256`), the same
+> daily/monthly layout and the same retention (30 days daily, 366 days
+> monthly). Collection therefore uses the R2 S3-compatible list API with a
+> bucket-scoped, read-only API token instead of a Drive credential. The
+> existing `drive_round_trip_passed` / `drive_object_key` columns and
+> `driveRoundTripPassed` / `driveObjectKey` payload keys keep their names
+> (renaming would alter the proven ingest contract); they now mean "remote
+> object store" and the Phase 8 design doc records this semantic. No `Open
+> in Drive` action: the object key stays server-only.
+
 ### Current source process
 
-- `Database backup` runs in GitHub Actions every day at 02:17 UTC.
-- It uploads an AES-256-encrypted archive and SHA-256 checksum to the dedicated
-  Google Drive account.
-- It downloads the stored Drive copy into a temporary directory, verifies the
-  checksum, decrypts and validates the archive, then removes temporary decrypted
-  files.
+- `Database backup` runs in GitHub Actions every day (owner-confirmed active;
+  latest run 14 Sep 2026 ~05:56 UTC).
+- It uploads an AES-256-encrypted archive and SHA-256 checksum to the
+  Cloudflare R2 backups bucket.
+- It downloads the stored copy into a temporary directory, verifies the
+  checksum, decrypts and validates the archive, then removes temporary
+  decrypted files.
 - Daily files are retained for 30 days.
 - A monthly copy is retained for 366 days.
 - `Backup restore test` runs an isolated, non-production restore test monthly.
@@ -318,17 +332,16 @@ Show:
 - Latest backup time, age, duration and GitHub run link
 - Encrypted archive present
 - Matching checksum present and verified
-- Google Drive round-trip verification state
+- Object-store (R2) round-trip verification state
 - Backup file size and size trend
 - Daily versus monthly retention category
 - Latest isolated restore-test time, age and result
 - Expected-next-run and overdue state
-- Private `Open in Drive` action where safe
 
-To reconcile actual Drive inventory, n8n may use a read-only Google Drive
-credential restricted to listing metadata from the dedicated `Daily`, `Monthly`
-and `Restore Tests` folders. The portal must not download, decrypt or expose backup
-contents.
+To reconcile actual object inventory, n8n may use a read-only Cloudflare R2
+credential (API token scoped to the backups bucket with Object Read & List
+only) listing object metadata from the daily and monthly prefixes. The portal
+must not download, decrypt or expose backup contents.
 
 Example:
 
@@ -344,7 +357,7 @@ Latest backup
 Created:          09 Sep 2026, 04:17 Europe/Malta
 Encrypted:        Yes
 Checksum:         Verified
-Drive round trip: Passed
+R2 round trip:    Passed
 Size:             68.2 MB
 Status:           HEALTHY
 
@@ -354,7 +367,7 @@ RLS validation:   Passed
 Status:           HEALTHY
 ```
 
-**Gate:** Match one displayed backup to its encrypted Drive file, checksum,
+**Gate:** Match one displayed backup to its encrypted R2 object, checksum,
 GitHub Actions run and n8n evidence without opening or decrypting the archive.
 
 ## Phase 9 - Read-only Report Centre
