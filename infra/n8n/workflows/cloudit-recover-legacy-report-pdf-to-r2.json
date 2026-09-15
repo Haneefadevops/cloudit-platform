@@ -1,0 +1,309 @@
+{
+  "name": "CloudIT - Recover Legacy Report PDF to R2",
+  "id": "5ca84a65-49ae-4db3-a1fc-5e7d40cfe095",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "f75daacf-1ca0-46df-a0bf-47eb37e7be50",
+      "name": "Manual Recovery Only",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "UdAUnNeowBGgkAMR",
+          "mode": "list",
+          "cachedResultName": "cavetta_monthly_maintenance_reports"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "reportMonth",
+              "keyValue": "2026-08"
+            },
+            {
+              "keyName": "reportType",
+              "keyValue": "MONTHLY_MAINTENANCE"
+            },
+            {
+              "keyName": "documentStatus",
+              "keyValue": "DRAFT"
+            }
+          ]
+        },
+        "limit": 2,
+        "orderBy": true,
+        "orderByDirection": "ASC"
+      },
+      "id": "68e401b3-b0d0-4dd7-bf84-244e59af80de",
+      "name": "Load Exact Legacy Draft",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [460, 300],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fail closed unless exactly one unsent, unapproved August 2026 DRAFT still points to legacy Google Drive.\nconst rows = $input.all().map((item) => item.json ?? {}).filter((row) => Object.keys(row).length > 0);\nif (rows.length !== 1) throw new Error('Recovery denied: expected exactly one DRAFT row');\nconst row = rows[0];\nconst clean = (value) => String(value ?? '').trim();\nconst reportMonth = clean(row.reportMonth);\nconst reportType = clean(row.reportType).toUpperCase();\nconst state = clean(row.documentStatus).toUpperCase();\nconst fileName = clean(row.pdfFileName);\nconst oldFileId = clean(row.pdfDriveFileId);\nconst oldUrl = clean(row.pdfDriveUrl);\nconst approvedAt = clean(row.approvedAt);\nconst sentAt = clean(row.sentAt);\nconst reportBody = clean(row.reportBody);\nif (reportMonth !== '2026-08' || reportType !== 'MONTHLY_MAINTENANCE' || state !== 'DRAFT' || approvedAt || sentAt) throw new Error('Recovery denied: report is not the expected unsent DRAFT');\nif (fileName !== 'Cavetta-Monthly-Maintenance-Report-2026-08.pdf') throw new Error('Recovery denied: unexpected PDF filename');\nif (!/^[A-Za-z0-9_-]{10,200}$/.test(oldFileId) || !/^https:\\/\\/drive\\.google\\.com\\//i.test(oldUrl)) throw new Error('Recovery denied: row is not a legacy Google Drive record');\nif (reportBody.length < 20) throw new Error('Recovery denied: stored report body is unavailable');\nconst objectKey = `Cavetta Maintenance Reports/2026/${fileName}`;\nreturn [{ json: { ...row, reportMonth, reportType, fileName, objectKey } }];"
+      },
+      "id": "2e4b9a2f-bbf2-4103-bfee-2dc78b448259",
+      "name": "Validate Recoverable Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rebuild a self-contained PDF source from the authoritative stored DRAFT.\nconst row = $json;\nconst escapeHtml = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\\\"', '&quot;').replaceAll(\"'\", '&#039;');\nconst title = `Monthly Maintenance Report — ${escapeHtml(row.reportMonthLabel || row.reportMonth)}`;\nconst status = escapeHtml(String(row.overallResult || 'NO_DATA').toUpperCase());\nconst generatedAt = escapeHtml(row.generatedAt || 'Not recorded');\nconst body = escapeHtml(row.reportBody);\nconst html = `<!doctype html><html><head><meta charset=\"utf-8\"><style>@page{size:A4;margin:16mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#171717;font-size:10.5pt;line-height:1.5;margin:0}header{border-bottom:2px solid #222;padding-bottom:14px;margin-bottom:22px}h1{font-size:22pt;margin:0 0 6px}.meta{color:#666;font-size:9pt}.badge{display:inline-block;border:1px solid #b89b4c;background:#fff8df;border-radius:999px;padding:4px 9px;font-weight:700;margin:12px 0}.report{white-space:pre-wrap;overflow-wrap:anywhere;border-top:1px solid #ddd;padding-top:16px}footer{border-top:1px solid #ddd;color:#777;font-size:8.5pt;margin-top:26px;padding-top:10px}</style></head><body><header><h1>${title}</h1><div class=\"meta\">Cavetta Properties · CloudIT Pvt Ltd</div><div class=\"badge\">${status} · DRAFT</div><div class=\"meta\">Original report generated: ${generatedAt}</div></header><main class=\"report\">${body}</main><footer>Recovered from the authoritative stored DRAFT and regenerated into private Cloudflare R2 storage. No approval or delivery action was performed.</footer></body></html>`;\nreturn [{ json: { ...row, reportHtml: html } }];"
+      },
+      "id": "4f3e7ead-84a8-4f6d-aa8c-577f75215b37",
+      "name": "Build Recovery HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "reportHtml",
+        "options": {
+          "fileName": "index.html"
+        }
+      },
+      "id": "4b25f988-d2a6-4664-8f91-f8ff0b1530fa",
+      "name": "Convert Recovery HTML to File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://gotenberg:3000/forms/chromium/convert/html",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Gotenberg-Output-Filename",
+              "value": "Cavetta-Monthly-Maintenance-Report-2026-08"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "files",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "preferCssPageSize",
+              "value": "true"
+            },
+            {
+              "name": "printBackground",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "87860882-da57-4931-b3d5-ced6bd2d42ca",
+      "name": "Generate Recovery PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Verify the generated bytes before any private storage or metadata mutation.\nconst buffer = await $helpers.getBinaryDataBuffer(0, 'data');\nif (buffer.length < 5 || buffer.length > 25 * 1024 * 1024 || buffer.subarray(0, 5).toString('ascii') !== '%PDF-') throw new Error('Recovery denied: Gotenberg did not return a valid PDF');\nconst source = $('Validate Recoverable Draft').first().json;\nconst item = $input.item;\nif (!item.binary?.data) throw new Error('Recovery denied: generated binary is missing');\nitem.binary.data.mimeType = 'application/pdf';\nitem.binary.data.fileExtension = 'pdf';\nitem.binary.data.fileName = source.fileName;\nitem.json = { reportMonth: source.reportMonth, reportType: source.reportType, fileName: source.fileName, objectKey: source.objectKey, byteLength: buffer.length };\nreturn item;"
+      },
+      "id": "cbad47bb-e1d6-4c5b-a4a2-ed8ef2f612b3",
+      "name": "Validate Generated PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "cavetta-private-storage",
+        "fileName": "={{ $json.objectKey }}",
+        "additionalFields": {}
+      },
+      "credentials": {
+        "s3": {
+          "id": "",
+          "name": "Cavetta R2 Reports"
+        }
+      },
+      "id": "fe346926-4a66-47ae-b716-89528f2ce9c5",
+      "name": "Upload Recovered PDF to R2",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the only Data Table fields this recovery is permitted to replace.\nif ($json.success !== true) throw new Error('Recovery denied: R2 upload was not successful');\nconst source = $('Validate Generated PDF').first().json;\nreturn [{ json: { reportMonth: source.reportMonth, reportType: source.reportType, documentStatus: 'DRAFT', pdfFileName: source.fileName, pdfDriveFileId: source.objectKey, pdfDriveUrl: `r2://cavetta-private-storage/${source.objectKey}`, pdfGeneratedAt: new Date().toISOString() } }];"
+      },
+      "id": "27c417f8-51c2-4398-83aa-3826306cc37f",
+      "name": "Prepare Recovered Metadata",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "UdAUnNeowBGgkAMR",
+          "mode": "list",
+          "cachedResultName": "cavetta_monthly_maintenance_reports"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "reportMonth",
+              "keyValue": "={{ $json.reportMonth }}"
+            },
+            {
+              "keyName": "reportType",
+              "keyValue": "={{ $json.reportType }}"
+            },
+            {
+              "keyName": "documentStatus",
+              "keyValue": "DRAFT"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "pdfFileName": "={{ $json.pdfFileName }}",
+            "pdfDriveFileId": "={{ $json.pdfDriveFileId }}",
+            "pdfDriveUrl": "={{ $json.pdfDriveUrl }}",
+            "pdfGeneratedAt": "={{ $json.pdfGeneratedAt }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "pdfFileName",
+              "displayName": "pdfFileName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "pdfDriveFileId",
+              "displayName": "pdfDriveFileId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "pdfDriveUrl",
+              "displayName": "pdfDriveUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "pdfGeneratedAt",
+              "displayName": "pdfGeneratedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "6f0fce12-020e-4302-b681-aa0af6a808c0",
+      "name": "Update Only PDF Metadata",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [2220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const metadata = $('Prepare Recovered Metadata').first().json;\nreturn [{ json: { status: 'RECOVERED_TO_R2', reportMonth: metadata.reportMonth, reportType: metadata.reportType, documentStatus: 'DRAFT', pdfFileName: metadata.pdfFileName, pdfGeneratedAt: metadata.pdfGeneratedAt, nextStep: 'Test preview once, then delete or archive this recovery workflow.' } }];"
+      },
+      "id": "56f1d7a4-8029-488f-b328-63828f7d783a",
+      "name": "Recovery Complete",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 300]
+    }
+  ],
+  "connections": {
+    "Manual Recovery Only": {
+      "main": [[{ "node": "Load Exact Legacy Draft", "type": "main", "index": 0 }]]
+    },
+    "Load Exact Legacy Draft": {
+      "main": [[{ "node": "Validate Recoverable Draft", "type": "main", "index": 0 }]]
+    },
+    "Validate Recoverable Draft": {
+      "main": [[{ "node": "Build Recovery HTML", "type": "main", "index": 0 }]]
+    },
+    "Build Recovery HTML": {
+      "main": [[{ "node": "Convert Recovery HTML to File", "type": "main", "index": 0 }]]
+    },
+    "Convert Recovery HTML to File": {
+      "main": [[{ "node": "Generate Recovery PDF", "type": "main", "index": 0 }]]
+    },
+    "Generate Recovery PDF": {
+      "main": [[{ "node": "Validate Generated PDF", "type": "main", "index": 0 }]]
+    },
+    "Validate Generated PDF": {
+      "main": [[{ "node": "Upload Recovered PDF to R2", "type": "main", "index": 0 }]]
+    },
+    "Upload Recovered PDF to R2": {
+      "main": [[{ "node": "Prepare Recovered Metadata", "type": "main", "index": 0 }]]
+    },
+    "Prepare Recovered Metadata": {
+      "main": [[{ "node": "Update Only PDF Metadata", "type": "main", "index": 0 }]]
+    },
+    "Update Only PDF Metadata": {
+      "main": [[{ "node": "Recovery Complete", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Malta"
+  },
+  "staticData": null,
+  "tags": []
+}
