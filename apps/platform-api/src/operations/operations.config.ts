@@ -35,6 +35,8 @@ export const operationsConfig = {
   // operations endpoint. Undefined when not configured; the guard then
   // fails closed with 401.
   internalApiToken: process.env.OPERATIONS_INTERNAL_API_TOKEN || undefined,
+  reportPdfRelaySecret:
+    process.env.OPERATIONS_REPORT_PDF_RELAY_SECRET || undefined,
   // Statement timeout for every query against the operations database.
   statementTimeoutMs: 15_000,
   // Watchdog cadence freshness threshold used by the environment health

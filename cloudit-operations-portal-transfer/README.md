@@ -29,6 +29,12 @@ Operations Portal planned for `operations.cloudit.lk`.
   Restore-test evidence and the monthly-prefix verification are deferred to
   the first scheduled monthly restore test (expected early October 2026). See
   `docs/cloudit-operations-portal-phase-8-backup-centre.md`.
+- Phase 9 (read-only Report Centre): built and locally verified. Metadata list,
+  sanitized findings/history, inactive summary publisher, private R2 PDF relay,
+  same-origin preview/download, and atomic one-use nonce claims are complete.
+  Deployment, relay activation, and the unchanged-state real-DRAFT gate remain
+  pending owner approval. See
+  `docs/cloudit-operations-portal-phase-9-report-centre.md`.
 - The scheduled 1 October 2026 Phase 5E acceptance remains pending and its real
   report must remain `DRAFT` during review.
 - `ticketing_enabled` must remain `false`.
@@ -56,4 +62,3 @@ plan completely. The owner must explicitly approve Phase 0 before Phase 1 begins
   sanitized operational evidence.
 
 See `docs/deployment-architecture.md` for the proposed later deployment flow.
-

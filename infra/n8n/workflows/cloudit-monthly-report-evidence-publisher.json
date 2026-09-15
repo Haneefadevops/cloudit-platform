@@ -1,0 +1,131 @@
+{
+  "name": "CloudIT - Monthly Report Evidence Publisher",
+  "id": "0a4e3145-e1de-4e01-98bf-fd737f28530e",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "7,37 * * * *" }
+          ]
+        }
+      },
+      "id": "1c85a529-e1c6-414d-b951-9909d19499f2",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "UdAUnNeowBGgkAMR",
+          "mode": "list",
+          "cachedResultName": "cavetta_monthly_maintenance_reports"
+        },
+        "matchType": "allConditions",
+        "filters": { "conditions": [] },
+        "limit": 50,
+        "orderBy": true,
+        "orderByColumn": "reportMonth",
+        "orderByDirection": "DESC"
+      },
+      "id": "877e1e9f-7fae-471f-9c23-bd3d4723d704",
+      "name": "Load Monthly Reports",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Existing n8n rows use MONTHLY_MAINTENANCE; the operations contract uses lowercase.\nreturn $input.all().map((item) => ({\n  json: { ...item.json, reportType: String(item.json?.reportType ?? '').trim().toLowerCase() }\n}));"
+      },
+      "id": "7baec6eb-fd26-47b3-8f20-9d9d5c6843d0",
+      "name": "Normalize Report Type",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Read-only normalizer for the existing monthly-report Data Table.\n// It never exposes R2 object keys/locators and never changes a report row.\n// The old field pdfDriveFileId is an R2 object key; use it only to determine\n// private PDF availability. Do not include it in any evidence payload.\n\nconst allowedStates = new Set(['DRAFT', 'APPROVED', 'SENDING', 'SENT', 'REJECTED', 'SEND_FAILED']);\nconst allowedStatus = new Set(['GREEN', 'AMBER', 'RED', 'NO_DATA', 'UNKNOWN']);\nconst allowedSeverity = new Set(['info', 'warning', 'critical', 'none']);\nconst clean = (value) => String(value ?? '').trim();\nconst iso = (value) => {\n  const text = clean(value);\n  return Number.isFinite(Date.parse(text)) ? new Date(text).toISOString() : null;\n};\nconst safeMonth = (value) => /^\\d{4}-\\d{2}$/.test(clean(value)) ? clean(value) : null;\n\nconst records = [];\nfor (const item of $input.all()) {\n  const row = item.json ?? {};\n  const reportMonth = safeMonth(row.reportMonth);\n  const reportType = clean(row.reportType) || 'monthly_maintenance';\n  const documentStatus = clean(row.documentStatus).toUpperCase();\n  if (!reportMonth || !allowedStates.has(documentStatus) || reportType !== 'monthly_maintenance') continue;\n\n  const reportKey = `cavetta.monthly_maintenance.${reportMonth}`;\n  const overallCandidate = clean(row.overallResult).toUpperCase();\n  const severityCandidate = clean(row.severity).toLowerCase();\n  const generatedAt = iso(row.generatedAt);\n  const approvedAt = iso(row.approvedAt);\n  const rejectedAt = iso(row.rejectedAt);\n  const sendingStartedAt = iso(row.sendingStartedAt);\n  const sentAt = iso(row.sentAt);\n  const pdfGeneratedAt = iso(row.pdfGeneratedAt);\n  const attempts = Number(row.sendAttemptCount);\n  const stateStamp = sentAt || sendingStartedAt || approvedAt || rejectedAt || generatedAt || documentStatus;\n  const payload = {\n    reportKey, reportMonth, reportType, documentStatus,\n    findingCountsBySeverity: {},\n    pdfAvailable: Boolean(clean(row.pdfDriveFileId) && clean(row.pdfFileName) && pdfGeneratedAt),\n    sendAttemptCount: Number.isInteger(attempts) && attempts >= 0 && attempts <= 1000 ? attempts : 0\n  };\n  if (allowedStatus.has(overallCandidate)) payload.overallStatus = overallCandidate;\n  if (generatedAt) payload.generatedAt = generatedAt;\n  if (pdfGeneratedAt) payload.generatedAt = payload.generatedAt ?? pdfGeneratedAt;\n  if (approvedAt) payload.approvedAt = approvedAt;\n  if (rejectedAt) payload.rejectedAt = rejectedAt;\n  if (sendingStartedAt) payload.sendingStartedAt = sendingStartedAt;\n  if (sentAt) payload.sentAt = sentAt;\n\n  records.push({\n    contractVersion: '1.0', recordType: 'report_summary',\n    idempotencyKey: `report-summary-${reportKey}-${documentStatus}-${stateStamp}`.slice(0, 160),\n    environmentKey: 'production', sourceSystem: 'n8n',\n    observedAt: new Date().toISOString(), publishedAt: new Date().toISOString(),\n    freshUntil: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString(),\n    status: allowedStatus.has(overallCandidate) ? overallCandidate : 'UNKNOWN',\n    severity: allowedSeverity.has(severityCandidate) ? severityCandidate : 'none',\n    correlationKey: reportKey, payload\n  });\n}\n\nreturn [{ json: { publisherKey: 'cavetta-production-n8n', records, recordCount: records.length } }];"
+      },
+      "id": "a5cceffc-f5e4-4e1e-8c74-059476efb4f9",
+      "name": "Build Sanitized Report Summaries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f5eb9870-1af8-4539-bb55-d1e51b8e6f26",
+              "leftValue": "={{ $json.recordCount }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3a830af5-fcb0-4d1f-aa3f-24f10581e7df",
+      "name": "Has Evidence Records?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "CloudIT - Publish Operations Evidence v2"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "records": "{{ JSON.stringify($json.records) }}",
+            "publisherKey": "{{ $json.publisherKey }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "records", "displayName": "records", "required": false, "defaultMatch": true, "display": true, "type": "any", "canBeUsedToMatch": true },
+            { "id": "publisherKey", "displayName": "publisherKey", "required": false, "defaultMatch": true, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        }
+      },
+      "id": "3b3a9f8b-a7af-44fa-a14d-390c0535f85b",
+      "name": "Publish Evidence",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1180, 300]
+    }
+  ],
+  "connections": {
+    "Every 30 Minutes": { "main": [[{ "node": "Load Monthly Reports", "type": "main", "index": 0 }]] },
+    "Load Monthly Reports": { "main": [[{ "node": "Normalize Report Type", "type": "main", "index": 0 }]] },
+    "Normalize Report Type": { "main": [[{ "node": "Build Sanitized Report Summaries", "type": "main", "index": 0 }]] },
+    "Build Sanitized Report Summaries": { "main": [[{ "node": "Has Evidence Records?", "type": "main", "index": 0 }]] },
+    "Has Evidence Records?": { "main": [[{ "node": "Publish Evidence", "type": "main", "index": 0 }], []] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1", "timezone": "Europe/Malta" },
+  "staticData": null,
+  "tags": []
+}

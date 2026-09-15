@@ -1,0 +1,161 @@
+{
+  "name": "CloudIT - Private Report PDF Relay",
+  "id": "7c4fcafa-5828-47cd-b9e4-4a386f379083",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cloudit-report-pdf-relay",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "CloudIT Report PDF Relay"
+        }
+      },
+      "id": "6fd6b641-10d0-43df-ae69-b43b419d98bb",
+      "name": "Private PDF Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [240, 300],
+      "webhookId": "f3b2aeb0-a732-43ec-8a65-89dcb1eceb66"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate the signed, short-lived request before any lookup or R2 access.\n// OPERATIONS_REPORT_PDF_RELAY_SECRET is a protected n8n environment value.\nconst crypto = require('crypto');\nconst body = $json.body ?? {};\nconst reportKey = String(body.reportKey ?? '');\nconst issuedAt = Number(body.issuedAt);\nconst expiresAt = Number(body.expiresAt);\nconst nonce = String(body.nonce ?? '');\nconst correlationId = String(body.correlationId ?? '');\nconst disposition = String(body.disposition ?? '');\nconst signature = String(body.signature ?? '');\nconst secret = String($env.OPERATIONS_REPORT_PDF_RELAY_SECRET ?? '');\nconst now = Math.floor(Date.now() / 1000);\nif (secret.length < 32 || !/^[a-z0-9][a-z0-9_.-]{1,120}$/.test(reportKey) || !Number.isSafeInteger(issuedAt) || !Number.isSafeInteger(expiresAt) || issuedAt > now + 15 || issuedAt < now - 120 || expiresAt <= now || expiresAt > issuedAt + 120 || !/^[a-f0-9]{64}$/.test(nonce) || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(correlationId) || !['inline', 'attachment'].includes(disposition) || !/^[a-f0-9]{64}$/.test(signature)) throw new Error('PDF retrieval denied');\nconst canonical = [reportKey, issuedAt, expiresAt, nonce, correlationId, disposition].join('\\n');\nconst expected = crypto.createHmac('sha256', secret).update(canonical).digest('hex');\nif (!crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'))) throw new Error('PDF retrieval denied');\nconst match = reportKey.match(/^cavetta\\.monthly_maintenance\\.(\\d{4}-\\d{2})$/);\nif (!match) throw new Error('PDF retrieval denied');\nreturn [{ json: { reportKey, reportMonth: match[1], reportType: 'MONTHLY_MAINTENANCE', issuedAt, expiresAt, nonce, correlationId, disposition, signature } }];"
+      },
+      "id": "13b389e5-bacf-4bc4-995c-38c6127b57ed",
+      "name": "Validate Signed Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://platform-api:3001/api/operations/reports/{{ $json.reportKey }}/pdf-claim",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 5000 }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "CloudIT Operations Internal API"
+        }
+      },
+      "id": "19247576-c468-41b2-983e-d35b9f93b075",
+      "name": "Claim One Use Nonce",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "UdAUnNeowBGgkAMR",
+          "mode": "list",
+          "cachedResultName": "cavetta_monthly_maintenance_reports"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            { "keyName": "reportMonth", "keyValue": "={{ $('Validate Signed Request').first().json.reportMonth }}" },
+            { "keyName": "reportType", "keyValue": "={{ $('Validate Signed Request').first().json.reportType }}" }
+          ]
+        },
+        "limit": 2,
+        "orderBy": true,
+        "orderByDirection": "ASC"
+      },
+      "id": "7e1d6424-243f-444e-b8da-2485be92eb7b",
+      "name": "Load Authoritative Report",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [900, 300],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reload and strictly validate the authoritative n8n report. No fields are changed.\nconst requested = $('Validate Signed Request').first().json;\nconst rows = $input.all().map((item) => item.json ?? {}).filter((row) => Object.keys(row).length > 0 && String(row.reportMonth ?? '').trim() === requested.reportMonth && String(row.reportType ?? '').trim().toUpperCase() === requested.reportType);\nif (rows.length !== 1) throw new Error('PDF retrieval denied');\nconst row = rows[0];\nconst state = String(row.documentStatus ?? '').trim().toUpperCase();\nconst objectKey = String(row.pdfDriveFileId ?? '').trim();\nconst fileName = String(row.pdfFileName ?? '').trim();\nconst generatedAt = String(row.pdfGeneratedAt ?? '').trim();\nif (!['DRAFT', 'APPROVED', 'SENDING', 'SENT', 'REJECTED', 'SEND_FAILED'].includes(state) || !/^Cavetta Maintenance Reports\\/\\d{4}\\/[^/\\\\]{1,180}\\.pdf$/i.test(objectKey) || !/^[^/\\\\]{1,180}\\.pdf$/i.test(fileName) || objectKey.includes('..') || fileName.includes('..') || !Number.isFinite(Date.parse(generatedAt)) || !objectKey.endsWith('/' + fileName)) throw new Error('PDF retrieval denied');\nreturn [{ json: { objectKey } }];"
+      },
+      "id": "9eb80364-af84-449f-95cc-d6355cbbcd5b",
+      "name": "Authorize Private Object",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "bucketName": "cavetta-private-storage",
+        "fileKey": "={{ $json.objectKey }}"
+      },
+      "credentials": {
+        "s3": {
+          "id": "",
+          "name": "Cavetta R2 Reports"
+        }
+      },
+      "id": "53467f65-dcb7-44da-a5e4-18f4adcf224f",
+      "name": "Download Private PDF from R2",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Validate the binary before responding. Do not log or convert PDF bytes to JSON.\nconst buffer = await $helpers.getBinaryDataBuffer(0, 'data');\nif (buffer.length < 5 || buffer.length > 25 * 1024 * 1024 || buffer.subarray(0, 5).toString('ascii') !== '%PDF-') throw new Error('PDF retrieval denied');\nconst item = $input.item;\nif (!item.binary?.data) throw new Error('PDF retrieval denied');\nitem.binary.data.mimeType = 'application/pdf';\nitem.binary.data.fileExtension = 'pdf';\nitem.binary.data.fileName = 'report.pdf';\nreturn item;"
+      },
+      "id": "be66ecab-c76f-4fb6-875c-a61601488666",
+      "name": "Validate PDF Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "responseDataSource": "set",
+        "inputFieldName": "data",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/pdf" },
+              { "name": "Cache-Control", "value": "private, no-store" },
+              { "name": "X-Content-Type-Options", "value": "nosniff" }
+            ]
+          }
+        }
+      },
+      "id": "3410373f-6d23-4f09-bc08-91dba2156892",
+      "name": "Return Private PDF",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [1780, 300]
+    }
+  ],
+  "connections": {
+    "Private PDF Request": { "main": [[{ "node": "Validate Signed Request", "type": "main", "index": 0 }]] },
+    "Validate Signed Request": { "main": [[{ "node": "Claim One Use Nonce", "type": "main", "index": 0 }]] },
+    "Claim One Use Nonce": { "main": [[{ "node": "Load Authoritative Report", "type": "main", "index": 0 }]] },
+    "Load Authoritative Report": { "main": [[{ "node": "Authorize Private Object", "type": "main", "index": 0 }]] },
+    "Authorize Private Object": { "main": [[{ "node": "Download Private PDF from R2", "type": "main", "index": 0 }]] },
+    "Download Private PDF from R2": { "main": [[{ "node": "Validate PDF Binary", "type": "main", "index": 0 }]] },
+    "Validate PDF Binary": { "main": [[{ "node": "Return Private PDF", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1", "timezone": "Europe/Malta" },
+  "staticData": null,
+  "tags": []
+}

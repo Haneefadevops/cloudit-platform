@@ -355,3 +355,51 @@ export interface OperationsBackups {
 export async function getOperationsBackups(): Promise<OperationsBackups> {
   return fetchOperations<OperationsBackups>("/backups");
 }
+
+export type ReportDocumentStatus = "DRAFT" | "APPROVED" | "SENDING" | "SENT" | "REJECTED" | "SEND_FAILED";
+
+export interface OperationsReportFinding {
+  findingKey: string;
+  category: string;
+  severity: string;
+  status: string;
+  safeTitle: string;
+  safeSummary: string | null;
+  safeAction: string | null;
+  firstObservedAt: string | null;
+  lastObservedAt: string | null;
+}
+
+export interface OperationsReportHistory {
+  eventType: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  occurredAt: string;
+}
+
+export interface OperationsReport {
+  reportKey: string;
+  clientKey: string;
+  clientDisplayName: string;
+  reportMonth: string;
+  reportType: string;
+  overallStatus: HealthStatus | null;
+  documentStatus: ReportDocumentStatus | null;
+  generatedAt: string | null;
+  coverage: "FULL" | "PARTIAL" | "NO_DATA" | null;
+  findingCountsBySeverity: Record<string, number>;
+  pdfAvailable: boolean;
+  sendAttemptCount: number;
+  deliveryFailureCategory: string | null;
+  findings: OperationsReportFinding[];
+  history: OperationsReportHistory[];
+}
+
+export interface OperationsReports {
+  generatedAt: string;
+  reports: OperationsReport[];
+}
+
+export async function getOperationsReports(): Promise<OperationsReports> {
+  return fetchOperations<OperationsReports>("/reports");
+}

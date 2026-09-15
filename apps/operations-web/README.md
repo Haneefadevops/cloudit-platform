@@ -2,11 +2,12 @@
 
 Phase 2 foundation for the private portal at `operations.cloudit.lk`.
 
-This workspace currently provides the approved responsive shell, single-owner
-authentication, protected server-rendered routes, secure session/logout
-behavior, login rate limiting, security headers and a non-sensitive health
-endpoint. It does not connect to PostgreSQL, n8n, provider APIs, Google Drive,
-reports or production evidence.
+This workspace provides the private responsive operations portal,
+single-owner authentication, protected server-rendered evidence pages, secure
+session/logout behavior, login rate limiting, security headers, and a
+non-sensitive health endpoint. All operations data is loaded server-to-server
+from `platform-api`; provider credentials and private object references never
+enter browser bundles or JSON responses.
 
 Sign-in is rate limited: after five failed attempts from one client address
 within ten minutes, further attempts from that address are refused until the
@@ -38,6 +39,12 @@ initially runs with `OPERATIONS_MFA_REQUIRED=false` and no TOTP secret. TOTP
 must be enabled no later than before Phase 10 report actions are enabled.
 Session TTL must be between 15 minutes and 12 hours; the approved initial value
 is 8 hours (28800 seconds).
+
+Phase 9 PDF preview/download additionally requires the three server-only
+`OPERATIONS_REPORT_PDF_RELAY_*` values in `.env.example`. Production accepts
+HTTPS or the private `http://n8n:5678` Docker-network endpoint. The token authenticates the n8n webhook and the HMAC secret must
+match the protected value in n8n and `platform-api`. When any value is absent or
+invalid, the Report Centre fails closed and renders no PDF links.
 
 ## Local checks
 

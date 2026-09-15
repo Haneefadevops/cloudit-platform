@@ -81,6 +81,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visibl
 .ops-evidence li span:nth-child(2) { color:var(--muted); }
 .ops-age { grid-column:1/-1; color:var(--blue); font-size:11px; }
 .ops-link { color:var(--green); text-decoration:none; }.ops-link:hover { text-decoration:underline; }
+.report-pdf-actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:18px; padding-top:14px; border-top:1px solid var(--line); }
 .window-links { display:inline-flex; gap:6px; margin-bottom:22px; padding:5px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
 .window-links a { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 18px; border-radius:9px; text-decoration:none; color:var(--muted); font-size:12px; font-weight:700; }
 .window-links a:hover { color:var(--text); background:var(--raised); }

@@ -7,8 +7,9 @@ import { operationsConfig } from './operations.config';
  *
  * Every query runs inside an explicit transaction that first executes
  * `SET LOCAL operations.global_role = 'cloud_owner';` — without it the
- * fail-closed RLS policies in migration 0003 return zero rows. Only SELECT
- * statements are ever issued through this service.
+ * fail-closed RLS policies in migration 0003 return zero rows. SQL statements
+ * are SELECTs; Phase 9 includes one narrowly granted nonce-claim function that
+ * cannot mutate a report.
  */
 @Injectable()
 export class OperationsDataService implements OnModuleDestroy {

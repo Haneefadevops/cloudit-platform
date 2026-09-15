@@ -227,7 +227,8 @@ SET operations.global_role = 'cloud_owner';
 DO $$
 DECLARE v_count integer;
 BEGIN
-  SELECT count(*) INTO v_count FROM operations.clients;
+  SELECT count(*) INTO v_count FROM operations.clients
+  WHERE client_key IN ('test-client-a', 'test-client-b');
   PERFORM pg_temp.t_assert('owner_sees_all_clients', v_count = 2, 'count=' || v_count);
 END $$;
 
@@ -988,7 +989,8 @@ BEGIN
   v := operations_ingest.submit_batch('pub-a', 'test-secret-a-0123456789abcdef', 'nonce-pos-13', repeat('ab', 32),
     jsonb_build_array(pg_temp.t_env('report_summary', 'idem-rs-2', jsonb_build_object(
       'reportKey', 'report-a-2026-09', 'reportMonth', '2026-09',
-      'documentStatus', 'APPROVED', 'approvedAt', now(), 'rowVersion', 2
+      'documentStatus', 'APPROVED', 'approvedAt', now(),
+      'pdfAvailable', true, 'rowVersion', 2
     ))));
   SELECT document_status INTO v_status FROM operations.reports WHERE report_key = 'report-a-2026-09';
   SELECT count(*) INTO v_events FROM operations.report_events
@@ -1003,7 +1005,8 @@ BEGIN
   v := operations_ingest.submit_batch('pub-a', 'test-secret-a-0123456789abcdef', 'nonce-pos-14', repeat('ab', 32),
     jsonb_build_array(pg_temp.t_env('report_summary', 'idem-rs-3', jsonb_build_object(
       'reportKey', 'report-a-2026-09', 'reportMonth', '2026-09',
-      'documentStatus', 'SENT', 'sentAt', now(), 'rowVersion', 3
+      'documentStatus', 'SENT', 'sentAt', now(),
+      'pdfAvailable', true, 'rowVersion', 3
     ))));
   SELECT document_status, sent_at INTO v_status, v_sent FROM operations.reports WHERE report_key = 'report-a-2026-09';
   SELECT count(*) INTO v_events FROM operations.report_events
@@ -1018,7 +1021,8 @@ BEGIN
   v := operations_ingest.submit_batch('pub-a', 'test-secret-a-0123456789abcdef', 'nonce-pos-15', repeat('ab', 32),
     jsonb_build_array(pg_temp.t_env('report_summary', 'idem-rs-4', jsonb_build_object(
       'reportKey', 'report-a-2026-09', 'reportMonth', '2026-09',
-      'documentStatus', 'DRAFT', 'sendAttemptCount', 1, 'rowVersion', 1
+      'documentStatus', 'DRAFT', 'pdfAvailable', true,
+      'sendAttemptCount', 1, 'rowVersion', 1
     ))));
   SELECT document_status, sent_at, send_attempt_count INTO v_status, v_sent, v_attempts
   FROM operations.reports WHERE report_key = 'report-a-2026-09';
@@ -1124,6 +1128,57 @@ BEGIN
   PERFORM pg_temp.t_assert('command_nonce_replay_rejected', false, 'created');
 EXCEPTION WHEN raise_exception THEN
   PERFORM pg_temp.t_assert('command_nonce_replay_rejected', SQLERRM = 'rejected_replay', SQLERRM);
+END $$;
+
+-- Phase 9 PDF retrieval claims are one-use and cannot change report state.
+DO $$
+DECLARE v_before jsonb; v_after jsonb; v_claimed boolean;
+BEGIN
+  SELECT jsonb_build_object(
+    'document_status', document_status, 'approved_at', approved_at,
+    'rejected_at', rejected_at, 'sending_started_at', sending_started_at,
+    'sent_at', sent_at, 'send_attempt_count', send_attempt_count,
+    'row_version', row_version, 'updated_at', updated_at
+  ) INTO v_before FROM operations.reports WHERE report_key = 'report-a-2026-09';
+  v_claimed := operations_private.claim_report_pdf_retrieval(
+    'report-a-2026-09', repeat('cd', 32), now() + interval '1 minute'
+  );
+  SELECT jsonb_build_object(
+    'document_status', document_status, 'approved_at', approved_at,
+    'rejected_at', rejected_at, 'sending_started_at', sending_started_at,
+    'sent_at', sent_at, 'send_attempt_count', send_attempt_count,
+    'row_version', row_version, 'updated_at', updated_at
+  ) INTO v_after FROM operations.reports WHERE report_key = 'report-a-2026-09';
+  PERFORM pg_temp.t_assert('pdf_claim_preserves_report_state',
+    v_claimed AND v_before = v_after, 'unchanged=' || (v_before = v_after)::text);
+END $$;
+
+DO $$
+BEGIN
+  PERFORM operations_private.claim_report_pdf_retrieval(
+    'report-a-2026-09', repeat('cd', 32), now() + interval '1 minute'
+  );
+  PERFORM pg_temp.t_assert('pdf_claim_replay_rejected', false, 'claimed twice');
+EXCEPTION WHEN raise_exception THEN
+  PERFORM pg_temp.t_assert('pdf_claim_replay_rejected', SQLERRM = 'pdf_retrieval_denied', SQLERRM);
+END $$;
+
+DO $$
+BEGIN
+  PERFORM operations_private.claim_report_pdf_retrieval(
+    'report-a-2026-09', repeat('de', 32), now() - interval '1 second'
+  );
+  PERFORM pg_temp.t_assert('pdf_claim_expired_rejected', false, 'expired claim accepted');
+EXCEPTION WHEN raise_exception THEN
+  PERFORM pg_temp.t_assert('pdf_claim_expired_rejected', SQLERRM = 'pdf_retrieval_denied', SQLERRM);
+END $$;
+
+DO $$
+BEGIN
+  PERFORM count(*) FROM operations.report_pdf_retrieval_nonces;
+  PERFORM pg_temp.t_assert('pdf_nonce_ledger_direct_select_denied', false, 'query succeeded');
+EXCEPTION WHEN insufficient_privilege THEN
+  PERFORM pg_temp.t_assert('pdf_nonce_ledger_direct_select_denied', true, 'permission denied');
 END $$;
 
 DO $$

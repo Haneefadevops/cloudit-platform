@@ -1,6 +1,8 @@
 import {
   Controller,
+  Body,
   Get,
+  Post,
   NotFoundException,
   Param,
   Query,
@@ -13,8 +15,9 @@ import { OperationsInternalAuthGuard } from './operations-internal-auth.guard';
 import { OperationsExceptionFilter } from './operations-exception.filter';
 
 /**
- * Internal-only read endpoints for the private operations database. Never
- * exposed through a public route; callers must present the internal token.
+ * Internal-only operations endpoints. Metadata routes are read-only; the sole
+ * Phase 9 POST only consumes a PDF-retrieval nonce and cannot mutate a report.
+ * Never exposed through a public route; callers present the internal token.
  */
 @ApiTags('operations')
 @Controller('operations')
@@ -75,5 +78,30 @@ export class OperationsController {
   })
   async getBackups() {
     return this.operationsService.getBackups();
+  }
+
+  @Get('reports')
+  @ApiOperation({
+    summary: 'Report metadata, findings and history (read-only)',
+  })
+  async getReports() {
+    return this.operationsService.getReports();
+  }
+
+  @Post('reports/:reportKey/pdf-claim')
+  @ApiOperation({ summary: 'Atomically claim one private PDF relay request' })
+  async claimReportPdf(
+    @Param('reportKey') reportKey: string,
+    @Body()
+    body: {
+      issuedAt?: unknown;
+      expiresAt?: unknown;
+      nonce?: unknown;
+      correlationId?: unknown;
+      disposition?: unknown;
+      signature?: unknown;
+    },
+  ) {
+    return this.operationsService.claimReportPdfRetrieval(reportKey, body);
   }
 }

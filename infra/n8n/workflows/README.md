@@ -513,6 +513,52 @@ provider_connections provider CHECK) must be applied before activation.
 Rollback: deactivate and delete — this restores the pre-Phase-8 state
 exactly. No existing data or workflow is modified.
 
+## Phase 9 — report evidence and private PDF relay
+
+### `cloudit-monthly-report-evidence-publisher.json`
+
+This inactive scheduled workflow reads the existing monthly-report Data Table,
+normalizes `MONTHLY_MAINTENANCE` to the operations contract value, and publishes
+sanitized `report_summary` records. It never publishes `pdfDriveFileId`,
+`pdfDriveUrl`, report HTML, or PDF bytes. An empty Data Table ends without
+calling the publisher. Link its Execute Workflow node to
+`CloudIT - Publish Operations Evidence v2` after import.
+
+### `cloudit-private-report-pdf-relay.json`
+
+This inactive webhook is a server-to-server binary relay only. Its straight
+read path is: Header Auth webhook → validate HMAC/time window → atomically
+claim the one-use nonce in `platform-api` → reload the exact Data Table row →
+validate allowed state and private metadata → download through the existing
+R2 S3 credential → validate `%PDF-`/25 MiB maximum → return binary. It has no
+Data Table update, email, publisher, report command, or action node.
+
+Before activation, the owner must:
+
+1. Apply migration `0010_report_pdf_retrieval_nonces.sql` and deploy the updated
+   `platform-api` and `operations-web`.
+2. Set the same random value (at least 32 characters) as
+   `OPERATIONS_REPORT_PDF_RELAY_SECRET` in the protected environments for n8n,
+   `platform-api`, and `operations-web`.
+3. Create **CloudIT Report PDF Relay** as an n8n Header Auth credential with
+   header name `x-cloudit-pdf-relay-token`; put its random value in
+   operations-web as `OPERATIONS_REPORT_PDF_RELAY_TOKEN`.
+4. Create/link **CloudIT Operations Internal API** as an n8n Header Auth
+   credential with header name `x-operations-internal-token` and the existing
+   `OPERATIONS_INTERNAL_API_TOKEN` value.
+5. Link **Cavetta R2 Reports** to the download node. Confirm it is object-read
+   only for the report bucket, and confirm the Data Table selection remains
+   `reportMonth` + `MONTHLY_MAINTENANCE`.
+6. Set `OPERATIONS_REPORT_PDF_RELAY_URL` in operations-web to the private
+   `http://n8n:5678/webhook/cloudit-report-pdf-relay` Docker-network URL (or
+   the HTTPS webhook URL if the internal route is unavailable). Test one controlled DRAFT, then replay the identical signed
+   request and confirm denial. Confirm preview and attachment leave the report
+   fingerprint unchanged before activation.
+
+The workflow exports inactive. Activation, deployment, and the real-DRAFT gate
+remain owner-approved operations. Rollback is to deactivate/delete the relay
+and unset its three operations-web variables; report metadata remains readable.
+
 ## Importing into n8n
 
 1. Open your n8n instance.

@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { OperationsDataService } from './operations-data.service';
 import { operationsConfig } from './operations.config';
+import {
+  ReportPdfClaimBody,
+  verifyReportPdfClaim,
+} from './report-pdf-claim.util';
 import { nextCronRun } from './cron.util';
 import {
   AnalyticsRollupStatus,
@@ -434,14 +438,117 @@ export interface BackupsResponse {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Phase 9 report centre (metadata only; no PDF reference or write path)
+// ---------------------------------------------------------------------------
+
+interface ReportRow {
+  report_key: string;
+  client_key: string;
+  client_display_name: string;
+  report_month: Date | string;
+  report_type: string;
+  overall_status: AnalyticsRollupStatus | null;
+  document_status: string | null;
+  generated_at: Date | null;
+  coverage: 'FULL' | 'PARTIAL' | 'NO_DATA' | null;
+  finding_counts_by_severity: Record<string, number>;
+  pdf_available: boolean;
+  send_attempt_count: number;
+  delivery_failure_category: string | null;
+}
+
+interface ReportFindingRow {
+  report_key: string;
+  finding_key: string;
+  category: string;
+  severity: string;
+  status: string;
+  safe_title: string;
+  safe_summary: string | null;
+  safe_action: string | null;
+  first_observed_at: Date | null;
+  last_observed_at: Date | null;
+}
+
+interface ReportEventRow {
+  report_key: string;
+  event_type: string;
+  from_status: string | null;
+  to_status: string | null;
+  occurred_at: Date;
+}
+
+export interface ReportsResponse {
+  generatedAt: string;
+  reports: {
+    reportKey: string;
+    clientKey: string;
+    clientDisplayName: string;
+    reportMonth: string;
+    reportType: string;
+    overallStatus: AnalyticsRollupStatus | null;
+    documentStatus:
+      | 'DRAFT'
+      | 'APPROVED'
+      | 'SENDING'
+      | 'SENT'
+      | 'REJECTED'
+      | 'SEND_FAILED'
+      | null;
+    generatedAt: string | null;
+    coverage: 'FULL' | 'PARTIAL' | 'NO_DATA' | null;
+    findingCountsBySeverity: Record<string, number>;
+    pdfAvailable: boolean;
+    sendAttemptCount: number;
+    deliveryFailureCategory: string | null;
+    findings: {
+      findingKey: string;
+      category: string;
+      severity: string;
+      status: string;
+      safeTitle: string;
+      safeSummary: string | null;
+      safeAction: string | null;
+      firstObservedAt: string | null;
+      lastObservedAt: string | null;
+    }[];
+    history: {
+      eventType: string;
+      fromStatus: string | null;
+      toStatus: string | null;
+      occurredAt: string;
+    }[];
+  }[];
+}
+
 /**
- * Read-only business logic for the operations endpoints. All database
- * access is SELECT-only through OperationsDataService; the only response
- * fields are the safe, allowlisted catalogue/evidence columns.
+ * Read-mostly business logic for the operations endpoints. The Phase 9 nonce
+ * claim is the only stateful call and cannot mutate a report. Response fields
+ * are safe, allowlisted catalogue/evidence columns.
  */
 @Injectable()
 export class OperationsService {
   constructor(private readonly data: OperationsDataService) {}
+
+  async claimReportPdfRetrieval(
+    reportKey: string,
+    body: ReportPdfClaimBody,
+  ): Promise<{ claimed: true }> {
+    const { nonceHash, expiryIso } = verifyReportPdfClaim(
+      reportKey,
+      body,
+      operationsConfig.reportPdfRelaySecret,
+    );
+    const result = await this.data.query<{ claimed: boolean }>(
+      'SELECT operations_private.claim_report_pdf_retrieval($1, $2, $3) AS claimed',
+      [reportKey, nonceHash, expiryIso],
+    );
+    if (result.rows[0]?.claimed !== true) {
+      throw new BadRequestException('Invalid request');
+    }
+    return { claimed: true };
+  }
 
   async getOverview(): Promise<{ clients: unknown[] }> {
     const [
@@ -1576,7 +1683,8 @@ export class OperationsService {
       restoreRows,
     ] = await Promise.all([
       // Daily-class rows of the current UTC month drive the calendar.
-      this.data.query<BackupEvidenceRow>(`
+      this.data.query<BackupEvidenceRow>(
+        `
           SELECT be.backup_timestamp, be.retention_class,
                  be.encrypted_archive_present, be.checksum_file_present,
                  be.checksum_verified, be.drive_round_trip_passed,
@@ -1650,7 +1758,8 @@ export class OperationsService {
           LIMIT 14
         `),
       // Monthly-class presence for the current UTC month (rollup AMBER rule).
-      this.data.query<BackupEvidenceRow>(`
+      this.data.query<BackupEvidenceRow>(
+        `
           SELECT be.backup_timestamp
           FROM operations.backup_evidence AS be
           JOIN operations.clients AS cl ON cl.id = be.client_id AND cl.state = 'active'
@@ -1799,6 +1908,116 @@ export class OperationsService {
           expectedNextRunAtMs !== null &&
           nowMs > expectedNextRunAtMs + 30 * 60 * 1_000,
       },
+    };
+  }
+
+  /**
+   * Read-only report metadata, sanitized findings and state history. This
+   * deliberately has no PDF reference, command-table access, or write path.
+   */
+  async getReports(): Promise<ReportsResponse> {
+    const [reportsResult, findingsResult, eventsResult] = await Promise.all([
+      this.data.query<ReportRow>(`
+        SELECT r.report_key, c.client_key, c.display_name AS client_display_name,
+               r.report_month, r.report_type, r.overall_status, r.document_status,
+               r.generated_at, r.coverage, r.finding_counts_by_severity,
+               r.pdf_available, r.send_attempt_count, r.delivery_failure_category
+        FROM operations.reports r
+        JOIN operations.clients c ON c.id = r.client_id
+        WHERE c.state = 'active'
+        ORDER BY r.report_month DESC, r.generated_at DESC NULLS LAST, r.report_key ASC
+        LIMIT 50
+      `),
+      this.data.query<ReportFindingRow>(`
+        WITH selected_reports AS (
+          SELECT r.id, r.client_id, r.report_key, r.report_month
+          FROM operations.reports r
+          JOIN operations.clients c ON c.id = r.client_id
+          WHERE c.state = 'active'
+          ORDER BY r.report_month DESC, r.generated_at DESC NULLS LAST, r.report_key ASC
+          LIMIT 50
+        )
+        SELECT r.report_key, f.finding_key, f.category, f.severity, f.status,
+               f.safe_title, f.safe_summary, f.safe_action,
+               f.first_observed_at, f.last_observed_at
+        FROM operations.report_findings f
+        JOIN selected_reports r ON r.id = f.report_id AND r.client_id = f.client_id
+        ORDER BY r.report_month DESC, f.severity DESC, f.finding_key ASC
+      `),
+      this.data.query<ReportEventRow>(`
+        WITH selected_reports AS (
+          SELECT r.id, r.client_id, r.report_key
+          FROM operations.reports r
+          JOIN operations.clients c ON c.id = r.client_id
+          WHERE c.state = 'active'
+          ORDER BY r.report_month DESC, r.generated_at DESC NULLS LAST, r.report_key ASC
+          LIMIT 50
+        )
+        SELECT r.report_key, e.event_type, e.from_status, e.to_status, e.occurred_at
+        FROM operations.report_events e
+        JOIN selected_reports r ON r.id = e.report_id AND r.client_id = e.client_id
+        ORDER BY e.occurred_at DESC, e.event_key ASC
+      `),
+    ]);
+
+    const findingsByReport = new Map<
+      string,
+      ReportsResponse['reports'][number]['findings']
+    >();
+    for (const finding of findingsResult.rows) {
+      const findings = findingsByReport.get(finding.report_key) ?? [];
+      findings.push({
+        findingKey: finding.finding_key,
+        category: finding.category,
+        severity: finding.severity,
+        status: finding.status,
+        safeTitle: finding.safe_title,
+        safeSummary: finding.safe_summary,
+        safeAction: finding.safe_action,
+        firstObservedAt: iso(finding.first_observed_at),
+        lastObservedAt: iso(finding.last_observed_at),
+      });
+      findingsByReport.set(finding.report_key, findings);
+    }
+
+    const historyByReport = new Map<
+      string,
+      ReportsResponse['reports'][number]['history']
+    >();
+    for (const event of eventsResult.rows) {
+      const history = historyByReport.get(event.report_key) ?? [];
+      history.push({
+        eventType: event.event_type,
+        fromStatus: event.from_status,
+        toStatus: event.to_status,
+        occurredAt: event.occurred_at.toISOString(),
+      });
+      historyByReport.set(event.report_key, history);
+    }
+
+    return {
+      generatedAt: new Date().toISOString(),
+      reports: reportsResult.rows.map((report) => ({
+        reportKey: report.report_key,
+        clientKey: report.client_key,
+        clientDisplayName: report.client_display_name,
+        reportMonth:
+          report.report_month instanceof Date
+            ? report.report_month.toISOString().slice(0, 10)
+            : report.report_month,
+        reportType: report.report_type,
+        overallStatus: report.overall_status,
+        documentStatus:
+          report.document_status as ReportsResponse['reports'][number]['documentStatus'],
+        generatedAt: iso(report.generated_at),
+        coverage: report.coverage,
+        findingCountsBySeverity: report.finding_counts_by_severity,
+        pdfAvailable: report.pdf_available,
+        sendAttemptCount: report.send_attempt_count,
+        deliveryFailureCategory: report.delivery_failure_category,
+        findings: findingsByReport.get(report.report_key) ?? [],
+        history: historyByReport.get(report.report_key) ?? [],
+      })),
     };
   }
 }
