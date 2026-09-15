@@ -114,11 +114,11 @@ timeouts; Ctrl+S after edits).
 
 1. **Load Config** — non-secret constants only: repo owner/name
    (`Cavetta`/`Cavetta`), workflow names (`Database backup`,
-   `Backup restore test`), R2 account id, bucket name, daily/monthly prefix
-   strings (`daily/` / `monthly/` — **exact strings to confirm with the
-   owner**), `maxKeys: 1000`, expected next backup time (drives the overdue
-   display; comment states the assumption and the observed 05:56 UTC run),
-   publisher key `cavetta-production-n8n`. **No secrets.**
+   `Backup restore test`), bucket name, daily/monthly prefix strings
+   (`Cavetta Backups/Daily/` / `Cavetta Backups/Monthly/` — **exact strings
+   to confirm with the owner**; RAW form, the S3 SDK URL-encodes the space),
+   publisher key `cavetta-production-n8n`. **No secrets.** (The R2 account
+   id lives in the S3 credential's Endpoint field, not in the workflow.)
 2. **Get GitHub Workflow IDs** — `GET /repos/Cavetta/Cavetta/actions/workflows`
    with the fine-grained GitHub token (Header Auth credential, Cavetta repo
    only, Actions: read); resolve the two workflow ids by name.
@@ -126,10 +126,15 @@ timeouts; Ctrl+S after edits).
    (recent `Database backup` runs: conclusion, created_at, updated_at, run
    number/id, html_url).
 4. **Get Restore Runs** — same for the restore-test workflow id.
-5. **List R2 Daily** — R2 S3-compatible `GET
-   https://{accountId}.r2.cloudflarestorage.com/{bucket}?list-type=2&prefix={dailyPrefix}&max-keys=1000`,
-   R2 API token credential (bucket-scoped, Object Read & List only).
-   **Metadata only: key, size, last-modified. Never GET an object.**
+5. **List R2 Daily** — n8n **S3 node** (NOT the AWS S3 node): File → Get
+   Many, Return All ON, Bucket Name and Prefix from Load Config, wired to
+   the `Cloudflare R2 S3 Read Only` **S3 credential** (Access Key ID +
+   Secret Access Key from the bucket-scoped Object Read & List R2 token,
+   Endpoint `https://<account id>.r2.cloudflarestorage.com`, Region `auto`,
+   Force Path Style ON). R2 requires AWS4-HMAC-SHA256 SigV4 signing — plain
+   `Authorization: Bearer` is rejected (live finding, see the activation
+   record below). **Metadata only: key, size, last-modified. Never GET an
+   object.**
 6. **List R2 Monthly** — same with the monthly prefix.
 7. **Normalize Backups** (Code node; harness-verified, see below) — join +
    omit-never-guess + diagnostics output for first-run VERIFY.
@@ -137,13 +142,13 @@ timeouts; Ctrl+S after edits).
 9. **Publish Evidence** — wired exactly like Phase 6/7 to
    `CloudIT - Publish Operations Evidence v2` (name-mode selector From list).
 
-**Pagination decision:** the chain stays flat, so instead of a
-continuation-token loop each prefix listing requests `max-keys=1000`. The
-inventory is bounded by retention (~30 daily + ~12 monthly objects ≈ 45, far
-under 1000); if `IsTruncated` is ever true the Normalize node emits a hard
-`truncated_listing` diagnostics entry and processes only the returned page —
-never guessed. The Load Config comment records this assumption; the owner
-confirms the object count at activation.
+**Pagination decision (revised 15 Sep 2026):** the two listings use the
+S3 node's **Return All** mode, which auto-paginates — a truncated listing
+cannot occur, so the original `max-keys=1000` cap and the
+`truncated_listing` handling are superseded (the diagnostics key stays in
+the contract, always 0). The inventory is bounded by retention (~30 daily
++ ~12 monthly objects ≈ 45). The Load Config comment records this; the
+owner confirms the object count at activation.
 
 ### Normalize join rules
 
@@ -355,8 +360,31 @@ First manual run of the imported collector (owner-executed, full run):
   n8n host (old Node/OpenSSL, or egress TLS inspection). The collector's
   failure path behaved as designed: only an unreachable
   `provider_connection` was built and `diagnostics.r2Failed: true` was set.
-  Pending: server-side TLS diagnosis (curl/node version from the n8n host)
-  before the next manual run.
+  **Root cause found (same day):** the workflow had been imported BEFORE the
+  config-values push landed, so `account_REPLACE_ME` was still in Load
+  Config — the SNI `account_REPLACE_ME.r2.cloudflarestorage.com` does not
+  exist, which is what produced TLS alert 40. TLS was never truly broken;
+  filling the real config values and re-importing resolved the handshake.
+- **R2 rejects Bearer tokens — AWS4-HMAC-SHA256 required (template
+  revision).** Once TLS was fixed, the plain `Authorization: Bearer` Header
+  Auth calls failed again: R2 first demanded `x-amz-content-sha256`, and
+  with that header added it responded `InvalidRequest: Please use
+  AWS4-HMAC-SHA256`. Full SigV4 signing with the Access Key ID + Secret
+  Access Key is mandatory — Header Auth can never work against R2. Revision:
+  the two `List R2` HTTP nodes were replaced by n8n **S3 nodes** (File → Get
+  Many, Return All ON, prefix via the node's options; credential referenced
+  by name `Cloudflare R2 S3 Read Only`, account endpoint
+  `https://676d602d0fd48ae086a188f1ee69b857.r2.cloudflarestorage.com`,
+  Region `auto`, Force Path Style ON). Load Config now holds the prefixes
+  in RAW form (`Cavetta Backups/Daily/`, `Cavetta Backups/Monthly/` — the
+  SDK URL-encodes), and the dead `r2AccountId`/`maxKeys` constants were
+  removed (the account id moved into the credential Endpoint). The Normalize
+  node reads the S3 output via $('List R2 ...').all() — one item per object,
+  error items shaped `{ error: "<string>" }` — and every
+  join/omit/diagnostics rule is unchanged; the full local harness (12
+  scenarios, 119 assertions) re-passed against the revised code. Template
+  re-committed: `fix(n8n): Phase 8 collector uses S3 node for R2 (SigV4
+  required)`.
 - Migration 0008 note: applied automatically by the production deploy
   pipeline (`ensure-operations-database.sh`) on 15 Sep 2026 07:05 UTC,
   confirmed in the deploy log.

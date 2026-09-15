@@ -387,10 +387,11 @@ pipeline (`CloudIT - Publish Operations Evidence v2` → `operations-ingest` →
 modified. Design:
 `cloudit-operations-portal-transfer/docs/cloudit-operations-portal-phase-8-backup-centre.md`.
 It mirrors the Phase 7 shape: a single Schedule Trigger, one straight flat
-line (Load Config → five HTTP nodes with Continue On Fail → Normalize
-Backups → Build Records → Publish Evidence), Europe/Malta timezone, and it
-imports INACTIVE. Metadata only: the R2 listings list object metadata (key,
-size, last-modified) and NEVER download an object. Migration 0008 (adds
+line (Load Config → three GitHub HTTP nodes with Continue On Fail → two
+S3 nodes for the R2 listings → Normalize Backups → Build Records → Publish
+Evidence), Europe/Malta timezone, and it imports INACTIVE. Metadata only:
+the R2 listings list object metadata (key, size, last-modified) and NEVER
+download an object. Migration 0008 (adds
 `cloudflare_r2` to the envelope sourceSystem allowlist and widens the
 provider_connections provider CHECK) must be applied before activation.
 
@@ -403,8 +404,9 @@ provider_connections provider CHECK) must be applied before activation.
   confirmed backup completion time before activation.
 - `GET api.github.com/repos/Cavetta/Cavetta/actions/workflows` resolves the
   two workflow ids by name (`Database backup`, `Backup restore test`), then
-  `runs?per_page=30` / `runs?per_page=10`. Two R2 S3-compatible list calls
-  (`list-type=2&prefix=daily|monthly&max-keys=1000`) return object metadata.
+  `runs?per_page=30` / `runs?per_page=10`. The two R2 listings are n8n
+  **S3 nodes** (File → Get Many, Return All ON, prefix from Load Config)
+  against the bucket, returning one item per object (metadata only).
 - One `backup_evidence` per `cavetta-db-YYYY-MM-DDTHHMMSSZ.tar.gz.gpg`
   object, joined to the NEWEST `Database backup` run whose
   `[created_at, updated_at + 10 min]` window contains the filename
@@ -439,18 +441,17 @@ provider_connections provider CHECK) must be applied before activation.
   `restore-<restoreTestKey>` / `backup-conn-github-<YYYY-MM-DD>` /
   `backup-conn-r2-<YYYY-MM-DD>` upsert on natural keys, so scheduled
   re-runs reconcile changed conclusions instead of duplicating.
-- **Truncation decision:** the chain stays flat (no continuation-token
-  loop); each listing requests max-keys=1000 (~30 daily + ~12 monthly
-  objects expected, far under the cap). If `IsTruncated` is ever true the
-  Normalize node emits a `truncatedListing` diagnostics entry and processes
-  only the returned page — never guessed. The owner confirms the object
-  count at activation.
+- **Pagination:** the S3 node's Return All ON auto-paginates, so a
+  truncated listing cannot occur — the max-keys=1000 concern of the
+  original design is gone and `truncatedListing` stays 0 in diagnostics
+  (kept for contract stability). The owner confirms the object count at
+  activation.
 - **VERIFY-ON-FIRST-RUN:** the Normalize node outputs `diagnostics`
   (objectsSeen, pairs, recordsBuilt, omittedNoRun, omittedNoBackupLink,
   omittedUnknownClass, truncatedListing, runConclusions) — compare them
   against the bucket listing and the two GitHub workflows before trusting
   the counts. Also confirm the exact daily/monthly prefix strings, the R2
-  account id/bucket, and that the restore-test workflow names/inputs are
+  bucket name, and that the restore-test workflow names/inputs are
   unchanged after the R2 move.
 - **Expected receipt:** `accepted` with **matched backup pairs + completed
   restore runs + 2** records on success (≈ daily + monthly archives with a
@@ -464,18 +465,25 @@ provider_connections provider CHECK) must be applied before activation.
   token limited to the Cavetta repository with **Actions: read**. The token
   value lives only in the n8n credential — never in the workflow JSON or
   Code nodes.
-- **Cloudflare R2 Read Only**: n8n credential type **Header Auth**; Name
-  `Authorization`, Value `Bearer <token>`. Create an R2 API token scoped to
-  the backup bucket with **Object Read & List** only. The token never
-  appears in the workflow JSON or Code nodes; the collector only ever lists
-  object metadata.
+- **Cloudflare R2 S3 Read Only**: n8n credential type **S3** (NOT Header
+  Auth, NOT AWS). Live lesson 15 Sep 2026: R2's S3 endpoint REJECTS plain
+  `Authorization: Bearer` tokens (it demands `x-amz-content-sha256`, then
+  responds `InvalidRequest: Please use AWS4-HMAC-SHA256`), so the two list
+  nodes are generic S3 nodes that sign every request with AWS SigV4. Create
+  an R2 API token scoped to the backup bucket with **Object Read & List**
+  only and enter in the credential: **S3 Endpoint**
+  `https://676d602d0fd48ae086a188f1ee69b857.r2.cloudflarestorage.com`,
+  **Region** `auto`, the token's **Access Key ID** + **Secret Access Key**,
+  and **Force Path Style** ON. The keys never appear in the workflow JSON
+  or Code nodes; the collector only ever lists object metadata.
 
 #### Load Config placeholders to fill (owner, before activation)
 
-- `r2AccountId` (`account_REPLACE_ME`) and `r2Bucket`
-  (`bucket_REPLACE_ME`) — from the Cloudflare dashboard.
-- `dailyPrefix` / `monthlyPrefix` (`daily/` / `monthly/` assumed — confirm
-  the exact prefix strings against the bucket layout).
+- `r2Bucket` (`bucket_REPLACE_ME`) — from the Cloudflare dashboard. The
+  account id lives in the S3 credential's Endpoint field, not here.
+- `dailyPrefix` / `monthlyPrefix` (`Cavetta Backups/Daily/` and
+  `Cavetta Backups/Monthly/` assumed — RAW form, the S3 SDK URL-encodes
+  the space; confirm the exact prefix strings against the bucket layout).
 - The **schedule** — replace the placeholder `0 7 * * *` cron with ~1 hour
   after the confirmed daily backup window.
 - `repoOwner` / `repoName` / workflow names (`Cavetta`/`Cavetta`,
@@ -487,7 +495,7 @@ provider_connections provider CHECK) must be applied before activation.
 1. Import the JSON — it exports with `active: false` and stays INACTIVE.
 2. Fill the Load Config placeholders above; re-link the two credentials on
    import when prompted (`GitHub Actions Read Only` on the three GitHub
-   HTTP nodes, `Cloudflare R2 Read Only` on the two R2 list nodes).
+   HTTP nodes, `Cloudflare R2 S3 Read Only` on the two S3 list nodes).
 3. In **Publish Evidence**, if the workflow selector imports empty, pick
    `CloudIT - Publish Operations Evidence v2` from the dropdown and confirm
    the two workflow inputs survived — `records` =
