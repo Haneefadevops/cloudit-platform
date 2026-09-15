@@ -1586,10 +1586,12 @@ export class OperationsService {
           FROM operations.backup_evidence AS be
           JOIN operations.clients AS cl ON cl.id = be.client_id AND cl.state = 'active'
           WHERE be.retention_class = 'daily'
-            AND be.backup_timestamp >= ${monthStart.toISOString()}::timestamptz
-            AND be.backup_timestamp < ${nextMonthStart.toISOString()}::timestamptz
+            AND be.backup_timestamp >= $1::timestamptz
+            AND be.backup_timestamp < $2::timestamptz
           ORDER BY be.backup_timestamp
-        `),
+        `,
+        [monthStart.toISOString(), nextMonthStart.toISOString()],
+      ),
       // Card row: newest backup regardless of retention class.
       this.data.query<BackupEvidenceRow>(`
           SELECT be.backup_timestamp, be.retention_class,
@@ -1653,10 +1655,12 @@ export class OperationsService {
           FROM operations.backup_evidence AS be
           JOIN operations.clients AS cl ON cl.id = be.client_id AND cl.state = 'active'
           WHERE be.retention_class = 'monthly'
-            AND be.backup_timestamp >= ${monthStart.toISOString()}::timestamptz
-            AND be.backup_timestamp < ${nextMonthStart.toISOString()}::timestamptz
+            AND be.backup_timestamp >= $1::timestamptz
+            AND be.backup_timestamp < $2::timestamptz
           LIMIT 1
-        `),
+        `,
+        [monthStart.toISOString(), nextMonthStart.toISOString()],
+      ),
       // Restore evidence: newest restore test by start.
       this.data.query<RestoreTestRow>(`
           SELECT rt.result, rt.started_at, rt.duration_ms, rt.github_run_url,
