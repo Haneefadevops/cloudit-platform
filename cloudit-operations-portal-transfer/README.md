@@ -17,9 +17,18 @@ Operations Portal planned for `operations.cloudit.lk`.
 - Phase 4 (sanitized n8n publishing): approved by the owner on 11 September
   2026. Production gate evidence recorded in
   `docs/cloudit-operations-portal-phase-4-publishing.md`.
-- Phase 5 (overview and workflow visualization): implemented, not deployed;
-  awaiting owner acceptance at the Phase 5 gate. See
+- Phase 5 (overview and workflow visualization): approved and live. See
   `docs/cloudit-operations-portal-phase-5-overview.md`.
+- Phase 6 (infrastructure analytics): approved and live. See
+  `docs/cloudit-operations-portal-phase-6-collector-design.md`.
+- Phase 7 (Vercel and ImageKit analytics): built and live; the ~48h soak and
+  the identical-range comparison gate against the provider dashboards remain
+  pending owner approval. See `docs/cloudit-operations-portal-phase-7-vercel-imagekit.md`.
+- Phase 8 (backup centre, Cloudflare R2): gate passed for backup evidence on
+  15 September 2026; collector activated on the corrected ~09:00 UTC schedule.
+  Restore-test evidence and the monthly-prefix verification are deferred to
+  the first scheduled monthly restore test (expected early October 2026). See
+  `docs/cloudit-operations-portal-phase-8-backup-centre.md`.
 - The scheduled 1 October 2026 Phase 5E acceptance remains pending and its real
   report must remain `DRAFT` during review.
 - `ticketing_enabled` must remain `false`.

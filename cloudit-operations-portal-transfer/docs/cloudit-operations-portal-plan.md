@@ -99,7 +99,7 @@ The intended top-level areas are:
 | 5 | Overview and workflow visualization | Verify every displayed workflow status against n8n |
 | 6 | Infrastructure analytics | Verify website, database and connection charts against source evidence |
 | 7 | Vercel and ImageKit analytics | Compare identical periods with the provider dashboards |
-| 8 | Google Drive backup visualization | Match Drive metadata, checksum evidence and GitHub run |
+| 8 | Cloudflare R2 backup visualization | Match R2 metadata, checksum evidence and GitHub run — **PASSED 15 Sep 2026 for backup evidence; restore-test evidence deferred to the first scheduled monthly run** |
 | 9 | Read-only Report Centre | Verify private PDF viewing without a report-state change |
 | 10 | Approve, reject and send controls | Complete an isolated test and remove all test evidence |
 | 11 | Incidents and audit history | Verify a safe incident lifecycle and action audit |
@@ -369,6 +369,13 @@ Status:           HEALTHY
 
 **Gate:** Match one displayed backup to its encrypted R2 object, checksum,
 GitHub Actions run and n8n evidence without opening or decrypting the archive.
+
+> **Status: PASSED 15 September 2026 for backup evidence** (full comparison
+> table in `cloudit-operations-portal-phase-8-backup-centre.md`; collector
+> activated on the corrected ~09:00 UTC schedule, one hour after the observed
+> ~07:48 UTC backup window). Restore-test evidence and the monthly-prefix
+> layout remain unverified until the first scheduled monthly restore test
+> lands (expected early October 2026).
 
 ## Phase 9 - Read-only Report Centre
 
