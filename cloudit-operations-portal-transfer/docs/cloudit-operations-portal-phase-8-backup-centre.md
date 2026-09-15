@@ -329,6 +329,38 @@ code is a separately approved action.)
 5. Approve the two 0008 changes (sourceSystem allowlist + provider CHECK
    widening) and the truncation-over-pagination decision.
 
+## Live activation record (15 September 2026)
+
+First manual run of the imported collector (owner-executed, full run):
+
+- **Defect found — `invalid_provider` (fixed, migration 0009).** 0008 widened
+  the `operations.provider_connections` table CHECK and the envelope
+  `sourceSystem` allowlist, but the 0005 writer
+  `operations_ingest.insert_provider_connection` validates `payload.provider`
+  against its OWN hardcoded enum — which still rejected `cloudflare_r2`. The
+  first run's failure-path record (R2 unreachable, see below) was rejected
+  with `invalid_provider` / `rejected_validation`. The 0008 verification had
+  exercised the table CHECK via a direct INSERT but not the writer path;
+  lesson recorded: provider-enum changes must always be proven through
+  `submit_batch`, never around it. Fix: `0009_provider_connection_writer.sql`
+  re-creates the writer with `'cloudflare_r2'` added (body otherwise
+  byte-identical to 0005; `CREATE OR REPLACE`, idempotent). Verified in a
+  throwaway pg16 container: fresh apply 0001→0009, 0009 re-run, and the exact
+  live envelope accepted through `submit_batch` (`accepted: 1`), replay
+  returning `duplicates: 1` with no new row.
+- **R2 listing unreachable from n8n — `write EPROTO … SSL alert number 40`
+  (handshake failure) on both `List R2` nodes.** GitHub API calls succeeded
+  from the same run, so outbound HTTPS works generally; the failure is
+  specific to the TLS handshake with `*.r2.cloudflarestorage.com` from the
+  n8n host (old Node/OpenSSL, or egress TLS inspection). The collector's
+  failure path behaved as designed: only an unreachable
+  `provider_connection` was built and `diagnostics.r2Failed: true` was set.
+  Pending: server-side TLS diagnosis (curl/node version from the n8n host)
+  before the next manual run.
+- Migration 0008 note: applied automatically by the production deploy
+  pipeline (`ensure-operations-database.sh`) on 15 Sep 2026 07:05 UTC,
+  confirmed in the deploy log.
+
 ## Explicitly not done in Phase 8
 
 - No backup download, decryption or restore, ever, through the portal.
