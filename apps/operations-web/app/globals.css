@@ -126,3 +126,17 @@ button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visibl
 .ops-quota-bar { display:block; height:6px; margin:12px 0 8px; border-radius:999px; background:var(--line); overflow:hidden; }
 .ops-quota-bar-fill { display:block; height:100%; border-radius:999px; background:var(--blue); }
 .ops-quota-bar-fill.is-low { background:var(--amber); }
+/* Phase 8 · backups page */
+.ops-calendar { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; }
+.ops-calendar-weekday { padding:2px 0 6px; color:var(--muted); font-size:10px; letter-spacing:.08em; text-transform:uppercase; text-align:center; }
+.ops-calendar-day { min-height:46px; padding:6px 8px; border:1px solid var(--line); border-radius:10px; background:var(--raised); font-size:12px; display:flex; flex-direction:column; justify-content:space-between; gap:4px; }
+.ops-calendar-day.is-blank { border-color:transparent; background:transparent; }
+.ops-calendar-day.is-ok { color:var(--green); border-color:#35d39a55; background:#35d39a12; }
+.ops-calendar-day.is-failed { color:var(--pink); border-color:#ff386855; background:#ff386812; }
+.ops-calendar-day.is-missing { color:var(--amber); border-color:#ffb84d55; background:#ffb84d12; }
+.ops-calendar-day.is-future { color:var(--muted); opacity:.55; }
+.ops-calendar-daynum { font-weight:700; }
+.ops-calendar-state { font-size:9px; letter-spacing:.08em; font-weight:750; }
+@media (max-width: 760px) {
+  .ops-calendar { gap:4px; }.ops-calendar-day { min-height:38px; padding:4px 5px; }.ops-calendar-state { display:none; }
+}

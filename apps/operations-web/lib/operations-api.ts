@@ -309,3 +309,49 @@ export interface OperationsImagekit {
 export async function getOperationsImagekit(): Promise<OperationsImagekit> {
   return fetchOperations<OperationsImagekit>("/imagekit");
 }
+
+export type BackupDayState = "ok" | "failed" | "missing" | "future";
+
+export interface OperationsBackupsLatestBackup {
+  backupTimestamp: string;
+  ageSeconds: number;
+  durationMs: number | null;
+  githubRunUrl: string | null;
+  encryptedArchivePresent: boolean;
+  checksumFilePresent: boolean;
+  checksumVerified: boolean;
+  driveRoundTripPassed: boolean;
+  archiveStructureValidated: boolean;
+  sizeBytes: number | null;
+  retentionClass: "daily" | "monthly";
+}
+
+export interface OperationsBackupsRestoreTest {
+  result: "passed" | "failed" | null;
+  startedAt: string;
+  ageSeconds: number;
+  durationMs: number | null;
+  githubRunUrl: string | null;
+  checksumPassed: boolean | null;
+  decryptPassed: boolean | null;
+  isolatedRestorePassed: boolean | null;
+  requiredObjectsPassed: boolean | null;
+  rlsPassed: boolean | null;
+  anonymousDenialPassed: boolean | null;
+  publicWhitelistPassed: boolean | null;
+  cleanupPassed: boolean | null;
+}
+
+export interface OperationsBackups {
+  generatedAt: string;
+  rollup: { level: HealthStatus; reasons: string[] };
+  calendar: { year: number; month: number; days: { date: string; state: BackupDayState }[] };
+  latestBackup: OperationsBackupsLatestBackup | null;
+  sizeTrend: { date: string; sizeBytes: number | null }[];
+  latestRestoreTest: OperationsBackupsRestoreTest | null;
+  schedule: { lastSuccessAt: string | null; expectedNextRunAt: string | null; overdue: boolean };
+}
+
+export async function getOperationsBackups(): Promise<OperationsBackups> {
+  return fetchOperations<OperationsBackups>("/backups");
+}

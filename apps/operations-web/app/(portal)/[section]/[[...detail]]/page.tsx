@@ -6,6 +6,7 @@ import { WorkflowDetailPage } from "../../../../components/workflow-detail-page"
 import { InfrastructurePage } from "../../../../components/infrastructure-page";
 import { VercelPage } from "../../../../components/vercel-page";
 import { ImagekitPage } from "../../../../components/imagekit-page";
+import { BackupsPage } from "../../../../components/backups-page";
 import type { WorkflowsWindow } from "../../../../lib/operations-api";
 
 const sections = new Set(["overview", "clients", "workflows", "infrastructure", "vercel", "imagekit", "backups", "reports", "incidents", "audit-log", "settings"]);
@@ -23,6 +24,7 @@ export default async function ProtectedSectionPage({
   if (params.section === "infrastructure") return <InfrastructurePage />;
   if (params.section === "vercel") return <VercelPage />;
   if (params.section === "imagekit") return <ImagekitPage />;
+  if (params.section === "backups") return <BackupsPage />;
   if (params.section === "workflows") {
     const workflowKey = params.detail?.[0];
     if (workflowKey) return <WorkflowDetailPage workflowKey={workflowKey} />;
