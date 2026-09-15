@@ -68,4 +68,12 @@ export class OperationsController {
   async getImagekitAnalytics() {
     return this.operationsService.getImagekitAnalytics();
   }
+
+  @Get('backups')
+  @ApiOperation({
+    summary: 'Backup evidence, restore tests and schedule (read-only)',
+  })
+  async getBackups() {
+    return this.operationsService.getBackups();
+  }
 }

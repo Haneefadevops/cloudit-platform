@@ -267,3 +267,99 @@ export function computeImagekitRollupStatus(
   }
   return 'GREEN';
 }
+
+// Phase 8 backup-centre windows (Phase 0 §11.1/§11.2 thresholds).
+const BACKUPS_NO_SUCCESS_MS = 28 * 60 * 60 * 1_000; // 28 hours
+const BACKUPS_OVERDUE_GRACE_MS = 30 * 60 * 1_000; // 30 minutes
+const BACKUPS_RESTORE_STALE_MS = 32 * 24 * 60 * 60 * 1_000; // 32 days
+const BACKUPS_MONTHLY_GRACE_MS = 36 * 60 * 60 * 1_000; // 36 hours
+
+export interface BackupsRollupEvidence {
+  /** Any backup_evidence row at all. */
+  hasEvidence: boolean;
+  /** The newest daily backup record is a failure (failed run/verification/missing pair). */
+  latestBackupFailed: boolean;
+  /** Newest successful backup timestamp (any retention class), ms epoch; null when never. */
+  lastSuccessAtMs: number | null;
+  /** Expected next daily run = last successful daily backup + 24h, ms epoch; null when unknown. */
+  expectedNextRunAtMs: number | null;
+  /** Latest restore test has result 'failed'. */
+  restoreTestFailed: boolean;
+  /** Latest restore test start, ms epoch; null when never. */
+  lastRestoreTestAtMs: number | null;
+  /** A monthly-class backup exists for the current UTC month. */
+  monthlyCopyPresent: boolean;
+}
+
+/**
+ * Phase 8 backups rollup (backup centre card):
+ *   RED     — the latest daily backup failed (failed run / failed
+ *             verification / missing pair), the latest restore test failed,
+ *             or no successful backup has been observed within the last
+ *             28 hours (including never);
+ *   AMBER   — the expected daily run is overdue more than 30 minutes, the
+ *             latest restore test is older than 32 days (including never),
+ *             or no monthly-class backup exists for the current UTC month
+ *             once more than 36 hours have passed since its first day;
+ *   NO_DATA — no backup evidence at all;
+ *   GREEN   — everything else.
+ */
+export function computeBackupsRollupStatus(
+  evidence: BackupsRollupEvidence,
+  nowMs: number,
+): { level: AnalyticsRollupStatus; reasons: string[] } {
+  if (!evidence.hasEvidence) {
+    return { level: 'NO_DATA', reasons: [] };
+  }
+
+  const redReasons: string[] = [];
+  if (evidence.latestBackupFailed) {
+    redReasons.push(
+      'Latest daily backup failed (failed run, failed verification or missing pair)',
+    );
+  }
+  if (evidence.restoreTestFailed) {
+    redReasons.push('Latest restore test failed');
+  }
+  if (evidence.lastSuccessAtMs === null) {
+    redReasons.push('No successful backup has ever been observed');
+  } else if (nowMs - evidence.lastSuccessAtMs > BACKUPS_NO_SUCCESS_MS) {
+    redReasons.push('No successful backup within the last 28 hours');
+  }
+  if (redReasons.length > 0) {
+    return { level: 'RED', reasons: redReasons };
+  }
+
+  const amberReasons: string[] = [];
+  if (
+    evidence.expectedNextRunAtMs !== null &&
+    nowMs > evidence.expectedNextRunAtMs + BACKUPS_OVERDUE_GRACE_MS
+  ) {
+    amberReasons.push(
+      'Latest backup is overdue more than 30 minutes past the expected run time',
+    );
+  }
+  if (evidence.lastRestoreTestAtMs === null) {
+    amberReasons.push('No restore test evidence has ever been observed');
+  } else if (nowMs - evidence.lastRestoreTestAtMs > BACKUPS_RESTORE_STALE_MS) {
+    amberReasons.push('Latest restore test is older than 32 days');
+  }
+  const monthStartMs = Date.UTC(
+    new Date(nowMs).getUTCFullYear(),
+    new Date(nowMs).getUTCMonth(),
+    1,
+  );
+  if (
+    !evidence.monthlyCopyPresent &&
+    nowMs > monthStartMs + BACKUPS_MONTHLY_GRACE_MS
+  ) {
+    amberReasons.push(
+      'No monthly-class backup exists for the current UTC month',
+    );
+  }
+  if (amberReasons.length > 0) {
+    return { level: 'AMBER', reasons: amberReasons };
+  }
+
+  return { level: 'GREEN', reasons: [] };
+}

@@ -4,6 +4,7 @@ import { operationsConfig } from './operations.config';
 import { nextCronRun } from './cron.util';
 import {
   AnalyticsRollupStatus,
+  computeBackupsRollupStatus,
   computeDatabaseRollupStatus,
   computeEnvironmentHealth,
   computeImagekitRollupStatus,
@@ -344,6 +345,93 @@ export interface ImagekitAnalyticsResponse {
     failureCategory: string | null;
   };
   warningThresholds: { state: 'NO_DATA'; note: string };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 8 backup centre (backup evidence / restore tests)
+// ---------------------------------------------------------------------------
+
+// A daily backup row counts as fully healthy only when all five contract
+// booleans are true (Phase 0 §7.3); the same predicate drives the calendar
+// day state, the latest-backup-failed rollup rule and the schedule.
+const BACKUP_HEALTHY_PREDICATE = `encrypted_archive_present
+      AND checksum_file_present
+      AND checksum_verified
+      AND drive_round_trip_passed
+      AND archive_structure_validated`;
+
+// drive_object_key is server-only (Phase 8 design) and is deliberately never
+// selected into any row interface below.
+interface BackupEvidenceRow {
+  backup_timestamp: Date;
+  retention_class: 'daily' | 'monthly';
+  encrypted_archive_present: boolean;
+  checksum_file_present: boolean;
+  checksum_verified: boolean;
+  drive_round_trip_passed: boolean;
+  archive_structure_validated: boolean;
+  size_bytes: number | null;
+  duration_ms: number | null;
+  github_run_url: string | null;
+}
+
+interface RestoreTestRow {
+  result: 'passed' | 'failed' | null;
+  started_at: Date;
+  duration_ms: number | null;
+  github_run_url: string | null;
+  checksum_passed: boolean | null;
+  decrypt_passed: boolean | null;
+  isolated_restore_passed: boolean | null;
+  required_objects_passed: boolean | null;
+  rls_passed: boolean | null;
+  anonymous_denial_passed: boolean | null;
+  public_whitelist_passed: boolean | null;
+  cleanup_passed: boolean | null;
+}
+
+export interface BackupsResponse {
+  generatedAt: string;
+  rollup: { level: AnalyticsRollupStatus; reasons: string[] };
+  calendar: {
+    year: number;
+    month: number;
+    days: { date: string; state: 'ok' | 'failed' | 'missing' | 'future' }[];
+  };
+  latestBackup: {
+    backupTimestamp: string;
+    ageSeconds: number;
+    durationMs: number | null;
+    githubRunUrl: string | null;
+    encryptedArchivePresent: boolean;
+    checksumFilePresent: boolean;
+    checksumVerified: boolean;
+    driveRoundTripPassed: boolean;
+    archiveStructureValidated: boolean;
+    sizeBytes: number | null;
+    retentionClass: 'daily' | 'monthly';
+  } | null;
+  sizeTrend: { date: string; sizeBytes: number | null }[];
+  latestRestoreTest: {
+    result: 'passed' | 'failed' | null;
+    startedAt: string;
+    ageSeconds: number;
+    durationMs: number | null;
+    githubRunUrl: string | null;
+    checksumPassed: boolean | null;
+    decryptPassed: boolean | null;
+    isolatedRestorePassed: boolean | null;
+    requiredObjectsPassed: boolean | null;
+    rlsPassed: boolean | null;
+    anonymousDenialPassed: boolean | null;
+    publicWhitelistPassed: boolean | null;
+    cleanupPassed: boolean | null;
+  } | null;
+  schedule: {
+    lastSuccessAt: string | null;
+    expectedNextRunAt: string | null;
+    overdue: boolean;
+  };
 }
 
 /**
@@ -1462,6 +1550,250 @@ export class OperationsService {
       warningThresholds: {
         state: 'NO_DATA',
         note: 'ImageKit exposes no warning-threshold-history API — documented provider gap',
+      },
+    };
+  }
+
+  async getBackups(): Promise<BackupsResponse> {
+    // Single clock for the whole response: ages, calendar 'future' days and
+    // the overdue flag must all agree.
+    const nowMs = Date.now();
+    const now = new Date(nowMs);
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth() + 1; // 1-12
+    const monthStart = new Date(Date.UTC(year, month - 1, 1));
+    const nextMonthStart = new Date(Date.UTC(year, month, 1));
+    const todayKey = now.toISOString().slice(0, 10);
+
+    const [
+      monthDailyRows,
+      latestBackupRows,
+      latestDailyRows,
+      lastSuccessRows,
+      lastSuccessDailyRows,
+      trendRows,
+      monthlyRows,
+      restoreRows,
+    ] = await Promise.all([
+      // Daily-class rows of the current UTC month drive the calendar.
+      this.data.query<BackupEvidenceRow>(`
+          SELECT be.backup_timestamp, be.retention_class,
+                 be.encrypted_archive_present, be.checksum_file_present,
+                 be.checksum_verified, be.drive_round_trip_passed,
+                 be.archive_structure_validated,
+                 be.size_bytes::float8 AS size_bytes,
+                 be.duration_ms, be.github_run_url
+          FROM operations.backup_evidence AS be
+          JOIN operations.clients AS cl ON cl.id = be.client_id AND cl.state = 'active'
+          WHERE be.retention_class = 'daily'
+            AND be.backup_timestamp >= ${monthStart.toISOString()}::timestamptz
+            AND be.backup_timestamp < ${nextMonthStart.toISOString()}::timestamptz
+          ORDER BY be.backup_timestamp
+        `),
+      // Card row: newest backup regardless of retention class.
+      this.data.query<BackupEvidenceRow>(`
+          SELECT be.backup_timestamp, be.retention_class,
+                 be.encrypted_archive_present, be.checksum_file_present,
+                 be.checksum_verified, be.drive_round_trip_passed,
+                 be.archive_structure_validated,
+                 be.size_bytes::float8 AS size_bytes,
+                 be.duration_ms, be.github_run_url
+          FROM operations.backup_evidence AS be
+          JOIN operations.clients AS cl ON cl.id = be.client_id AND cl.state = 'active'
+          ORDER BY be.backup_timestamp DESC
+          LIMIT 1
+        `),
+      // Rollup input: is the newest daily record fully healthy?
+      this.data.query<BackupEvidenceRow>(`
+          SELECT be.backup_timestamp, be.retention_class,
+                 be.encrypted_archive_present, be.checksum_file_present,
+                 be.checksum_verified, be.drive_round_trip_passed,
+                 be.archive_structure_validated,
+                 be.size_bytes::float8 AS size_bytes,
+                 be.duration_ms, be.github_run_url
+          FROM operations.backup_evidence AS be
+          JOIN operations.clients AS cl ON cl.id = be.client_id AND cl.state = 'active'
+          WHERE be.retention_class = 'daily'
+          ORDER BY be.backup_timestamp DESC
+          LIMIT 1
+        `),
+      // Newest fully healthy backup of any retention class (28h RED rule).
+      this.data.query<BackupEvidenceRow>(`
+          SELECT be.backup_timestamp
+          FROM operations.backup_evidence AS be
+          JOIN operations.clients AS cl ON cl.id = be.client_id AND cl.state = 'active'
+          WHERE ${BACKUP_HEALTHY_PREDICATE}
+          ORDER BY be.backup_timestamp DESC
+          LIMIT 1
+        `),
+      // Expected next run derives from the newest successful DAILY backup.
+      this.data.query<BackupEvidenceRow>(`
+          SELECT be.backup_timestamp
+          FROM operations.backup_evidence AS be
+          JOIN operations.clients AS cl ON cl.id = be.client_id AND cl.state = 'active'
+          WHERE be.retention_class = 'daily'
+            AND ${BACKUP_HEALTHY_PREDICATE}
+          ORDER BY be.backup_timestamp DESC
+          LIMIT 1
+        `),
+      // Size trend: up to the 14 most recent daily backups, reversed to
+      // oldest-first afterwards.
+      this.data.query<BackupEvidenceRow>(`
+          SELECT be.backup_timestamp,
+                 be.size_bytes::float8 AS size_bytes
+          FROM operations.backup_evidence AS be
+          JOIN operations.clients AS cl ON cl.id = be.client_id AND cl.state = 'active'
+          WHERE be.retention_class = 'daily'
+          ORDER BY be.backup_timestamp DESC
+          LIMIT 14
+        `),
+      // Monthly-class presence for the current UTC month (rollup AMBER rule).
+      this.data.query<BackupEvidenceRow>(`
+          SELECT be.backup_timestamp
+          FROM operations.backup_evidence AS be
+          JOIN operations.clients AS cl ON cl.id = be.client_id AND cl.state = 'active'
+          WHERE be.retention_class = 'monthly'
+            AND be.backup_timestamp >= ${monthStart.toISOString()}::timestamptz
+            AND be.backup_timestamp < ${nextMonthStart.toISOString()}::timestamptz
+          LIMIT 1
+        `),
+      // Restore evidence: newest restore test by start.
+      this.data.query<RestoreTestRow>(`
+          SELECT rt.result, rt.started_at, rt.duration_ms, rt.github_run_url,
+                 rt.checksum_passed, rt.decrypt_passed, rt.isolated_restore_passed,
+                 rt.required_objects_passed, rt.rls_passed,
+                 rt.anonymous_denial_passed, rt.public_whitelist_passed,
+                 rt.cleanup_passed
+          FROM operations.restore_tests AS rt
+          JOIN operations.clients AS cl ON cl.id = rt.client_id AND cl.state = 'active'
+          ORDER BY rt.started_at DESC
+          LIMIT 1
+        `),
+    ]);
+
+    const isHealthy = (row: BackupEvidenceRow): boolean =>
+      row.encrypted_archive_present &&
+      row.checksum_file_present &&
+      row.checksum_verified &&
+      row.drive_round_trip_passed &&
+      row.archive_structure_validated;
+
+    // Calendar: one entry per day of the current UTC month. A day is 'ok'
+    // when at least one daily backup is fully healthy, 'failed' when daily
+    // backups exist but none are healthy, 'missing' for past days without a
+    // daily backup, and 'future' after today (UTC).
+    const healthByDay = new Map<string, boolean>();
+    for (const row of monthDailyRows.rows) {
+      const dayKey = row.backup_timestamp.toISOString().slice(0, 10);
+      healthByDay.set(
+        dayKey,
+        (healthByDay.get(dayKey) ?? false) || isHealthy(row),
+      );
+    }
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const days: BackupsResponse['calendar']['days'] = [];
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      let state: 'ok' | 'failed' | 'missing' | 'future';
+      if (date > todayKey) {
+        state = 'future';
+      } else if (!healthByDay.has(date)) {
+        state = 'missing';
+      } else {
+        state = healthByDay.get(date) ? 'ok' : 'failed';
+      }
+      days.push({ date, state });
+    }
+
+    const latestBackupRow = latestBackupRows.rows[0] ?? null;
+    const latestDailyRow = latestDailyRows.rows[0] ?? null;
+    const lastSuccessRow = lastSuccessRows.rows[0] ?? null;
+    const lastSuccessDailyRow = lastSuccessDailyRows.rows[0] ?? null;
+    const restoreRow = restoreRows.rows[0] ?? null;
+
+    const lastSuccessAtMs = lastSuccessRow?.backup_timestamp.getTime() ?? null;
+    const lastSuccessDailyAtMs =
+      lastSuccessDailyRow?.backup_timestamp.getTime() ?? null;
+    const expectedNextRunAtMs =
+      lastSuccessDailyAtMs === null
+        ? null
+        : lastSuccessDailyAtMs + 24 * 60 * 60 * 1_000;
+
+    const rollup = computeBackupsRollupStatus(
+      {
+        hasEvidence: latestBackupRow !== null,
+        latestBackupFailed:
+          latestDailyRow !== null && !isHealthy(latestDailyRow),
+        lastSuccessAtMs,
+        expectedNextRunAtMs,
+        restoreTestFailed: restoreRow?.result === 'failed',
+        lastRestoreTestAtMs: restoreRow?.started_at.getTime() ?? null,
+        monthlyCopyPresent: monthlyRows.rows.length > 0,
+      },
+      nowMs,
+    );
+
+    const ageSeconds = (atMs: number): number =>
+      Math.max(0, Math.round((nowMs - atMs) / 1_000));
+
+    return {
+      generatedAt: new Date(nowMs).toISOString(),
+      rollup,
+      calendar: { year, month, days },
+      latestBackup:
+        latestBackupRow === null
+          ? null
+          : {
+              backupTimestamp: latestBackupRow.backup_timestamp.toISOString(),
+              ageSeconds: ageSeconds(
+                latestBackupRow.backup_timestamp.getTime(),
+              ),
+              durationMs: latestBackupRow.duration_ms,
+              githubRunUrl: latestBackupRow.github_run_url,
+              encryptedArchivePresent:
+                latestBackupRow.encrypted_archive_present,
+              checksumFilePresent: latestBackupRow.checksum_file_present,
+              checksumVerified: latestBackupRow.checksum_verified,
+              driveRoundTripPassed: latestBackupRow.drive_round_trip_passed,
+              archiveStructureValidated:
+                latestBackupRow.archive_structure_validated,
+              sizeBytes: latestBackupRow.size_bytes,
+              retentionClass: latestBackupRow.retention_class,
+            },
+      sizeTrend: [...trendRows.rows].reverse().map((row) => ({
+        date: row.backup_timestamp.toISOString().slice(0, 10),
+        sizeBytes: row.size_bytes,
+      })),
+      latestRestoreTest:
+        restoreRow === null
+          ? null
+          : {
+              result: restoreRow.result,
+              startedAt: restoreRow.started_at.toISOString(),
+              ageSeconds: ageSeconds(restoreRow.started_at.getTime()),
+              durationMs: restoreRow.duration_ms,
+              githubRunUrl: restoreRow.github_run_url,
+              checksumPassed: restoreRow.checksum_passed,
+              decryptPassed: restoreRow.decrypt_passed,
+              isolatedRestorePassed: restoreRow.isolated_restore_passed,
+              requiredObjectsPassed: restoreRow.required_objects_passed,
+              rlsPassed: restoreRow.rls_passed,
+              anonymousDenialPassed: restoreRow.anonymous_denial_passed,
+              publicWhitelistPassed: restoreRow.public_whitelist_passed,
+              cleanupPassed: restoreRow.cleanup_passed,
+            },
+      schedule: {
+        lastSuccessAt:
+          lastSuccessDailyAtMs === null
+            ? null
+            : new Date(lastSuccessDailyAtMs).toISOString(),
+        expectedNextRunAt:
+          expectedNextRunAtMs === null
+            ? null
+            : new Date(expectedNextRunAtMs).toISOString(),
+        overdue:
+          expectedNextRunAtMs !== null &&
+          nowMs > expectedNextRunAtMs + 30 * 60 * 1_000,
       },
     };
   }
