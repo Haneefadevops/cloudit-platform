@@ -432,13 +432,35 @@ reconciliation without double rows proven end-to-end).
   failure record stays stored (the GREEN re-publish same-day hit the same
   idempotency key → duplicate, skipped). The tile flips GREEN on the next
   day's run under a new date key. Backup records are unaffected.
-- **Schedule correction pending:** the observed daily backup lands ~07:48
-  UTC (runs 12–15 Sep all start 07:48/07:55/07:29/07:11 UTC — the old
-  "02:17 UTC" spec value is wrong); the collector trigger must run ~1h
-  AFTER the backup, i.e. ~09:00 UTC, not 07:00.
-- Portal `/backups` verification against the live API and the Phase 8 gate
-  (match one displayed backup to R2 object + checksum + GitHub run + n8n
-  receipt, owner sign-off) remain open at the time of writing.
+- **Schedule correction:** the observed daily backup lands ~07:48 UTC (runs
+  12–15 Sep all start 07:48/07:55/07:29/07:11 UTC — the old "02:17 UTC" spec
+  value was wrong); the collector trigger was set accordingly to run AFTER
+  the backup window.
+
+## Phase gate — PASSED (backup evidence), 15 September 2026
+
+Owner-approved gate check, evidence matched across all four systems for the
+15 September 2026 daily backup (and spot-checked 10–14 Sep):
+
+| Field | Portal `/backups` | R2 object | GitHub run | n8n receipt |
+|---|---|---|---|---|
+| Timestamp | 15 Sep 09:48:44 Europe/Malta | `cavetta-db-2026-09-15T074844Z.tar.gz.gpg` | run 34943571592, created 07:48:13Z | `3de2792d-0f3c-4149-b0b3-2a88ab355f05` |
+| Size | 5.8 MB | 6,032,021 bytes | — | payload `sizeBytes: 6032021` |
+| Duration | 2m 3s | — | 07:48:13Z → 07:50:16Z | `durationMs: 123000` |
+| Verifications | all six YES | archive + `.sha256` sibling present | conclusion `success` | `checksumVerified`/`driveRoundTripPassed`/`archiveStructureValidated` true |
+
+Idempotency proven live (`duplicates` on same-day replays, zero double rows);
+failure paths proven live (RED-only batches on R2/GitHub outages); object key
+never left the server. The workflow was **activated on the corrected
+~09:00 UTC schedule by the owner on 15 Sep 2026** — first scheduled
+auto-run expected 16 Sep ~09:00 UTC.
+
+**Deferred (not blocking):** restore-test evidence — the first SCHEDULED
+monthly restore test (expected with the first monthly archive, early Oct
+2026) must be verified against the portal restore section when it lands;
+until then the portal correctly shows NO DATA there. The monthly prefix
+(`Cavetta Backups/Monthly/`) is also still unverified — it will be confirmed
+by the first monthly archive landing there.
 
 ## Explicitly not done in Phase 8
 
