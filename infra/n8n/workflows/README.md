@@ -378,6 +378,133 @@ pre-Phase-7 state exactly. No existing data or workflow is modified.
   four quota constants are set (+4 quota, +1 utilization). Failure run:
   **1** record.
 
+## Phase 8 — Backup evidence collector (operations portal)
+
+One new scheduled collector publishes Cloudflare R2 backup evidence and
+GitHub Actions restore-test evidence through the same proven Phase 4
+pipeline (`CloudIT - Publish Operations Evidence v2` → `operations-ingest` →
+`operations` DB). It is new and independent: no existing workflow is
+modified. Design:
+`cloudit-operations-portal-transfer/docs/cloudit-operations-portal-phase-8-backup-centre.md`.
+It mirrors the Phase 7 shape: a single Schedule Trigger, one straight flat
+line (Load Config → five HTTP nodes with Continue On Fail → Normalize
+Backups → Build Records → Publish Evidence), Europe/Malta timezone, and it
+imports INACTIVE. Metadata only: the R2 listings list object metadata (key,
+size, last-modified) and NEVER download an object. Migration 0008 (adds
+`cloudflare_r2` to the envelope sourceSystem allowlist and widens the
+provider_connections provider CHECK) must be applied before activation.
+
+### `cloudit-backup-evidence-collector.json` — daily (placeholder 07:00)
+
+- Schedule `0 7 * * *` (Europe/Malta) — PLACEHOLDER pending owner
+  confirmation of the real daily backup window (the 14 Sep 2026 run was
+  observed ~05:56 UTC, archive `cavetta-db-2026-09-14T075617Z`; the old
+  Phase 0 spec documented 02:17 UTC). Move the cron to ~1 hour AFTER the
+  confirmed backup completion time before activation.
+- `GET api.github.com/repos/Cavetta/Cavetta/actions/workflows` resolves the
+  two workflow ids by name (`Database backup`, `Backup restore test`), then
+  `runs?per_page=30` / `runs?per_page=10`. Two R2 S3-compatible list calls
+  (`list-type=2&prefix=daily|monthly&max-keys=1000`) return object metadata.
+- One `backup_evidence` per `cavetta-db-YYYY-MM-DDTHHMMSSZ.tar.gz.gpg`
+  object, joined to the NEWEST `Database backup` run whose
+  `[created_at, updated_at + 10 min]` window contains the filename
+  timestamp (backupKey = filename lowercased, extensions stripped;
+  unmatched object → record OMITTED and counted in diagnostics —
+  omit-never-guess). Run success → `checksumVerified` /
+  `driveRoundTripPassed` / `archiveStructureValidated` true; run failure
+  with the object present → those three false (status RED); a missing
+  `.sha256` sibling also forces RED. `driveObjectKey` is the R2 object key
+  (server-only: never selected into any portal API response).
+- One `restore_test_evidence` per completed `Backup restore test` run:
+  `restoreTestKey` = `restore-<run id>`; `sourceRetentionClass` from
+  `display_title` containing daily/monthly (case-insensitive), else
+  `event == "schedule"` → monthly, else omitted + diagnostics; `result`
+  from conclusion (success → passed, failure → failed); on success the
+  eight `*Passed` booleans = true, on failure they are OMITTED. `backupKey`
+  links the newest backup of the tested retention class with
+  `backup_timestamp` at or before the restore start, from the records this
+  run is about to publish — backup records are ordered BEFORE restore
+  records in the batch (ingest foreign-key order) and an unlinkable restore
+  is omitted rather than risk a whole-batch `unknown_backup` rejection.
+- Plus two `provider_connection` records (`github`/`github-actions`,
+  `cloudflare_r2`/`r2-list`). On ANY provider failure ONLY the unreachable
+  connection record(s) publish (reachable false, authorizationState denied
+  on 401/403 else unknown, failureCategory from the closed allowlist
+  authentication/authorization/provider_unavailable, `lastSuccessfulAt`
+  omitted).
+- Envelope: `sourceSystem` `cloudflare_r2` for the evidence records and the
+  R2 connectivity record, `github_actions` for the GitHub connectivity
+  record; freshUntil observedAt + 28h for backup/connection records and
+  + 35 days for restore records; idempotency keys `backup-<backupKey>` /
+  `restore-<restoreTestKey>` / `backup-conn-github-<YYYY-MM-DD>` /
+  `backup-conn-r2-<YYYY-MM-DD>` upsert on natural keys, so scheduled
+  re-runs reconcile changed conclusions instead of duplicating.
+- **Truncation decision:** the chain stays flat (no continuation-token
+  loop); each listing requests max-keys=1000 (~30 daily + ~12 monthly
+  objects expected, far under the cap). If `IsTruncated` is ever true the
+  Normalize node emits a `truncatedListing` diagnostics entry and processes
+  only the returned page — never guessed. The owner confirms the object
+  count at activation.
+- **VERIFY-ON-FIRST-RUN:** the Normalize node outputs `diagnostics`
+  (objectsSeen, pairs, recordsBuilt, omittedNoRun, omittedNoBackupLink,
+  omittedUnknownClass, truncatedListing, runConclusions) — compare them
+  against the bucket listing and the two GitHub workflows before trusting
+  the counts. Also confirm the exact daily/monthly prefix strings, the R2
+  account id/bucket, and that the restore-test workflow names/inputs are
+  unchanged after the R2 move.
+- **Expected receipt:** `accepted` with **matched backup pairs + completed
+  restore runs + 2** records on success (≈ daily + monthly archives with a
+  matching run, one per completed restore-test run, plus the two
+  connections). Failure run: **1** record per unreachable provider.
+
+#### Provider credentials (owner creates; secrets never enter the workflow)
+
+- **GitHub Actions Read Only**: n8n credential type **Header Auth**; Name
+  `Authorization`, Value `Bearer <token>`. Create a fine-grained GitHub
+  token limited to the Cavetta repository with **Actions: read**. The token
+  value lives only in the n8n credential — never in the workflow JSON or
+  Code nodes.
+- **Cloudflare R2 Read Only**: n8n credential type **Header Auth**; Name
+  `Authorization`, Value `Bearer <token>`. Create an R2 API token scoped to
+  the backup bucket with **Object Read & List** only. The token never
+  appears in the workflow JSON or Code nodes; the collector only ever lists
+  object metadata.
+
+#### Load Config placeholders to fill (owner, before activation)
+
+- `r2AccountId` (`account_REPLACE_ME`) and `r2Bucket`
+  (`bucket_REPLACE_ME`) — from the Cloudflare dashboard.
+- `dailyPrefix` / `monthlyPrefix` (`daily/` / `monthly/` assumed — confirm
+  the exact prefix strings against the bucket layout).
+- The **schedule** — replace the placeholder `0 7 * * *` cron with ~1 hour
+  after the confirmed daily backup window.
+- `repoOwner` / `repoName` / workflow names (`Cavetta`/`Cavetta`,
+  `Database backup`, `Backup restore test`) are pre-filled — confirm the
+  restore-test workflow names/inputs are unchanged after the R2 move.
+
+#### Import + activation procedure (owner action)
+
+1. Import the JSON — it exports with `active: false` and stays INACTIVE.
+2. Fill the Load Config placeholders above; re-link the two credentials on
+   import when prompted (`GitHub Actions Read Only` on the three GitHub
+   HTTP nodes, `Cloudflare R2 Read Only` on the two R2 list nodes).
+3. In **Publish Evidence**, if the workflow selector imports empty, pick
+   `CloudIT - Publish Operations Evidence v2` from the dropdown and confirm
+   the two workflow inputs survived — `records` =
+   `{{ JSON.stringify($json.records) }}` (Allow Any Type), `publisherKey` =
+   `{{ $json.publisherKey }}` (String), Attempt To Convert Types ON
+   (mustache only, no leading `=`).
+4. Test with ONE full **Execute Workflow run** — never step re-runs:
+   `publishedAt` must be within ±5 minutes of ingestion and step re-runs
+   reuse stale data.
+5. Check the `accepted` receipt in `operations.ingestion_receipts` against
+   the expected counts above, inspect the Normalize `diagnostics` against
+   the VERIFY notes, then replay ONE run and confirm the receipt reports
+   `duplicates` with no new rows. Then activate.
+
+Rollback: deactivate and delete — this restores the pre-Phase-8 state
+exactly. No existing data or workflow is modified.
+
 ## Importing into n8n
 
 1. Open your n8n instance.
