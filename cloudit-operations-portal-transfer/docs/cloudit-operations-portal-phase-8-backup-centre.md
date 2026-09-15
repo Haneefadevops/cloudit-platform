@@ -389,6 +389,57 @@ First manual run of the imported collector (owner-executed, full run):
   pipeline (`ensure-operations-database.sh`) on 15 Sep 2026 07:05 UTC,
   confirmed in the deploy log.
 
+### First fully GREEN run (15 Sep 2026 12:25 UTC, receipt `3de2792d-0f3c-4149-b0b3-2a88ab355f05`)
+
+After the S3-node revision and config fixes above, a full manual run published
+the first real evidence: **7 `backup_evidence` records accepted, 0 rejected,
+2 duplicates** (the two `provider_connection` records already accepted under
+the same daily idempotency keys that morning — first-write-wins per key,
+reconciliation without double rows proven end-to-end).
+
+- **Two config paste defects found and fixed by the owner (traps for future
+  collectors):** (1) a dropped opening quote in `restoreWorkflowName`
+  (`SyntaxError: Unexpected identifier 'restore'`) — a Code node must be
+  re-pasted as a WHOLE block, never line-edited; (2) after fixing the quote,
+  `Get Restore Runs` still 404'd because the name no longer matched the
+  GitHub workflow name exactly → `workflows.find(...)` returned `undefined`
+  → URL `.../workflows/undefined/runs` → GitHub answers 404 "Not Found",
+  which reads like a missing repo, not a config typo. A workflow-name lookup
+  failure should be surfaced as its own diagnostics counter, not surfaced as
+  a provider 404 (deferred: cosmetic, the omit-never-guess behaviour was
+  still correct).
+- **Zero-object listing stops the chain silently:** `List R2 Monthly`
+  matched nothing (no monthly archive exists yet — the folder is not even
+  created) and n8n then passes zero items downstream, so Normalize never
+  ran and the execution ended green with no publish. Fix: both S3 nodes get
+  **Execute Once ON** (otherwise a multi-item input re-runs the listing per
+  item — 14× here — and would duplicate objects in `.all()`) and **Always
+  Output Data ON** (so an empty listing still emits one item and the chain
+  continues; the Normalize code treats it as a healthy empty branch).
+- **Evidence quality:** 14 R2 objects = 7 archive + 7 `.sha256` siblings
+  (`pairs: 7`, every archive checksummed); all 7 records GREEN with correct
+  run join (`created_at`..`updated_at + 10 min` window), sizes 5.98–6.03 MB,
+  retentionClass daily, `driveObjectKey` kept server-side; 25 GitHub backup
+  runs in history, older/unmatched runs omitted (`omittedNoRun`), the two
+  pre-R2-era failure runs correctly never matched.
+- **Restore-test runs omitted as designed:** all 8 historical runs are
+  `workflow_dispatch` with display title "Backup restore test" (no
+  daily/monthly marker) → retention class indeterminable →
+  `omittedUnknownClass`, no records. Restore evidence will start landing
+  with the first SCHEDULED restore test (`event == "schedule"` implies
+  monthly per the contract).
+- **Known cosmetic lag:** the morning's RED `backup-conn-github-2026-09-15`
+  failure record stays stored (the GREEN re-publish same-day hit the same
+  idempotency key → duplicate, skipped). The tile flips GREEN on the next
+  day's run under a new date key. Backup records are unaffected.
+- **Schedule correction pending:** the observed daily backup lands ~07:48
+  UTC (runs 12–15 Sep all start 07:48/07:55/07:29/07:11 UTC — the old
+  "02:17 UTC" spec value is wrong); the collector trigger must run ~1h
+  AFTER the backup, i.e. ~09:00 UTC, not 07:00.
+- Portal `/backups` verification against the live API and the Phase 8 gate
+  (match one displayed backup to R2 object + checksum + GitHub run + n8n
+  receipt, owner sign-off) remain open at the time of writing.
+
 ## Explicitly not done in Phase 8
 
 - No backup download, decryption or restore, ever, through the portal.
