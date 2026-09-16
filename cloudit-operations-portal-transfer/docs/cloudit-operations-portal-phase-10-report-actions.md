@@ -329,3 +329,31 @@ recorded here so the implementation can be audited against intent.
   or signatures reach the browser bundle or HTML; no new runtime
   dependencies; `.env` scratch file and the workflow generator under
   `.scratch/` are gitignored; nothing committed.
+
+## Production deployment record (2026-09-16)
+
+- **Commit**: `0afccde` (`feat(operations): add phase 10 guarded report actions`),
+  pushed to `master` and deployed via GitHub Actions.
+- **Migration**: `0011_report_command_lifecycle.sql` applied automatically by
+  `deploy.sh`; the owner re-ran
+  `bash infra/scripts/ensure-operations-database.sh` on the server and confirmed
+  idempotent re-application (`already exists, skipping` on every object, final
+  line `OK: 4 roles, 26 tables, Cavetta catalogue seeded`).
+- **Portal**: `https://operations.cloudit.lk/reports` shows the intended
+  fail-closed state — "Report actions are locked: owner MFA (TOTP) is not
+  enabled." banner, no action buttons, August/July DRAFT cards with
+  Preview/Download PDF intact.
+- **n8n**: `CloudIT - Guarded Report Command` imported **inactive** with
+  credentials linked (webhook Header Auth `CloudIT Report Command`; four HTTP
+  nodes on `CloudIT Operations Internal API`).
+- **Owner decision**: the owner explicitly declined TOTP for now. Login stays
+  email+password, `OPERATIONS_MFA_REQUIRED=false`, the action controls stay
+  hidden, and the command workflow stays inactive. This is the intended parked
+  state — every action path fails closed with `MFA_NOT_ENABLED`, so no report
+  command can be issued from the portal until TOTP is configured.
+- **Deferred**: kickoff step 7 (controlled non-real production acceptance)
+  cannot run without MFA and is parked, not failed. To unlock later: configure
+  TOTP, set `OPERATIONS_MFA_REQUIRED=true`, activate the command workflow in
+  n8n, then run the controlled non-real lifecycle test with the owner's
+  approval. A real report may be approved/rejected/sent only with a separate
+  explicit authorization. No real report was touched during construction.

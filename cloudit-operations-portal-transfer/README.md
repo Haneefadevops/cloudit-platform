@@ -35,6 +35,14 @@ Operations Portal planned for `operations.cloudit.lk`.
   Deployment, relay activation, and the unchanged-state real-DRAFT gate remain
   pending owner approval. See
   `docs/cloudit-operations-portal-phase-9-report-centre.md`.
+- Phase 10 (guarded report actions): built, committed (`0afccde`) and deployed
+  on 16 September 2026. Migration `0011` applied automatically and verified
+  idempotent; the command workflow `CloudIT - Guarded Report Command` is
+  imported inactive with credentials. The owner declined TOTP for now, so the
+  action controls stay hidden and every command path fails closed
+  (`MFA_NOT_ENABLED`) until TOTP is enabled and the workflow is activated.
+  Controlled non-real production acceptance is deferred until then. See
+  `docs/cloudit-operations-portal-phase-10-report-actions.md`.
 - The scheduled 1 October 2026 Phase 5E acceptance remains pending and its real
   report must remain `DRAFT` during review.
 - `ticketing_enabled` must remain `false`.
