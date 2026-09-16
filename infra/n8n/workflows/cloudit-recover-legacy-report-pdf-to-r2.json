@@ -8,7 +8,10 @@
       "name": "Manual Recovery Only",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -44,28 +47,37 @@
       "name": "Load Exact Legacy Draft",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
-      "position": [460, 300],
+      "position": [
+        460,
+        300
+      ],
       "alwaysOutputData": true
     },
     {
       "parameters": {
-        "jsCode": "// Fail closed unless exactly one unsent, unapproved August 2026 DRAFT still points to legacy Google Drive.\nconst rows = $input.all().map((item) => item.json ?? {}).filter((row) => Object.keys(row).length > 0);\nif (rows.length !== 1) throw new Error('Recovery denied: expected exactly one DRAFT row');\nconst row = rows[0];\nconst clean = (value) => String(value ?? '').trim();\nconst reportMonth = clean(row.reportMonth);\nconst reportType = clean(row.reportType).toUpperCase();\nconst state = clean(row.documentStatus).toUpperCase();\nconst fileName = clean(row.pdfFileName);\nconst oldFileId = clean(row.pdfDriveFileId);\nconst oldUrl = clean(row.pdfDriveUrl);\nconst approvedAt = clean(row.approvedAt);\nconst sentAt = clean(row.sentAt);\nconst reportBody = clean(row.reportBody);\nif (reportMonth !== '2026-08' || reportType !== 'MONTHLY_MAINTENANCE' || state !== 'DRAFT' || approvedAt || sentAt) throw new Error('Recovery denied: report is not the expected unsent DRAFT');\nif (fileName !== 'Cavetta-Monthly-Maintenance-Report-2026-08.pdf') throw new Error('Recovery denied: unexpected PDF filename');\nif (!/^[A-Za-z0-9_-]{10,200}$/.test(oldFileId) || !/^https:\\/\\/drive\\.google\\.com\\//i.test(oldUrl)) throw new Error('Recovery denied: row is not a legacy Google Drive record');\nif (reportBody.length < 20) throw new Error('Recovery denied: stored report body is unavailable');\nconst objectKey = `Cavetta Maintenance Reports/2026/${fileName}`;\nreturn [{ json: { ...row, reportMonth, reportType, fileName, objectKey } }];"
+        "jsCode": "// Fail closed unless exactly one unsent, unapproved August 2026 DRAFT is being recovered.\nconst rows = $input.all().map((item) => item.json ?? {}).filter((row) => Object.keys(row).length > 0);\nif (rows.length !== 1) throw new Error('Recovery denied: expected exactly one DRAFT row');\nconst row = rows[0];\nconst clean = (value) => String(value ?? '').trim();\nconst reportMonth = clean(row.reportMonth);\nconst reportType = clean(row.reportType).toUpperCase();\nconst state = clean(row.documentStatus).toUpperCase();\nconst fileName = clean(row.pdfFileName);\nconst oldFileId = clean(row.pdfDriveFileId);\nconst oldUrl = clean(row.pdfDriveUrl);\nconst approvedAt = clean(row.approvedAt);\nconst sentAt = clean(row.sentAt);\nconst reportBody = clean(row.reportBody);\nif (reportMonth !== '2026-08' || reportType !== 'MONTHLY_MAINTENANCE' || state !== 'DRAFT' || approvedAt || sentAt) throw new Error('Recovery denied: report is not the expected unsent DRAFT');\nif (fileName !== 'Cavetta-Monthly-Maintenance-Report-2026-08.pdf') throw new Error('Recovery denied: unexpected PDF filename');\nconst objectKey = `Cavetta Maintenance Reports/2026/${fileName}`;\nconst r2Url = `r2://cavetta-private-storage/${objectKey}`;\nconst isLegacyDrive = /^[A-Za-z0-9_-]{10,200}$/.test(oldFileId) && /^https:\\/\\/drive\\.google\\.com\\//i.test(oldUrl);\nconst isExactPriorRecovery = oldFileId === objectKey && oldUrl === r2Url;\nif (!isLegacyDrive && !isExactPriorRecovery) throw new Error('Recovery denied: unexpected existing PDF storage metadata');\nif (reportBody.length < 20) throw new Error('Recovery denied: stored report body is unavailable');\nreturn [{ json: { ...row, reportMonth, reportType, fileName, objectKey } }];"
       },
       "id": "2e4b9a2f-bbf2-4103-bfee-2dc78b448259",
       "name": "Validate Recoverable Draft",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Rebuild a self-contained PDF source from the authoritative stored DRAFT.\nconst row = $json;\nconst escapeHtml = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\\\"', '&quot;').replaceAll(\"'\", '&#039;');\nconst title = `Monthly Maintenance Report — ${escapeHtml(row.reportMonthLabel || row.reportMonth)}`;\nconst status = escapeHtml(String(row.overallResult || 'NO_DATA').toUpperCase());\nconst generatedAt = escapeHtml(row.generatedAt || 'Not recorded');\nconst body = escapeHtml(row.reportBody);\nconst html = `<!doctype html><html><head><meta charset=\"utf-8\"><style>@page{size:A4;margin:16mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#171717;font-size:10.5pt;line-height:1.5;margin:0}header{border-bottom:2px solid #222;padding-bottom:14px;margin-bottom:22px}h1{font-size:22pt;margin:0 0 6px}.meta{color:#666;font-size:9pt}.badge{display:inline-block;border:1px solid #b89b4c;background:#fff8df;border-radius:999px;padding:4px 9px;font-weight:700;margin:12px 0}.report{white-space:pre-wrap;overflow-wrap:anywhere;border-top:1px solid #ddd;padding-top:16px}footer{border-top:1px solid #ddd;color:#777;font-size:8.5pt;margin-top:26px;padding-top:10px}</style></head><body><header><h1>${title}</h1><div class=\"meta\">Cavetta Properties · CloudIT Pvt Ltd</div><div class=\"badge\">${status} · DRAFT</div><div class=\"meta\">Original report generated: ${generatedAt}</div></header><main class=\"report\">${body}</main><footer>Recovered from the authoritative stored DRAFT and regenerated into private Cloudflare R2 storage. No approval or delivery action was performed.</footer></body></html>`;\nreturn [{ json: { ...row, reportHtml: html } }];"
+        "jsCode": "const source = $json;\n\n// Recovery is deliberately self-contained; retain the original template defaults.\nconst maintenanceConfig = {};\n\nconst clientName = String(\n  maintenanceConfig.client_name ?? \"Cavetta Properties\"\n).trim();\n\nconst publicSiteUrl = String(\n  maintenanceConfig.public_site_url ?? \"https://cavetta.mt/\"\n).trim();\n\nconst companyLogoUrl = String(\n  maintenanceConfig.company_logo_url ??\n    \"https://ik.imagekit.io/4z66kkrjv/company-assets/cloudit_logo.png\"\n).trim();\n\nconst reportSenderName = String(\n  maintenanceConfig.report_sender_name ?? \"CloudIT Pvt Ltd\"\n).trim();\n\nconst escapeHtml = (value) =>\n  String(value ?? \"\")\n    .replaceAll(\"&\", \"&amp;\")\n    .replaceAll(\"<\", \"&lt;\")\n    .replaceAll(\">\", \"&gt;\")\n    .replaceAll('\"', \"&quot;\")\n    .replaceAll(\"'\", \"&#039;\");\n\nconst text = (value, fallback = \"\") => {\n  const result = String(value ?? \"\").trim();\n  return result || fallback;\n};\n\nconst normalizedStatus = (value) =>\n  text(value, \"NO_DATA\").toUpperCase();\n\nconst numeric = (value) => {\n  if (value === null || value === undefined || value === \"\") {\n    return null;\n  }\n\n  const parsed = Number(value);\n  return Number.isFinite(parsed) ? parsed : null;\n};\n\nconst displayNumber = (\n  value,\n  status = \"GREEN\",\n  suffix = \"\",\n  maximumFractionDigits = 2\n) => {\n  if (normalizedStatus(status) === \"NO_DATA\") {\n    return \"N/A\";\n  }\n\n  const parsed = numeric(value);\n\n  if (parsed === null) {\n    return \"N/A\";\n  }\n\n  return (\n    parsed.toLocaleString(\"en-GB\", { maximumFractionDigits }) +\n    suffix\n  );\n};\n\nconst formatBytes = (value, status = \"GREEN\") => {\n  if (normalizedStatus(status) === \"NO_DATA\") {\n    return \"N/A\";\n  }\n\n  const bytes = numeric(value);\n\n  if (bytes === null || bytes < 0) {\n    return \"N/A\";\n  }\n\n  if (bytes === 0) {\n    return \"0 B\";\n  }\n\n  const units = [\"B\", \"KB\", \"MB\", \"GB\", \"TB\"];\n  const unitIndex = Math.min(\n    Math.floor(Math.log(bytes) / Math.log(1000)),\n    units.length - 1\n  );\n\n  return `${(bytes / Math.pow(1000, unitIndex)).toFixed(2)} ${units[unitIndex]}`;\n};\n\nconst statusClass = (value) => {\n  const status = normalizedStatus(value);\n\n  if ([\"GREEN\", \"FULL\", \"HEALTHY\", \"SUCCESS\", \"AVAILABLE\", \"OK\", \"PASS\"].includes(status)) {\n    return \"status-good\";\n  }\n\n  if ([\"RED\", \"FAILED\", \"FAILURE\", \"CRITICAL\", \"FAIL\"].includes(status)) {\n    return \"status-bad\";\n  }\n\n  return \"status-warning\";\n};\n\nconst statusBadge = (value) => {\n  const status = normalizedStatus(value);\n\n  return `<span class=\"status ${statusClass(status)}\">${escapeHtml(\n    status.replaceAll(\"_\", \" \")\n  )}</span>`;\n};\n\nconst safeLink = (url, label) => {\n  const value = text(url);\n\n  if (!/^https:\\/\\/[^\\s]+$/i.test(value)) {\n    return `<span class=\"muted\">Not available</span>`;\n  }\n\n  return `<a href=\"${escapeHtml(value)}\">${escapeHtml(label)}</a>`;\n};\n\nconst parseJsonArray = (value) => {\n  try {\n    const parsed = JSON.parse(String(value ?? \"[]\"));\n    return Array.isArray(parsed) ? parsed : [];\n  } catch {\n    return [];\n  }\n};\n\nconst expectedSources = [\n  [\"WEEKLY_HEALTH\", \"Weekly health and availability\"],\n  [\"INCIDENTS_RECOVERIES\", \"Incidents and recoveries\"],\n  [\"BACKUP_RESTORE\", \"Backup and isolated restore-test evidence\"],\n  [\"GA4_ANALYTICS\", \"GA4\"],\n  [\"VERCEL_WEB_ANALYTICS\", \"Vercel Web Analytics\"],\n  [\"SUPABASE_INFRASTRUCTURE\", \"Supabase infrastructure\"],\n  [\"IMAGEKIT_USAGE\", \"ImageKit usage\"],\n];\n\nconst parsedSnapshots = parseJsonArray(source.sourceSnapshotsJson);\nconst snapshotsByKey = new Map(\n  parsedSnapshots.map((snapshot) => [text(snapshot.sourceKey), snapshot])\n);\n\nconst reportMonth = text(source.reportMonth, \"unknown\").replace(/[^0-9-]/g, \"\");\nconst reportMonthLabel = text(source.reportMonthLabel, reportMonth);\n\nconst snapshots = expectedSources.map(([sourceKey, sourceLabel]) => {\n  const stored = snapshotsByKey.get(sourceKey);\n\n  if (stored) {\n    return {\n      ...stored,\n      sourceKey,\n      sourceLabel: text(stored.sourceLabel, sourceLabel),\n      coverage: normalizedStatus(stored.coverage),\n    };\n  }\n\n  return {\n    sourceKey,\n    sourceLabel,\n    reportMonth,\n    coverage: \"NO_DATA\",\n    freshness: \"UNKNOWN\",\n    validationStatus: \"MISSING\",\n    requestedPeriodStart: \"\",\n    requestedPeriodEndExclusive: \"\",\n    requestedTimezone: \"Europe/Malta\",\n    providerTimezone: \"\",\n    boundarySemantics: \"\",\n    actualPeriodStart: \"\",\n    actualPeriodEndExclusive: \"\",\n    capturedAt: \"\",\n    sourceAsOf: \"\",\n    evidenceCount: 0,\n    expectedEvidenceCount: null,\n    retentionLimit: \"\",\n    latestSafeCollectionAt: \"\",\n    coverageDetail: `No stored ${reportMonth} snapshot exists for this required source.`,\n    actionRequired: \"Keep the report in DRAFT and investigate the missing scheduled snapshot.\",\n  };\n});\n\nconst getSnapshot = (sourceKey) =>\n  snapshots.find((snapshot) => snapshot.sourceKey === sourceKey);\n\nconst loadedSnapshotCount = snapshots.filter(\n  (snapshot) => text(snapshot.validationStatus).toUpperCase() === \"PRESENT\"\n).length;\n\nconst partialSnapshotCount = snapshots.filter(\n  (snapshot) => snapshot.coverage === \"PARTIAL\"\n).length;\n\nconst noDataSnapshotCount = snapshots.filter(\n  (snapshot) => snapshot.coverage === \"NO_DATA\"\n).length;\n\nconst invalidSnapshotCount = snapshots.filter((snapshot) =>\n  [\"MISSING\", \"DUPLICATE\", \"INVALID_COVERAGE\"].includes(\n    text(snapshot.validationStatus).toUpperCase()\n  )\n).length;\n\nconst snapshotContractComplete =\n  parsedSnapshots.length === expectedSources.length &&\n  loadedSnapshotCount === expectedSources.length &&\n  invalidSnapshotCount === 0;\n\nconst snapshotContractStatus = snapshotContractComplete ? \"PASS\" : \"FAIL\";\n\nconst snapshotOverallCoverage =\n  noDataSnapshotCount > 0\n    ? \"NO_DATA\"\n    : partialSnapshotCount > 0\n      ? \"PARTIAL\"\n      : \"FULL\";\n\nconst firstSnapshot = snapshots[0] ?? {};\nconst canonicalRequestedStart = text(firstSnapshot.requestedPeriodStart, \"Not available\");\nconst canonicalRequestedEnd = text(\n  firstSnapshot.requestedPeriodEndExclusive,\n  \"Not available\"\n);\nconst canonicalTimezone = text(firstSnapshot.requestedTimezone, \"Europe/Malta\");\n\nconst evidenceCards = snapshots\n  .map((snapshot) => {\n    const expectedEvidence = numeric(snapshot.expectedEvidenceCount);\n    const evidenceText = `${numeric(snapshot.evidenceCount) ?? 0} of ${\n      expectedEvidence === null ? \"not specified\" : expectedEvidence\n    }`;\n\n    return `\n      <article class=\"evidence-card\">\n        <div class=\"card-row\">\n          <h3>${escapeHtml(snapshot.sourceLabel)}</h3>\n          ${statusBadge(snapshot.coverage)}\n        </div>\n\n        <dl class=\"evidence-details\">\n          <dt>Requested period</dt>\n          <dd>${escapeHtml(text(snapshot.requestedPeriodStart, \"Not available\"))} to ${escapeHtml(\n            text(snapshot.requestedPeriodEndExclusive, \"Not available\")\n          )} exclusive (${escapeHtml(text(snapshot.requestedTimezone, \"Not documented\"))})</dd>\n\n          <dt>Actual period</dt>\n          <dd>${escapeHtml(text(snapshot.actualPeriodStart, \"Not available\"))} to ${escapeHtml(\n            text(snapshot.actualPeriodEndExclusive, \"Not available\")\n          )} exclusive</dd>\n\n          <dt>Capture / source-as-of</dt>\n          <dd>${escapeHtml(text(snapshot.capturedAt, \"Not available\"))} / ${escapeHtml(\n            text(snapshot.sourceAsOf, \"Not available\")\n          )}</dd>\n\n          <dt>Freshness / evidence</dt>\n          <dd>${escapeHtml(text(snapshot.freshness, \"UNKNOWN\"))} / ${escapeHtml(evidenceText)}</dd>\n\n          <dt>Provider boundaries</dt>\n          <dd>${escapeHtml(text(snapshot.providerTimezone, \"Not documented\"))}; ${escapeHtml(\n            text(snapshot.boundarySemantics, \"Not documented\")\n          )}</dd>\n\n          <dt>Retention</dt>\n          <dd>${escapeHtml(text(snapshot.retentionLimit, \"Not documented\"))}</dd>\n        </dl>\n\n        <p><strong>Coverage:</strong> ${escapeHtml(\n          text(snapshot.coverageDetail, \"No coverage detail available\")\n        )}</p>\n\n        ${\n          snapshot.coverage !== \"FULL\"\n            ? `<div class=\"source-warning\"><strong>Action:</strong> ${escapeHtml(\n                text(snapshot.actionRequired, \"Review this source before approval.\")\n              )}</div>`\n            : \"\"\n        }\n      </article>\n    `;\n  })\n  .join(\"\");\n\nconst overallResult = normalizedStatus(source.overallResult);\nconst healthResult = normalizedStatus(source.healthResult);\nconst incidentResult = normalizedStatus(source.incidentResult);\nconst backupResult = normalizedStatus(source.backupResult);\nconst analyticsResult = normalizedStatus(source.analyticsResult);\nconst vercelAnalyticsResult = normalizedStatus(source.vercelAnalyticsResult);\nconst supabaseInfrastructureResult = normalizedStatus(\n  source.supabaseInfrastructureResult\n);\nconst supabaseApiRequestResult = normalizedStatus(source.supabaseApiRequestResult);\nconst imagekitUsageResult = normalizedStatus(source.imagekitUsageResult);\nconst imagekitQuotaStatus = normalizedStatus(source.imagekitQuotaStatus);\n\nconst expectedOverviewServices = [\n  \"Uptime Kuma\",\n  \"Vercel\",\n  \"Supabase\",\n  \"ImageKit\",\n  \"Backups\",\n];\n\nconst parsedInfrastructureOverview = parseJsonArray(\n  source.infrastructureOverviewJson\n);\n\nconst overviewByService = new Map(\n  parsedInfrastructureOverview\n    .filter(\n      (entry) =>\n        entry &&\n        typeof entry === \"object\" &&\n        !Array.isArray(entry)\n    )\n    .map((entry) => [text(entry.service), entry])\n);\n\nconst infrastructureOverview = expectedOverviewServices.map(\n  (service) => {\n    const stored = overviewByService.get(service);\n\n    if (stored) {\n      return {\n        service,\n        healthStatus: normalizedStatus(stored.healthStatus),\n        health: text(\n          stored.health,\n          \"No service-health detail is available.\"\n        ),\n        analyticsStatus: normalizedStatus(\n          stored.analyticsStatus\n        ),\n        usageAnalytics: text(\n          stored.usageAnalytics,\n          \"No aggregate usage or analytics detail is available.\"\n        ),\n        evidenceLinks:\n          stored.evidenceLinks &&\n          typeof stored.evidenceLinks === \"object\" &&\n          !Array.isArray(stored.evidenceLinks)\n            ? stored.evidenceLinks\n            : {},\n      };\n    }\n\n    return {\n      service,\n      healthStatus: \"NO_DATA\",\n      health: \"No service-health detail is available.\",\n      analyticsStatus: \"NO_DATA\",\n      usageAnalytics:\n        \"No aggregate usage or analytics detail is available. This does not indicate application downtime.\",\n      evidenceLinks: {},\n    };\n  }\n);\n\nconst infrastructureOverviewRows = infrastructureOverview\n  .map((entry) => {\n    const backupUrl = text(\n      entry.evidenceLinks.latestBackupRun\n    );\n    const restoreUrl = text(\n      entry.evidenceLinks.latestRestoreTestRun\n    );\n\n    const evidenceLinks = [\n      backupUrl\n        ? safeLink(backupUrl, \"Latest backup run\")\n        : \"\",\n      restoreUrl\n        ? safeLink(restoreUrl, \"Latest restore-test run\")\n        : \"\",\n    ]\n      .filter(Boolean)\n      .join(\" &middot; \");\n\n    return `\n      <tr>\n        <td><strong>${escapeHtml(entry.service)}</strong></td>\n        <td>\n          ${statusBadge(entry.healthStatus)}\n          <p class=\"overview-detail\">${escapeHtml(entry.health)}</p>\n        </td>\n        <td>\n          ${statusBadge(entry.analyticsStatus)}\n          <p class=\"overview-detail\">${escapeHtml(entry.usageAnalytics)}</p>\n          ${evidenceLinks ? `<p class=\"overview-links\">${evidenceLinks}</p>` : \"\"}\n        </td>\n      </tr>\n    `;\n  })\n  .join(\"\");\n\nconst vercelSnapshot = getSnapshot(\"VERCEL_WEB_ANALYTICS\");\nconst supabaseSnapshot = getSnapshot(\"SUPABASE_INFRASTRUCTURE\");\nconst imagekitSnapshot = getSnapshot(\"IMAGEKIT_USAGE\");\n\nconst vercelTopRoutes = parseJsonArray(source.vercelTopRoutesJson).slice(0, 5);\nconst vercelRouteRows =\n  vercelAnalyticsResult !== \"NO_DATA\" && vercelTopRoutes.length > 0\n    ? vercelTopRoutes\n        .map(\n          (route, index) => `\n            <tr>\n              <td>${index + 1}</td>\n              <td>${escapeHtml(route.path ?? \"/\")}</td>\n              <td>${displayNumber(route.visitors, vercelAnalyticsResult, \"\", 0)}</td>\n              <td>${displayNumber(route.pageviews, vercelAnalyticsResult, \"\", 0)}</td>\n            </tr>\n          `\n        )\n        .join(\"\")\n    : `<tr><td colspan=\"4\" class=\"muted\">No public route data available for this exact report period.</td></tr>`;\n\nconst generatedAt = new Intl.DateTimeFormat(\"en-GB\", {\n  dateStyle: \"long\",\n  timeStyle: \"short\",\n  timeZone: \"Europe/Malta\",\n}).format(new Date());\n\nconst executiveSummary = text(\n  source.executiveSummary,\n  \"This DRAFT requires review before approval.\"\n);\n\nconst actionRequired = text(\n  source.actionRequired ?? source.recommendedAction ?? source.recommendedActions,\n  overallResult === \"GREEN\"\n    ? \"Continue routine monitoring.\"\n    : \"Review the sections marked AMBER, RED, PARTIAL, or NO_DATA.\"\n);\n\nconst supabaseActionRequired = text(\n  source.supabaseInfrastructureActionRequired,\n  \"None\"\n);\n\nconst imagekitActionRequired = text(source.imagekitUsageActionRequired, \"None\");\nconst pdfFileName = `Cavetta-Monthly-Maintenance-Report-${reportMonth}.pdf`;\n\nconst metricCard = (value, label) => `\n  <div class=\"metric\">\n    <span class=\"metric-value\">${escapeHtml(value)}</span>\n    <span class=\"metric-label\">${escapeHtml(label)}</span>\n  </div>\n`;\n\nconst html = `<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <style>\n    @page { size: A4; margin: 14mm; }\n    * { box-sizing: border-box; }\n    body { margin: 0; color: #171717; background: #fff; font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; line-height: 1.45; }\n    .page { width: 100%; }\n    .header { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-bottom: 16px; border-bottom: 2px solid #202020; }\n    .logo { display: block; width: 145px; height: auto; object-fit: contain; }\n    .company { text-align: right; font-size: 9pt; color: #4b4b4b; }\n    .company strong { display: block; color: #171717; font-size: 11pt; margin-bottom: 3px; }\n    h1 { margin: 24px 0 4px; font-size: 23pt; line-height: 1.2; }\n    h2 { margin: 24px 0 10px; font-size: 15pt; page-break-after: avoid; }\n    h3 { margin: 0 0 8px; font-size: 11pt; }\n    p { margin: 0 0 8px; }\n    .subtitle { margin: 0; color: #5b5b5b; font-size: 11pt; }\n    .summary { margin-top: 20px; padding: 18px; border: 1px solid #d6d6d6; border-radius: 8px; background: #f7f7f7; page-break-inside: avoid; }\n    .summary-heading, .card-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }\n    .summary-heading { margin-bottom: 10px; }\n    .summary-heading h2 { margin: 0; font-size: 14pt; }\n    .status { display: inline-block; min-width: 76px; padding: 5px 10px; border: 1px solid; border-radius: 999px; text-align: center; font-size: 8.5pt; font-weight: 700; letter-spacing: .4px; }\n    .status-good { color: #195c34; border-color: #85b899; background: #edf7f1; }\n    .status-warning { color: #714f00; border-color: #d4b766; background: #fff8df; }\n    .status-bad { color: #851f1f; border-color: #cf8d8d; background: #fff0f0; }\n    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }\n    .card, .evidence-card { padding: 14px; border: 1px solid #ddd; border-radius: 7px; page-break-inside: avoid; }\n    .evidence-card { margin-bottom: 10px; }\n    .evidence-details { display: grid; grid-template-columns: 135px 1fr; gap: 4px 10px; margin: 8px 0; font-size: 8.5pt; }\n    .evidence-details dt { color: #666; font-weight: 700; }\n    .evidence-details dd { margin: 0; overflow-wrap: anywhere; }\n    .source-warning { margin-top: 8px; padding: 9px; border-left: 4px solid #d4b766; background: #fff8df; }\n    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }\n    .metric-grid-two { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }\n    .metric { padding: 13px 8px; text-align: center; border: 1px solid #ddd; border-radius: 7px; page-break-inside: avoid; }\n    .metric-value { display: block; font-size: 20pt; line-height: 1.1; font-weight: 700; }\n    .metric-label { display: block; margin-top: 5px; color: #666; font-size: 8.5pt; }\n    table { width: 100%; border-collapse: collapse; }\n    th, td { padding: 9px; border-bottom: 1px solid #ddd; text-align: left; vertical-align: top; }\n    th { color: #555; font-weight: 600; }\n    .overview-table { table-layout: fixed; }\n    .overview-table th:first-child { width: 18%; }\n    .overview-table th:nth-child(2) { width: 36%; }\n    .overview-table th:nth-child(3) { width: 46%; }\n    .overview-table tr { page-break-inside: avoid; }\n    .overview-detail { margin: 7px 0 0; color: #555; font-size: 9pt; }\n    .overview-links { margin: 7px 0 0; font-size: 8.5pt; }\n    a { color: #222; text-decoration: underline; word-break: break-all; }\n    .muted { color: #777; }\n    .period { margin: 12px 0; padding: 10px; background: #f7f7f7; border-radius: 6px; color: #555; font-size: 9pt; overflow-wrap: anywhere; page-break-inside: avoid; }\n    .action-box { padding: 14px; border-left: 4px solid #555; background: #f5f5f5; page-break-inside: avoid; }\n    .section-spacing { margin-top: 12px; }\n    .footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #d6d6d6; color: #6b6b6b; font-size: 8.5pt; text-align: center; }\n  </style>\n</head>\n<body>\n  <main class=\"page\">\n    <header class=\"header\">\n      <img class=\"logo\" src=\"${escapeHtml(companyLogoUrl)}\" alt=\"${escapeHtml(reportSenderName)}\">\n      <div class=\"company\">\n        <strong>${escapeHtml(reportSenderName)}</strong>\n        <div>info@cloudit.lk</div>\n        <div>www.cloudit.lk</div>\n        <div>+94 75 686 8854</div>\n      </div>\n    </header>\n\n    <h1>Monthly Maintenance Report</h1>\n    <p class=\"subtitle\">${safeLink(publicSiteUrl, clientName)} &mdash; ${escapeHtml(reportMonthLabel)}</p>\n\n    <section class=\"summary\">\n      <div class=\"summary-heading\"><h2>Executive summary</h2>${statusBadge(overallResult)}</div>\n      <p>${escapeHtml(executiveSummary)}</p>\n    </section>\n\n    <h2>Monthly source-evidence assurance</h2>\n    <section class=\"summary\">\n      <div class=\"summary-heading\"><h2>Snapshot contract</h2>${statusBadge(snapshotContractStatus)}</div>\n      <p><strong>Coverage:</strong> ${statusBadge(snapshotOverallCoverage)}</p>\n      <p><strong>Snapshots loaded:</strong> ${loadedSnapshotCount} of ${expectedSources.length}</p>\n      <p><strong>Requested calendar window:</strong> ${escapeHtml(canonicalRequestedStart)} to ${escapeHtml(canonicalRequestedEnd)} exclusive (${escapeHtml(canonicalTimezone)})</p>\n      <p class=\"muted\">Every PARTIAL or NO DATA source below must be reviewed before this DRAFT can be approved.</p>\n    </section>\n\n    <section class=\"section-spacing\">${evidenceCards}</section>\n\n    <h2>Consolidated infrastructure overview</h2>\n    <p class=\"muted\">Service health and aggregate usage evidence are shown separately. Missing analytics does not mean the live application was unavailable.</p>\n    <table class=\"overview-table\">\n      <thead>\n        <tr>\n          <th>Service</th>\n          <th>Health</th>\n          <th>Usage / analytics</th>\n        </tr>\n      </thead>\n      <tbody>${infrastructureOverviewRows}</tbody>\n    </table>\n\n    <h2>Google Analytics</h2>\n    <section class=\"metric-grid\">\n      ${metricCard(displayNumber(source.totalUsers, analyticsResult, \"\", 0), \"Total users\")}\n      ${metricCard(displayNumber(source.newUsers, analyticsResult, \"\", 0), \"New users\")}\n      ${metricCard(displayNumber(source.sessions, analyticsResult, \"\", 0), \"Sessions\")}\n      ${metricCard(displayNumber(source.screenPageViews, analyticsResult, \"\", 0), \"Page views\")}\n    </section>\n    <p class=\"muted section-spacing\">${escapeHtml(text(getSnapshot(\"GA4_ANALYTICS\").coverageDetail, \"No GA4 coverage detail available.\"))}</p>\n\n    <h2>Vercel Web Analytics</h2>\n    <div class=\"summary-heading\"><h3>Monthly traffic</h3>${statusBadge(vercelAnalyticsResult)}</div>\n    <section class=\"metric-grid-two\">\n      ${metricCard(displayNumber(source.vercelVisitorCount, vercelAnalyticsResult, \"\", 0), \"Visitors\")}\n      ${metricCard(displayNumber(source.vercelPageviewCount, vercelAnalyticsResult, \"\", 0), \"Page views\")}\n    </section>\n    <div class=\"period\">Actual period: ${escapeHtml(text(source.vercelPeriodStart, \"Not available\"))} to ${escapeHtml(text(source.vercelPeriodEnd, \"Not available\"))} exclusive</div>\n    <h3>Top five public routes</h3>\n    <table><thead><tr><th>#</th><th>Public route</th><th>Visitors</th><th>Page views</th></tr></thead><tbody>${vercelRouteRows}</tbody></table>\n    <p class=\"muted\">${escapeHtml(text(vercelSnapshot.coverageDetail, \"No Vercel coverage detail available.\"))}</p>\n\n    <h2>Supabase infrastructure</h2>\n    <div class=\"summary-heading\"><h3>Monthly infrastructure health</h3>${statusBadge(supabaseInfrastructureResult)}</div>\n    <p class=\"muted\">${escapeHtml(text(supabaseSnapshot.coverageDetail, source.supabaseInfrastructureDetail ?? \"No Supabase infrastructure details are available.\"))}</p>\n    <section class=\"metric-grid\">\n      ${metricCard(displayNumber(source.supabaseInfrastructureSampleCount, supabaseInfrastructureResult, \"\", 0), \"Reporting samples\")}\n      ${metricCard(displayNumber(source.supabaseDatabaseSizeStartMb, supabaseInfrastructureResult, \" MB\"), \"Database size at start\")}\n      ${metricCard(displayNumber(source.supabaseDatabaseSizeEndMb, supabaseInfrastructureResult, \" MB\"), \"Database size at end\")}\n      ${metricCard(displayNumber(source.supabaseDatabaseSizeGrowthMb, supabaseInfrastructureResult, \" MB\"), \"Database growth\")}\n    </section>\n    <div class=\"period\">Sample period: ${escapeHtml(text(source.supabaseDatabaseSizeStartAt, \"Not available\"))} to ${escapeHtml(text(source.supabaseDatabaseSizeEndAt, \"Not available\"))} exclusive</div>\n    <section class=\"metric-grid\">\n      ${metricCard(displayNumber(source.supabasePeakDirectConnections, supabaseInfrastructureResult, \"\", 0), \"Peak direct connections\")}\n      ${metricCard(displayNumber(source.supabasePeakSupavisorConnections, supabaseInfrastructureResult, \"\", 0), \"Peak Supavisor connections\")}\n      ${metricCard(displayNumber(source.supabasePeakConnectionUtilizationPercent, supabaseInfrastructureResult, \"%\"), \"Peak PgBouncer utilization\")}\n      ${metricCard(displayNumber(source.supabasePeakDiskUsedPercent, supabaseInfrastructureResult, \"%\"), \"Peak disk usage\")}\n    </section>\n    <section class=\"metric-grid-two section-spacing\">\n      ${metricCard(displayNumber(source.supabasePeakMemoryUsedPercent, supabaseInfrastructureResult, \"%\"), \"Peak memory usage\")}\n      ${metricCard(displayNumber(source.supabaseNoDataSampleCount, supabaseInfrastructureResult, \"\", 0), \"No-data samples\")}\n    </section>\n    <div class=\"card section-spacing\"><div class=\"card-row\"><h3>Supabase API request totals</h3>${statusBadge(supabaseApiRequestResult)}</div><p>Exact-period request total: <strong>${displayNumber(source.supabaseApiRequestTotal, supabaseApiRequestResult, \"\", 0)}</strong></p><p class=\"muted\">${escapeHtml(text(source.supabaseApiRequestDetail, \"No exact-period Supabase API request data is available.\"))}</p></div>\n    ${supabaseActionRequired.toUpperCase() !== \"NONE\" ? `<div class=\"action-box section-spacing\"><strong>Infrastructure action:</strong> ${escapeHtml(supabaseActionRequired)}</div>` : \"\"}\n\n    <h2>ImageKit usage analytics</h2>\n    <div class=\"summary-heading\"><h3>Exact-month account usage</h3>${statusBadge(imagekitUsageResult)}</div>\n    <p class=\"muted\">${escapeHtml(text(imagekitSnapshot.coverageDetail, source.imagekitUsageDetail ?? \"No ImageKit usage details are available.\"))}</p>\n    <section class=\"metric-grid\">\n      ${metricCard(formatBytes(source.imagekitBandwidthBytes, imagekitUsageResult), `Bandwidth (${displayNumber(source.imagekitBandwidthUsagePercent, imagekitUsageResult, \"%\")} of quota)`)}\n      ${metricCard(formatBytes(source.imagekitMediaLibraryStorageBytes, imagekitUsageResult), `Media Library storage (${displayNumber(source.imagekitMediaLibraryStorageUsagePercent, imagekitUsageResult, \"%\")} of quota)`)}\n      ${metricCard(displayNumber(source.imagekitVideoProcessingUnitsCount, imagekitUsageResult, \"\", 0), `Video units (${displayNumber(source.imagekitVideoProcessingUsagePercent, imagekitUsageResult, \"%\")} of quota)`)}\n      ${metricCard(displayNumber(source.imagekitExtensionUnitsCount, imagekitUsageResult, \"\", 0), `Extension units (${displayNumber(source.imagekitExtensionUsagePercent, imagekitUsageResult, \"%\")} of quota)`)}\n    </section>\n    <section class=\"metric-grid-two section-spacing\">\n      ${metricCard(formatBytes(source.imagekitOriginalCacheStorageBytes, imagekitUsageResult), \"Original cache storage\")}\n      ${metricCard(displayNumber(source.imagekitUsageWarningPercent, imagekitUsageResult, \"%\"), \"Configured warning threshold\")}\n    </section>\n    <div class=\"period\">Actual period: ${escapeHtml(text(source.imagekitPeriodStart, \"Not available\"))} to ${escapeHtml(text(source.imagekitPeriodEnd, \"Not available\"))} exclusive<br>Provider timezone: ${escapeHtml(text(imagekitSnapshot.providerTimezone, \"Not documented\"))}<br>Source as of: ${escapeHtml(text(imagekitSnapshot.sourceAsOf, \"Not available\"))}<br>Quota status: ${statusBadge(imagekitQuotaStatus)}</div>\n    ${imagekitActionRequired.toUpperCase() !== \"NONE\" ? `<div class=\"action-box section-spacing\"><strong>ImageKit action:</strong> ${escapeHtml(imagekitActionRequired)}</div>` : \"\"}\n\n    <h2>Backup evidence</h2>\n    <table><tbody>\n      <tr><th>Database backup workflow</th><td>${safeLink(source.latestDatabaseRunUrl, \"View latest database backup run\")}</td></tr>\n      <tr><th>Backup restore test</th><td>${safeLink(source.latestRestoreRunUrl, \"View latest restore-test run\")}</td></tr>\n    </tbody></table>\n\n    <h2>Recommended action</h2>\n    <section class=\"action-box\">${escapeHtml(actionRequired)}</section>\n\n    <footer class=\"footer\">Generated ${escapeHtml(generatedAt)} Europe/Malta<br>${escapeHtml(reportSenderName)} &middot; info@cloudit.lk &middot; www.cloudit.lk</footer>\n  </main>\n</body>\n</html>`;\n\nreturn {\n  json: {\n    ...source,\n    reportHtml: html,\n    pdfFileName,\n    pdfGeneratedAt: new Date().toISOString(),\n  },\n};\n\n\n"
       },
       "id": "4f3e7ead-84a8-4f6d-aa8c-577f75215b37",
       "name": "Build Recovery HTML",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -79,7 +91,10 @@
       "name": "Convert Recovery HTML to File",
       "type": "n8n-nodes-base.convertToFile",
       "typeVersion": 1.1,
-      "position": [1120, 300]
+      "position": [
+        1120,
+        300
+      ]
     },
     {
       "parameters": {
@@ -126,7 +141,10 @@
       "name": "Generate Recovery PDF",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [1340, 300]
+      "position": [
+        1340,
+        300
+      ]
     },
     {
       "parameters": {
@@ -137,7 +155,10 @@
       "name": "Validate Generated PDF",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1560, 300]
+      "position": [
+        1560,
+        300
+      ]
     },
     {
       "parameters": {
@@ -156,7 +177,10 @@
       "name": "Upload Recovered PDF to R2",
       "type": "n8n-nodes-base.s3",
       "typeVersion": 1,
-      "position": [1780, 300]
+      "position": [
+        1780,
+        300
+      ]
     },
     {
       "parameters": {
@@ -166,7 +190,10 @@
       "name": "Prepare Recovered Metadata",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2000, 300]
+      "position": [
+        2000,
+        300
+      ]
     },
     {
       "parameters": {
@@ -254,7 +281,10 @@
       "name": "Update Only PDF Metadata",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
-      "position": [2220, 300]
+      "position": [
+        2220,
+        300
+      ]
     },
     {
       "parameters": {
@@ -264,39 +294,122 @@
       "name": "Recovery Complete",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2440, 300]
+      "position": [
+        2440,
+        300
+      ]
     }
   ],
   "connections": {
     "Manual Recovery Only": {
-      "main": [[{ "node": "Load Exact Legacy Draft", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Load Exact Legacy Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Load Exact Legacy Draft": {
-      "main": [[{ "node": "Validate Recoverable Draft", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Validate Recoverable Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Validate Recoverable Draft": {
-      "main": [[{ "node": "Build Recovery HTML", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Build Recovery HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Build Recovery HTML": {
-      "main": [[{ "node": "Convert Recovery HTML to File", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Convert Recovery HTML to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Convert Recovery HTML to File": {
-      "main": [[{ "node": "Generate Recovery PDF", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Generate Recovery PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Generate Recovery PDF": {
-      "main": [[{ "node": "Validate Generated PDF", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Validate Generated PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Validate Generated PDF": {
-      "main": [[{ "node": "Upload Recovered PDF to R2", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Upload Recovered PDF to R2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Upload Recovered PDF to R2": {
-      "main": [[{ "node": "Prepare Recovered Metadata", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Prepare Recovered Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Prepare Recovered Metadata": {
-      "main": [[{ "node": "Update Only PDF Metadata", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Update Only PDF Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Update Only PDF Metadata": {
-      "main": [[{ "node": "Recovery Complete", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Recovery Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
