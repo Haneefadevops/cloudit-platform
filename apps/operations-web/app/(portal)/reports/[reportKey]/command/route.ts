@@ -12,7 +12,6 @@ import {
 } from "../../../../../lib/operations-api";
 import { getOperationsRuntimeConfig } from "../../../../../lib/runtime-config";
 import { requireOperationsSession } from "../../../../../lib/server-session";
-import { verifyTotp } from "../../../../../lib/totp";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -67,24 +66,21 @@ export async function POST(
     return jsonError(500, "Action could not be recorded. No change was made.");
   }
 
-  // 2. Fail-closed config gate: actions are never exposed until owner TOTP is enabled.
-  if (!config.mfaRequired) return jsonError(403, "rejected_mfa");
-
+  // 2. Rate limit: max 10 action attempts per 10-minute window per session+IP.
   const forwardedFor = request.headers.get("x-forwarded-for");
   const clientIp = forwardedFor?.split(",").pop()?.trim() || "unknown";
   const rateLimitKey = `${session.email}|${clientIp}`;
 
-  // 3. Rate limit: max 10 action attempts per 10-minute window per session+IP.
   if (isActionRateLimited(rateLimitKey)) return jsonError(429, "rejected_rate_limit");
 
-  // 4. Strict Origin check (the SameSite=Strict cookie is the first layer; this is the second).
+  // 3. Strict Origin check (the SameSite=Strict cookie is the first layer; this is the second).
   const expectedOrigin = new URL(config.publicOrigin).origin;
   if (request.headers.get("origin") !== expectedOrigin) {
     recordActionFailure(rateLimitKey);
     return jsonError(403, "rejected_csrf");
   }
 
-  // 5. Bounded JSON body.
+  // 4. Bounded JSON body.
   const rawLength = Number(request.headers.get("content-length"));
   if (Number.isFinite(rawLength) && rawLength > MAX_BODY_BYTES) {
     return jsonError(400, "Invalid request");
@@ -97,7 +93,6 @@ export async function POST(
     requestKey?: unknown;
     actionNonce?: unknown;
     csrfToken?: unknown;
-    totpCode?: unknown;
     reason?: unknown;
   };
   try {
@@ -130,14 +125,7 @@ export async function POST(
     return jsonError(403, "rejected_csrf");
   }
 
-  // 6. Step-up MFA: a fresh 6-digit TOTP code is required for every action.
-  const totpCode = typeof body.totpCode === "string" ? body.totpCode.trim() : "";
-  if (!config.totpSecret || !verifyTotp(totpCode, config.totpSecret)) {
-    recordActionFailure(rateLimitKey);
-    return jsonError(403, "rejected_mfa");
-  }
-
-  // 7. Body validation. Only the safe command shape is accepted; row versions,
+  // 5. Body validation. Only the safe command shape is accepted; row versions,
   //    states, recipients, signatures and actor identity are never read from the browser.
   if (!COMMAND_TYPES.has(commandType)) return jsonError(400, "Invalid request");
   const requestKey = typeof body.requestKey === "string" ? body.requestKey : "";
@@ -150,7 +138,7 @@ export async function POST(
     reason = normalized.length > 0 ? normalized : undefined;
   }
 
-  // 8. Relay to platform-api and return the safe result verbatim.
+  // 6. Relay to platform-api and return the safe result verbatim.
   try {
     const result: ReportCommandResult = await createReportCommand(reportKey, {
       commandType: commandType as "APPROVE_AND_SEND" | "REJECT" | "RETRY_SEND",

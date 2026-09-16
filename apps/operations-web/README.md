@@ -48,19 +48,20 @@ invalid, the Report Centre fails closed and renders no PDF links.
 
 ## Report actions (Phase 10)
 
-Guarded report actions (approve & send, reject, retry send) render only when
-`OPERATIONS_MFA_REQUIRED=true`; while it is `false` the action routes fail
-closed with `rejected_mfa` and the portal shows a lock notice. Actions are
-same-origin POST-only: the command route enforces, in order, session auth, the
-MFA config gate, a per-session+IP rate limit (10 attempts per 10 minutes), a
+Guarded report actions (approve & send, reject, retry send) render for any
+authenticated owner session; per owner decision (2026-09-16) the step-up TOTP
+requirement was removed, so actions work with email+password login only.
+Actions are same-origin POST-only: the command route enforces, in order,
+session auth, a per-session+IP rate limit (10 attempts per 10 minutes), a
 strict `Origin` check against `OPERATIONS_PUBLIC_ORIGIN`, a per-render HMAC
-CSRF token, and step-up TOTP on every action. The request body is bounded to
-8 KB and accepts only `commandType`, `requestKey`, `actionNonce`, `csrfToken`,
-`totpCode` and an optional 300-character reject reason — never row versions,
-states, recipients or actor identity. Idempotency: each render precomputes
-HMAC-derived `requestKey` values, so a double-click submits an identical key
-and the API answers `alreadyRecorded` instead of creating a second command.
-The UI and all responses expose safe states only.
+CSRF token, and command validation. The request body is bounded to 8 KB and
+accepts only `commandType`, `requestKey`, `actionNonce`, `csrfToken` and an
+optional 300-character reject reason — never row versions, states, recipients
+or actor identity. Idempotency: each render precomputes HMAC-derived
+`requestKey` values, so a double-click submits an identical key and the API
+answers `alreadyRecorded` instead of creating a second command. The UI and all
+responses expose safe states only. `OPERATIONS_MFA_REQUIRED` now only controls
+the optional TOTP field at login and remains `false`.
 
 ## Local checks
 

@@ -13,7 +13,6 @@ export interface ReportActionsProps {
   documentStatus: string | null;
   pdfAvailable: boolean;
   actions: { approveAndSend: boolean; reject: boolean; retrySend: boolean };
-  mfaRequired: boolean;
   csrf: {
     actionNonce: string;
     // One CSRF token per command type; the server derives each as
@@ -80,7 +79,6 @@ const RESULT_LABELS: Record<string, string> = {
 
 const DENIAL_LABELS: Record<string, string> = {
   ineligible_state: "No change: this report is not in an actionable state",
-  mfa_required: "Owner MFA (TOTP) is required before actions are available",
   rate_limited: "Too many attempts — please wait a few minutes and try again",
 };
 
@@ -176,7 +174,6 @@ export function ReportActions(props: ReportActionsProps) {
       requestKey: props.requestKeys[kind],
       csrfToken: props.csrf.tokens[kind],
       actionNonce: props.csrf.actionNonce,
-      totpCode: String(data.get("totpCode") ?? "").trim(),
     };
     if (kind === "reject") {
       const reason = String(data.get("reason") ?? "").trim();
@@ -243,7 +240,7 @@ export function ReportActions(props: ReportActionsProps) {
   };
 
   const visibleKinds = (Object.keys(ACTION_DEFS) as ActionKind[]).filter(
-    (kind) => props.mfaRequired && props.actions[kind],
+    (kind) => props.actions[kind],
   );
   if (visibleKinds.length === 0) return null;
 
@@ -350,19 +347,6 @@ export function ReportActions(props: ReportActionsProps) {
                       />
                       <span className="ops-sub" data-reason-counter>0/300</span>
                       <span className="ops-sub">Stored privately and never shown in the portal.</span>
-                    </label>
-                  ) : null}
-                  {props.mfaRequired ? (
-                    <label>
-                      Authentication code
-                      <input
-                        name="totpCode"
-                        inputMode="numeric"
-                        pattern="[0-9]{6}"
-                        autoComplete="one-time-code"
-                        maxLength={6}
-                        required
-                      />
                     </label>
                   ) : null}
                   {error ? <p className="auth-message error" role="alert">{error}</p> : null}

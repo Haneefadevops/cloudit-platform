@@ -268,10 +268,15 @@ recorded here so the implementation can be audited against intent.
    through the authoritative evidence publisher, so n8n remains the
    state authority; no publisher workflow mutation is required.
 4. **Step-up MFA**: the session keeps its existing shape (no MFA timestamp).
-   Instead, every action confirmation requires a fresh TOTP code verified
+   ~~Instead, every action confirmation requires a fresh TOTP code verified
    server-side at submit time (`verifyTotp`, ±1 step window), which is
    strictly fresher than any session stamp. Action routes and UI fail closed
-   while `OPERATIONS_MFA_REQUIRED=false`.
+   while `OPERATIONS_MFA_REQUIRED=false`.~~ **Amended 2026-09-16 by owner
+   decision**: the step-up TOTP requirement was removed entirely. Actions
+   require only an authenticated owner session plus the rate-limit, strict
+   Origin and CSRF HMAC checks; `OPERATIONS_MFA_REQUIRED` now only gates the
+   optional login-time TOTP field. See the production deployment record
+   below.
 5. **Idempotency**: `request_key` = HMAC(server secret, actor|report|action|
    render nonce), generated per server render; a bounded unique index on
    (client, actor, action, report, request_key) makes double-clicks and
@@ -319,10 +324,11 @@ recorded here so the implementation can be audited against intent.
 - **Command protocol**: n8n semantic harness 26/26 (7 structural + 9
   signature/tamper/expiry/shape cases + 10 authoritative-row guard cases);
   DB-level replay/expiry/stale/wrong-state/tenant/duplicate/state-transition
-  denials covered by the isolation suite; CSRF, strict-Origin, step-up TOTP
-  and rate limiting are enforced in the operations-web POST route (order:
-  session → fail-closed MFA gate → rate limit → Origin → bounded body →
-  CSRF HMAC → TOTP → command validation → relay) and are verified by
+  denials covered by the isolation suite; CSRF, strict-Origin and rate
+  limiting are enforced in the operations-web POST route (order:
+  session → rate limit → Origin → bounded body → CSRF HMAC → command
+  validation → relay; the original step-up TOTP step was removed by the
+  2026-09-16 amendment) and are verified by
   typecheck/build/code review — the app has no JS test runner, matching the
   project's Phase 9 web-verification convention.
 - **Hygiene**: no secrets, tokens, recipient addresses, row versions, nonces
@@ -346,14 +352,20 @@ recorded here so the implementation can be audited against intent.
 - **n8n**: `CloudIT - Guarded Report Command` imported **inactive** with
   credentials linked (webhook Header Auth `CloudIT Report Command`; four HTTP
   nodes on `CloudIT Operations Internal API`).
-- **Owner decision**: the owner explicitly declined TOTP for now. Login stays
-  email+password, `OPERATIONS_MFA_REQUIRED=false`, the action controls stay
-  hidden, and the command workflow stays inactive. This is the intended parked
-  state — every action path fails closed with `MFA_NOT_ENABLED`, so no report
-  command can be issued from the portal until TOTP is configured.
-- **Deferred**: kickoff step 7 (controlled non-real production acceptance)
-  cannot run without MFA and is parked, not failed. To unlock later: configure
-  TOTP, set `OPERATIONS_MFA_REQUIRED=true`, activate the command workflow in
-  n8n, then run the controlled non-real lifecycle test with the owner's
-  approval. A real report may be approved/rejected/sent only with a separate
-  explicit authorization. No real report was touched during construction.
+- **Owner decision (amendment, 2026-09-16)**: after initially declining TOTP
+  and parking the phase, the owner explicitly amended the approved plan to
+  remove the step-up TOTP requirement: report actions are available to any
+  authenticated owner session (email+password login). The command route and
+  UI were changed accordingly — the fail-closed `MFA_NOT_ENABLED` gate, the
+  `rejected_mfa` denial and the dialog TOTP field were removed. Session auth,
+  per-session+IP rate limiting, strict Origin and per-render CSRF HMAC checks
+  remain. `OPERATIONS_MFA_REQUIRED` now only controls the optional login-time
+  TOTP field and stays `false`. This accepts the residual risk that a stolen
+  owner session could trigger report actions; all command-protocol protections
+  (signed commands, replay/expiry/stale/wrong-state denial, exactly-once,
+  safe audit) are unchanged.
+- **Deferred**: kickoff step 7 (controlled non-real production acceptance) is
+  still outstanding and should be run with a non-real report before any real
+  report action. A real report may be approved/rejected/sent only with a
+  separate explicit authorization. No real report was touched during
+  construction.

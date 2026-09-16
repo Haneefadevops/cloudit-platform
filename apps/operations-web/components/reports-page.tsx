@@ -87,18 +87,15 @@ function buildActionTokens(
 function ReportCard({
   report,
   relayConfigured,
-  mfaRequired,
   actionFlags,
   actionTokens,
 }: {
   report: OperationsReport;
   relayConfigured: boolean;
-  mfaRequired: boolean;
   actionFlags: ReportActionsFlags | null;
   actionTokens: ActionTokenBundle | null;
 }) {
   const showActions =
-    mfaRequired &&
     actionFlags !== null &&
     actionTokens !== null &&
     (actionFlags.actions.approveAndSend || actionFlags.actions.reject || actionFlags.actions.retrySend);
@@ -152,7 +149,6 @@ function ReportCard({
           documentStatus={report.documentStatus}
           pdfAvailable={report.pdfAvailable}
           actions={actionFlags.actions}
-          mfaRequired={mfaRequired}
           csrf={actionTokens.csrf}
           requestKeys={actionTokens.requestKeys}
         />
@@ -163,18 +159,16 @@ function ReportCard({
 
 async function ReportsContent({
   data,
-  mfaRequired,
   sessionEmail,
   sessionSecret,
 }: {
   data: OperationsReports;
-  mfaRequired: boolean;
   sessionEmail: string;
   sessionSecret: string | null;
 }) {
   const relayConfigured = isReportPdfRelayConfigured();
   const actionNonce = newActionNonce();
-  const candidates = mfaRequired && sessionSecret
+  const candidates = sessionSecret
     ? data.reports.filter((report) => isActionCandidate(report))
     : [];
 
@@ -192,9 +186,6 @@ async function ReportsContent({
 
   return <div className="page-wrap">
     <header className="page-header"><div><p className="eyebrow">OPERATIONS · REPORT CENTRE</p><h1>Reports</h1><p>Private, sanitized report evidence and delivery history</p></div></header>
-    {!mfaRequired ? (
-      <article className="ops-card"><p className="ops-sub">Report actions are locked: owner MFA (TOTP) is not enabled.</p></article>
-    ) : null}
     {data.reports.length === 0 ? <article className="ops-card"><p className="ops-empty-note">No report summaries have been published yet.</p></article> : (
       <div className="ops-grid">
         {data.reports.map((report) => (
@@ -202,7 +193,6 @@ async function ReportsContent({
             key={report.reportKey}
             report={report}
             relayConfigured={relayConfigured}
-            mfaRequired={mfaRequired}
             actionFlags={flagsByKey.get(report.reportKey) ?? null}
             actionTokens={sessionSecret ? buildActionTokens(sessionSecret, sessionEmail, report.reportKey, actionNonce) : null}
           />
@@ -214,14 +204,12 @@ async function ReportsContent({
 
 export async function ReportsPage() {
   const session = await requireOperationsSession();
-  const mfaRequired = process.env.OPERATIONS_MFA_REQUIRED !== "false";
   const sessionSecret = process.env.OPERATIONS_SESSION_SECRET;
   const usableSecret = sessionSecret && sessionSecret.length >= 32 ? sessionSecret : null;
   try {
     return (
       <ReportsContent
         data={await getOperationsReports()}
-        mfaRequired={mfaRequired}
         sessionEmail={session.email}
         sessionSecret={usableSecret}
       />
@@ -231,7 +219,6 @@ export async function ReportsPage() {
       return (
         <ReportsContent
           data={emptyReports}
-          mfaRequired={mfaRequired}
           sessionEmail={session.email}
           sessionSecret={usableSecret}
         />

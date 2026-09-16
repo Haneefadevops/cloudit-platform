@@ -38,10 +38,11 @@ Operations Portal planned for `operations.cloudit.lk`.
 - Phase 10 (guarded report actions): built, committed (`0afccde`) and deployed
   on 16 September 2026. Migration `0011` applied automatically and verified
   idempotent; the command workflow `CloudIT - Guarded Report Command` is
-  imported inactive with credentials. The owner declined TOTP for now, so the
-  action controls stay hidden and every command path fails closed
-  (`MFA_NOT_ENABLED`) until TOTP is enabled and the workflow is activated.
-  Controlled non-real production acceptance is deferred until then. See
+  imported with credentials. Per owner decision on 16 September 2026 the
+  step-up TOTP requirement was removed: actions are available to any
+  authenticated owner session (email+password), with session auth, rate
+  limiting, strict Origin and CSRF HMAC checks still enforced. Login-time
+  TOTP remains optional (`OPERATIONS_MFA_REQUIRED=false`). See
   `docs/cloudit-operations-portal-phase-10-report-actions.md`.
 - The scheduled 1 October 2026 Phase 5E acceptance remains pending and its real
   report must remain `DRAFT` during review.
