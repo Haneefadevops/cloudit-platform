@@ -1,6 +1,6 @@
 # CloudIT Operations Portal — Phase 11 design: incidents and audit history
 
-Date: 28 September 2026
+Date: 16 September 2026
 Status: **DESIGN ONLY — awaiting owner approval; no implementation or production mutation**
 
 ## Purpose and boundary
@@ -455,7 +455,7 @@ respected via existing CSS.
 - Bucket ordering: `totalOccurrences` DESC, then `lastOccurredAt` DESC,
   then category/service/endpoint ASC (design fixed only the primary sort).
 
-## Local acceptance (2026-09-28, all green)
+## Local acceptance (2026-09-16, all green)
 
 - **platform-api**: full Jest **9 suites / 148 tests, all passing** (2 new
   suites: `operations.incidents.spec.ts` 7 tests, `operations.audit-events.spec.ts`
