@@ -37,6 +37,16 @@ export const operationsConfig = {
   internalApiToken: process.env.OPERATIONS_INTERNAL_API_TOKEN || undefined,
   reportPdfRelaySecret:
     process.env.OPERATIONS_REPORT_PDF_RELAY_SECRET || undefined,
+  // Phase 10 guarded report commands: HMAC secret shared with the n8n
+  // executor (signs the dispatch payload), header-auth token for the n8n
+  // webhook, and the webhook URL. Undefined secret/token fails closed.
+  reportCommandSecret:
+    process.env.OPERATIONS_REPORT_COMMAND_SECRET || undefined,
+  reportCommandToken: process.env.OPERATIONS_REPORT_COMMAND_TOKEN || undefined,
+  reportCommandUrl:
+    process.env.OPERATIONS_REPORT_COMMAND_URL ||
+    'http://n8n:5678/webhook/cloudit-report-command',
+  reportCommandTtlSeconds: 120,
   // Statement timeout for every query against the operations database.
   statementTimeoutMs: 15_000,
   // Watchdog cadence freshness threshold used by the environment health

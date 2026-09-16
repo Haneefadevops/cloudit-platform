@@ -10,14 +10,17 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { OperationsService } from './operations.service';
 import { OperationsInternalAuthGuard } from './operations-internal-auth.guard';
 import { OperationsExceptionFilter } from './operations-exception.filter';
 
 /**
- * Internal-only operations endpoints. Metadata routes are read-only; the sole
- * Phase 9 POST only consumes a PDF-retrieval nonce and cannot mutate a report.
- * Never exposed through a public route; callers present the internal token.
+ * Internal-only operations endpoints. Metadata routes are read-only; the
+ * stateful routes are the Phase 9 PDF-retrieval nonce claim and the Phase 10
+ * guarded report commands, both mediated by narrowly granted, fail-closed
+ * database functions. Never exposed through a public route; callers present
+ * the internal token.
  */
 @ApiTags('operations')
 @Controller('operations')
@@ -103,5 +106,50 @@ export class OperationsController {
     },
   ) {
     return this.operationsService.claimReportPdfRetrieval(reportKey, body);
+  }
+
+  @Post('reports/:reportKey/commands')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Create, dispatch and relay one guarded report command',
+  })
+  async createReportCommand(
+    @Param('reportKey') reportKey: string,
+    @Body()
+    body: { commandType?: unknown; requestKey?: unknown; reason?: unknown },
+  ) {
+    return this.operationsService.createReportCommand(reportKey, body);
+  }
+
+  @Get('reports/:reportKey/commands')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Recent guarded command outcomes for one report (read-only)',
+  })
+  async getReportCommands(@Param('reportKey') reportKey: string) {
+    return this.operationsService.getReportCommands(reportKey);
+  }
+
+  @Get('reports/:reportKey/actions')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Guarded actions the current report state admits (read-only)',
+  })
+  async getReportActions(@Param('reportKey') reportKey: string) {
+    return this.operationsService.getReportActions(reportKey);
+  }
+
+  @Post('internal/report-commands/claim')
+  @ApiOperation({
+    summary: 'Executor claim: verify wire nonce and release command context',
+  })
+  async claimReportCommand(@Body() body: unknown) {
+    return this.operationsService.claimReportCommand(body);
+  }
+
+  @Post('internal/report-commands/acknowledge')
+  @ApiOperation({ summary: 'Executor acknowledge: report command outcome' })
+  async acknowledgeReportCommand(@Body() body: unknown) {
+    return this.operationsService.acknowledgeReportCommand(body);
   }
 }

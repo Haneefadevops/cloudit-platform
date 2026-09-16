@@ -1,0 +1,620 @@
+{
+  "name": "CloudIT - Guarded Report Command",
+  "id": "3a5c8d1e-6b2f-4a7c-9d4e-5f7a9c1e3b5d",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cloudit-report-command",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "CloudIT Report Command"
+        }
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e01",
+      "name": "Report Command Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "9e5d0c3b-7f2e-4a6b-b8c1-2d3e4f5a6b07"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate the signed, short-lived report command before any claim, lookup, or mutation.\n// OPERATIONS_REPORT_COMMAND_SECRET is a protected n8n environment value.\nconst crypto = require('crypto');\nconst body = $json.body ?? {};\nconst payload = body.payload ?? {};\nconst signature = String(body.signature ?? '');\nconst secret = String($env.OPERATIONS_REPORT_COMMAND_SECRET ?? '');\nconst version = String(payload.version ?? '');\nconst commandKey = String(payload.commandKey ?? '');\nconst commandType = String(payload.commandType ?? '');\nconst reportKey = String(payload.reportKey ?? '');\nconst clientKey = String(payload.clientKey ?? '');\nconst expectedRowVersion = Number(payload.expectedRowVersion);\nconst expectedState = String(payload.expectedState ?? '');\nconst nonce = String(payload.nonce ?? '');\nconst issuedAt = Number(payload.issuedAt);\nconst expiresAt = Number(payload.expiresAt);\nconst correlationId = String(payload.correlationId ?? '');\nconst recipientPolicyKey = String(payload.recipientPolicyKey ?? '');\nconst reasonDigest = String(payload.reasonDigest ?? '');\nconst now = Math.floor(Date.now() / 1000);\nconst reportKeyMatch = reportKey.match(/^cavetta\\.monthly_maintenance\\.(\\d{4}-\\d{2})$/);\nif (secret.length < 32 || version !== 'v1' || !/^[a-f0-9]{32}$/.test(commandKey) || !['APPROVE_AND_SEND', 'REJECT', 'RETRY_SEND'].includes(commandType) || !reportKeyMatch || clientKey !== 'cavetta' || !Number.isSafeInteger(expectedRowVersion) || expectedRowVersion <= 0 || !['DRAFT', 'SEND_FAILED'].includes(expectedState) || (commandType === 'RETRY_SEND' ? expectedState !== 'SEND_FAILED' : expectedState !== 'DRAFT') || !/^[a-f0-9]{64}$/.test(nonce) || !Number.isSafeInteger(issuedAt) || !Number.isSafeInteger(expiresAt) || issuedAt > now + 15 || issuedAt < now - 120 || expiresAt <= now || expiresAt > issuedAt + 180 || !/^[a-f0-9]{32}$/.test(correlationId) || (commandType === 'REJECT' ? recipientPolicyKey !== '-' : recipientPolicyKey !== 'cavetta-monthly-report') || (commandType === 'REJECT' ? !/^[a-f0-9]{64}$/.test(reasonDigest) : reasonDigest !== '-') || !/^[a-f0-9]{64}$/.test(signature)) throw new Error('Report command denied');\nconst canonical = [version, commandKey, commandType, reportKey, clientKey, String(expectedRowVersion), expectedState, nonce, issuedAt, expiresAt, correlationId, recipientPolicyKey, reasonDigest].join('\\n');\nconst expected = crypto.createHmac('sha256', secret).update(canonical).digest('hex');\nif (!crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'))) throw new Error('Report command denied');\nlet reason = null;\nif (commandType === 'REJECT') {\n  if (typeof body.reason !== 'string') throw new Error('Report command denied');\n  reason = body.reason.normalize('NFC').replace(/[\\u0000-\\u001F\\u007F-\\u009F]/g, '').trim().replace(/\\s+/g, ' ');\n  const digest = crypto.createHash('sha256').update(reason).digest('hex');\n  if (reason.length > 300 || digest !== reasonDigest) throw new Error('Report command denied');\n} else if (body.reason !== undefined && body.reason !== null) {\n  throw new Error('Report command denied');\n}\nreturn [{ json: { commandKey, commandType, reportKey, reportMonth: reportKeyMatch[1], reportType: 'MONTHLY_MAINTENANCE', clientKey, expectedRowVersion, expectedState, correlationId, nonce, reason } }];"
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e02",
+      "name": "Validate Signed Command",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://platform-api:3001/api/operations/internal/report-commands/claim",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ commandKey: $json.commandKey, clientKey: $json.clientKey, nonce: $json.nonce }) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "CloudIT Operations Internal API"
+        }
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e03",
+      "name": "Claim Command",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8b6d4f2a-1c3e-4a5b-9d7f-3e5a7c9b1d20",
+              "leftValue": "={{ $json.result }}",
+              "rightValue": "accepted",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e04",
+      "name": "Claim Accepted",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "UdAUnNeowBGgkAMR",
+          "mode": "list",
+          "cachedResultName": "cavetta_monthly_maintenance_reports"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "reportMonth",
+              "keyValue": "={{ $('Validate Signed Command').first().json.reportMonth }}"
+            },
+            {
+              "keyName": "reportType",
+              "keyValue": "MONTHLY_MAINTENANCE"
+            }
+          ]
+        },
+        "limit": 2,
+        "orderBy": true,
+        "orderByDirection": "ASC"
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e05",
+      "name": "Load Authoritative Report",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Guard the still-current authoritative row and compute the exact column\n// transition before the compare-and-set update. No fields are changed here.\nconst requested = $('Validate Signed Command').first().json;\nconst rows = $input.all().map((item) => item.json ?? {}).filter((row) => Object.keys(row).length > 0);\nlet outcome = null;\nif (rows.length !== 1) {\n  outcome = 'rejected_state';\n} else {\n  const row = rows[0];\n  const state = String(row.documentStatus ?? '').trim().toUpperCase();\n  const sentAt = String(row.sentAt ?? '').trim();\n  if (state !== String(requested.expectedState ?? '')) {\n    outcome = 'rejected_state';\n  } else if (requested.commandType === 'APPROVE_AND_SEND') {\n    const objectKey = String(row.pdfDriveFileId ?? '').trim();\n    const fileName = String(row.pdfFileName ?? '').trim();\n    if (!objectKey || !fileName || !/^[A-Za-z0-9 !/._-]+$/.test(objectKey) || objectKey.includes('..') || !objectKey.endsWith('/' + fileName) || sentAt) outcome = 'rejected_pdf_unavailable';\n  } else if (requested.commandType === 'RETRY_SEND') {\n    if (sentAt) outcome = 'rejected_state';\n  }\n}\nconst base = { commandKey: requested.commandKey, commandType: requested.commandType, reportMonth: requested.reportMonth, reportType: requested.reportType, expectedState: requested.expectedState };\nif (outcome) return [{ json: { guardPassed: false, outcome, columns: null, ...base } }];\nconst now = new Date().toISOString();\nlet columns;\nif (requested.commandType === 'APPROVE_AND_SEND') columns = { documentStatus: 'APPROVED', approvedAt: now, rejectedAt: null, rejectedReason: undefined };\nelse if (requested.commandType === 'REJECT') columns = { documentStatus: 'REJECTED', approvedAt: null, rejectedAt: now, rejectedReason: requested.reason };\nelse columns = { documentStatus: 'APPROVED', approvedAt: null, rejectedAt: null, rejectedReason: undefined };\nreturn [{ json: { guardPassed: true, outcome: null, columns, ...base } }];"
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e06",
+      "name": "Guard Authoritative Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7c5a3e1f-9b2d-4c6a-8e0b-4f6a8c0e2a31",
+              "leftValue": "={{ $json.guardPassed }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e07",
+      "name": "Guards Passed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "UdAUnNeowBGgkAMR",
+          "mode": "list",
+          "cachedResultName": "cavetta_monthly_maintenance_reports"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "reportMonth",
+              "keyValue": "={{ $('Validate Signed Command').first().json.reportMonth }}"
+            },
+            {
+              "keyName": "reportType",
+              "keyValue": "MONTHLY_MAINTENANCE"
+            },
+            {
+              "keyName": "documentStatus",
+              "keyValue": "={{ $('Validate Signed Command').first().json.expectedState }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "documentStatus": "={{ $('Guard Authoritative Row').first().json.columns.documentStatus }}",
+            "approvedAt": "={{ $('Guard Authoritative Row').first().json.columns.approvedAt ?? $('Load Authoritative Report').first().json.approvedAt ?? null }}",
+            "rejectedAt": "={{ $('Guard Authoritative Row').first().json.columns.rejectedAt ?? $('Load Authoritative Report').first().json.rejectedAt ?? null }}",
+            "rejectedReason": "={{ $('Guard Authoritative Row').first().json.columns.rejectedReason ?? $('Load Authoritative Report').first().json.rejectedReason ?? null }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "documentStatus",
+              "displayName": "documentStatus",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "approvedAt",
+              "displayName": "approvedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "rejectedAt",
+              "displayName": "rejectedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "rejectedReason",
+              "displayName": "rejectedReason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e08",
+      "name": "Apply Command",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1780,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6d4b2f9a-8e0c-4d5e-a1b3-5a7c9e1b3d42",
+              "leftValue": "={{ Number($json.id) }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e09",
+      "name": "CAS Applied",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://platform-api:3001/api/operations/internal/report-commands/acknowledge",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ commandKey: $('Validate Signed Command').first().json.commandKey, clientKey: 'cavetta', resultCode: 'acknowledged' }) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "CloudIT Operations Internal API"
+        }
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e10",
+      "name": "Acknowledge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { commandKey: $('Validate Signed Command').first().json.commandKey, status: 'acknowledged', resultCode: 'acknowledged' } }}",
+        "options": {}
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e11",
+      "name": "Respond Acknowledged",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { commandKey: $('Validate Signed Command').first().json.commandKey, status: 'denied', resultCode: $json.denialCode ?? 'failed_safe' } }}",
+        "options": {}
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e12",
+      "name": "Respond Denied",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        900,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://platform-api:3001/api/operations/internal/report-commands/acknowledge",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ commandKey: $('Validate Signed Command').first().json.commandKey, clientKey: 'cavetta', resultCode: $('Guard Authoritative Row').first().json.outcome }) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "CloudIT Operations Internal API"
+        }
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e13",
+      "name": "Acknowledge Denial",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { commandKey: $('Validate Signed Command').first().json.commandKey, status: 'denied', resultCode: $('Guard Authoritative Row').first().json.outcome } }}",
+        "options": {}
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e14",
+      "name": "Respond Guard Denied",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1780,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://platform-api:3001/api/operations/internal/report-commands/acknowledge",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ commandKey: $('Validate Signed Command').first().json.commandKey, clientKey: 'cavetta', resultCode: 'rejected_state' }) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "CloudIT Operations Internal API"
+        }
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e15",
+      "name": "Acknowledge Stale",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2220,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { commandKey: $('Validate Signed Command').first().json.commandKey, status: 'denied', resultCode: 'rejected_state' } }}",
+        "options": {}
+      },
+      "id": "2f4f7b16-8a1c-4c4e-9f2d-1a2b3c4d5e16",
+      "name": "Respond Denied Stale",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2440,
+        540
+      ]
+    }
+  ],
+  "connections": {
+    "Report Command Request": {
+      "main": [
+        [
+          {
+            "node": "Validate Signed Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Signed Command": {
+      "main": [
+        [
+          {
+            "node": "Claim Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim Command": {
+      "main": [
+        [
+          {
+            "node": "Claim Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim Accepted": {
+      "main": [
+        [
+          {
+            "node": "Load Authoritative Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Denied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Authoritative Report": {
+      "main": [
+        [
+          {
+            "node": "Guard Authoritative Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guard Authoritative Row": {
+      "main": [
+        [
+          {
+            "node": "Guards Passed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guards Passed": {
+      "main": [
+        [
+          {
+            "node": "Apply Command",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Acknowledge Denial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge Denial": {
+      "main": [
+        [
+          {
+            "node": "Respond Guard Denied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Command": {
+      "main": [
+        [
+          {
+            "node": "CAS Applied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CAS Applied": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Acknowledge Stale",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge": {
+      "main": [
+        [
+          {
+            "node": "Respond Acknowledged",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge Stale": {
+      "main": [
+        [
+          {
+            "node": "Respond Denied Stale",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Malta"
+  },
+  "staticData": null,
+  "tags": []
+}

@@ -1,13 +1,19 @@
 import {
   getOperationsReports,
+  getReportActions,
   OperationsApiError,
   type OperationsReport,
   type OperationsReports,
+  type ReportActions as ReportActionsFlags,
+  type ReportCommandType,
   type ReportDocumentStatus,
 } from "../lib/operations-api";
 import { formatMaltaTime } from "../lib/operations-time";
+import { deriveCsrfToken, deriveRequestKey, newActionNonce } from "../lib/report-action-tokens";
+import { requireOperationsSession } from "../lib/server-session";
 import { HealthPill } from "./status-pill";
 import { OperationsErrorState } from "./operations-error-state";
+import { ReportActions, type ReportActionsProps } from "./report-actions";
 import { isReportPdfRelayConfigured } from "../lib/report-pdf-relay";
 
 const emptyReports: OperationsReports = { generatedAt: "", reports: [] };
@@ -38,7 +44,64 @@ function findingCount(report: OperationsReport, severity: string): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function ReportCard({ report, relayConfigured }: { report: OperationsReport; relayConfigured: boolean }) {
+function isActionCandidate(report: OperationsReport): boolean {
+  return (
+    (report.documentStatus === "DRAFT" && report.pdfAvailable) ||
+    report.documentStatus === "SEND_FAILED"
+  );
+}
+
+type ActionTokenBundle = Pick<ReportActionsProps, "csrf" | "requestKeys">;
+
+function buildActionTokens(
+  secret: string,
+  email: string,
+  reportKey: string,
+  actionNonce: string,
+): ActionTokenBundle {
+  const commandTypes: Record<keyof ActionTokenBundle["requestKeys"], ReportCommandType> = {
+    approveAndSend: "APPROVE_AND_SEND",
+    reject: "REJECT",
+    retrySend: "RETRY_SEND",
+  };
+  const tokens = {} as Record<keyof ActionTokenBundle["requestKeys"], { csrf: string; requestKey: string }>;
+  for (const kind of Object.keys(commandTypes) as Array<keyof ActionTokenBundle["requestKeys"]>) {
+    tokens[kind] = {
+      csrf: deriveCsrfToken(secret, email, reportKey, commandTypes[kind], actionNonce),
+      requestKey: deriveRequestKey(secret, email, reportKey, commandTypes[kind], actionNonce),
+    };
+  }
+  return {
+    csrf: {
+      actionNonce,
+      tokens: { approveAndSend: tokens.approveAndSend.csrf, reject: tokens.reject.csrf, retrySend: tokens.retrySend.csrf },
+    },
+    requestKeys: {
+      approveAndSend: tokens.approveAndSend.requestKey,
+      reject: tokens.reject.requestKey,
+      retrySend: tokens.retrySend.requestKey,
+    },
+  };
+}
+
+function ReportCard({
+  report,
+  relayConfigured,
+  mfaRequired,
+  actionFlags,
+  actionTokens,
+}: {
+  report: OperationsReport;
+  relayConfigured: boolean;
+  mfaRequired: boolean;
+  actionFlags: ReportActionsFlags | null;
+  actionTokens: ActionTokenBundle | null;
+}) {
+  const showActions =
+    mfaRequired &&
+    actionFlags !== null &&
+    actionTokens !== null &&
+    (actionFlags.actions.approveAndSend || actionFlags.actions.reject || actionFlags.actions.retrySend);
   return (
     <article className="ops-card">
       <div className="ops-card-head">
@@ -55,6 +118,12 @@ function ReportCard({ report, relayConfigured }: { report: OperationsReport; rel
         <div><dt>PDF</dt><dd>{report.pdfAvailable ? "Available privately" : "Not available"}</dd></div>
         <div><dt>Delivery</dt><dd>{report.deliveryFailureCategory ? `Failed: ${report.deliveryFailureCategory}` : report.documentStatus ?? "NO DATA"}</dd></div>
       </dl>
+      {report.recentCommand ? (
+        <p className="ops-muted">
+          Last action: {report.recentCommand.commandType.replaceAll("_", " ")} — {report.recentCommand.status}
+          {report.recentCommand.resultCode ? ` (${report.recentCommand.resultCode})` : ""}
+        </p>
+      ) : null}
       <div className="ops-card-head"><h3>Sanitized findings</h3><span className="ops-sub">{report.findings.length} recorded</span></div>
       {report.findings.length === 0 ? <p className="ops-empty-note">No sanitized findings published for this report.</p> : (
         <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Severity</th><th>Finding</th><th>Action</th></tr></thead><tbody>
@@ -75,24 +144,99 @@ function ReportCard({ report, relayConfigured }: { report: OperationsReport; rel
       ) : (
         <p className="ops-sub">Read-only: {report.pdfAvailable ? "private PDF retrieval is not configured." : "no private PDF is available for this report."}</p>
       )}
+      {showActions && actionFlags && actionTokens ? (
+        <ReportActions
+          reportKey={report.reportKey}
+          clientDisplayName={report.clientDisplayName}
+          reportMonth={report.reportMonth}
+          documentStatus={report.documentStatus}
+          pdfAvailable={report.pdfAvailable}
+          actions={actionFlags.actions}
+          mfaRequired={mfaRequired}
+          csrf={actionTokens.csrf}
+          requestKeys={actionTokens.requestKeys}
+        />
+      ) : null}
     </article>
   );
 }
 
-function ReportsContent({ data }: { data: OperationsReports }) {
+async function ReportsContent({
+  data,
+  mfaRequired,
+  sessionEmail,
+  sessionSecret,
+}: {
+  data: OperationsReports;
+  mfaRequired: boolean;
+  sessionEmail: string;
+  sessionSecret: string | null;
+}) {
   const relayConfigured = isReportPdfRelayConfigured();
+  const actionNonce = newActionNonce();
+  const candidates = mfaRequired && sessionSecret
+    ? data.reports.filter((report) => isActionCandidate(report))
+    : [];
+
+  const flagsByKey = new Map<string, ReportActionsFlags | null>();
+  await Promise.all(
+    candidates.map(async (report) => {
+      try {
+        flagsByKey.set(report.reportKey, await getReportActions(report.reportKey));
+      } catch {
+        // Fail closed: an actions lookup failure renders no action buttons.
+        flagsByKey.set(report.reportKey, null);
+      }
+    }),
+  );
+
   return <div className="page-wrap">
     <header className="page-header"><div><p className="eyebrow">OPERATIONS · REPORT CENTRE</p><h1>Reports</h1><p>Private, sanitized report evidence and delivery history</p></div></header>
-    <article className="ops-card"><p className="ops-sub">Read-only — approval, rejection, sending, retrying, and regeneration are unavailable.</p></article>
-    {data.reports.length === 0 ? <article className="ops-card"><p className="ops-empty-note">No report summaries have been published yet.</p></article> : <div className="ops-grid">{data.reports.map((report) => <ReportCard key={report.reportKey} report={report} relayConfigured={relayConfigured} />)}</div>}
+    {!mfaRequired ? (
+      <article className="ops-card"><p className="ops-sub">Report actions are locked: owner MFA (TOTP) is not enabled.</p></article>
+    ) : null}
+    {data.reports.length === 0 ? <article className="ops-card"><p className="ops-empty-note">No report summaries have been published yet.</p></article> : (
+      <div className="ops-grid">
+        {data.reports.map((report) => (
+          <ReportCard
+            key={report.reportKey}
+            report={report}
+            relayConfigured={relayConfigured}
+            mfaRequired={mfaRequired}
+            actionFlags={flagsByKey.get(report.reportKey) ?? null}
+            actionTokens={sessionSecret ? buildActionTokens(sessionSecret, sessionEmail, report.reportKey, actionNonce) : null}
+          />
+        ))}
+      </div>
+    )}
   </div>;
 }
 
 export async function ReportsPage() {
+  const session = await requireOperationsSession();
+  const mfaRequired = process.env.OPERATIONS_MFA_REQUIRED !== "false";
+  const sessionSecret = process.env.OPERATIONS_SESSION_SECRET;
+  const usableSecret = sessionSecret && sessionSecret.length >= 32 ? sessionSecret : null;
   try {
-    return <ReportsContent data={await getOperationsReports()} />;
+    return (
+      <ReportsContent
+        data={await getOperationsReports()}
+        mfaRequired={mfaRequired}
+        sessionEmail={session.email}
+        sessionSecret={usableSecret}
+      />
+    );
   } catch (error) {
-    if (error instanceof OperationsApiError && error.statusCode === 404) return <ReportsContent data={emptyReports} />;
+    if (error instanceof OperationsApiError && error.statusCode === 404) {
+      return (
+        <ReportsContent
+          data={emptyReports}
+          mfaRequired={mfaRequired}
+          sessionEmail={session.email}
+          sessionSecret={usableSecret}
+        />
+      );
+    }
     return <div className="page-wrap"><header className="page-header"><div><p className="eyebrow">OPERATIONS · REPORT CENTRE</p><h1>Reports</h1><p>Private, sanitized report evidence and delivery history</p></div></header><OperationsErrorState error={error} /></div>;
   }
 }

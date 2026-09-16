@@ -140,6 +140,24 @@ function operationsConfig(): { baseUrl: string; token: string } {
   return { baseUrl: baseUrl.replace(/\/$/, ""), token };
 }
 
+async function readErrorMessage(response: Response): Promise<OperationsApiError> {
+  const statusCode = response.status;
+  let message = "Operations API request failed";
+  try {
+    const body: unknown = await response.json();
+    if (
+      typeof body === "object" &&
+      body !== null &&
+      typeof (body as { message?: unknown }).message === "string"
+    ) {
+      message = (body as { message: string }).message;
+    }
+  } catch {
+    // Keep the generic safe message.
+  }
+  return new OperationsApiError(statusCode, message);
+}
+
 async function fetchOperations<T>(path: string): Promise<T> {
   const { baseUrl, token } = operationsConfig();
   let response: Response;
@@ -152,23 +170,28 @@ async function fetchOperations<T>(path: string): Promise<T> {
   } catch {
     throw new OperationsApiError(503, "Operations API is unreachable");
   }
-  if (!response.ok) {
-    const statusCode = response.status;
-    let message = "Operations API request failed";
-    try {
-      const body: unknown = await response.json();
-      if (
-        typeof body === "object" &&
-        body !== null &&
-        typeof (body as { message?: unknown }).message === "string"
-      ) {
-        message = (body as { message: string }).message;
-      }
-    } catch {
-      // Keep the generic safe message.
-    }
-    throw new OperationsApiError(statusCode, message);
+  if (!response.ok) throw await readErrorMessage(response);
+  return (await response.json()) as T;
+}
+
+async function postOperations<T>(path: string, payload: unknown): Promise<T> {
+  const { baseUrl, token } = operationsConfig();
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/api/operations${path}`, {
+      method: "POST",
+      headers: {
+        "x-operations-internal-token": token,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      cache: "no-store",
+    });
+  } catch {
+    throw new OperationsApiError(503, "Operations API is unreachable");
   }
+  if (!response.ok) throw await readErrorMessage(response);
   return (await response.json()) as T;
 }
 
@@ -358,6 +381,42 @@ export async function getOperationsBackups(): Promise<OperationsBackups> {
 
 export type ReportDocumentStatus = "DRAFT" | "APPROVED" | "SENDING" | "SENT" | "REJECTED" | "SEND_FAILED";
 
+export type ReportCommandType = "APPROVE_AND_SEND" | "REJECT" | "RETRY_SEND";
+
+export interface ReportActions {
+  generatedAt: string;
+  reportKey: string;
+  actions: { approveAndSend: boolean; reject: boolean; retrySend: boolean };
+}
+
+export interface ReportCommandRecord {
+  commandType: ReportCommandType;
+  status: string;
+  resultCode: string | null;
+  requestedAt: string;
+  completedAt: string | null;
+}
+
+export interface ReportCommands {
+  generatedAt: string;
+  commands: ReportCommandRecord[];
+}
+
+export interface CreateReportCommandBody {
+  commandType: ReportCommandType;
+  requestKey: string;
+  reason?: string;
+}
+
+export interface ReportCommandResult {
+  generatedAt: string;
+  reportKey: string;
+  status: string;
+  resultCode: string | null;
+  denialCode: string | null;
+  alreadyRecorded: boolean;
+}
+
 export interface OperationsReportFinding {
   findingKey: string;
   category: string;
@@ -393,6 +452,7 @@ export interface OperationsReport {
   deliveryFailureCategory: string | null;
   findings: OperationsReportFinding[];
   history: OperationsReportHistory[];
+  recentCommand: ReportCommandRecord | null;
 }
 
 export interface OperationsReports {
@@ -402,4 +462,19 @@ export interface OperationsReports {
 
 export async function getOperationsReports(): Promise<OperationsReports> {
   return fetchOperations<OperationsReports>("/reports");
+}
+
+export async function getReportActions(reportKey: string): Promise<ReportActions> {
+  return fetchOperations<ReportActions>(`/reports/${encodeURIComponent(reportKey)}/actions`);
+}
+
+export async function getReportCommands(reportKey: string): Promise<ReportCommands> {
+  return fetchOperations<ReportCommands>(`/reports/${encodeURIComponent(reportKey)}/commands`);
+}
+
+export async function createReportCommand(
+  reportKey: string,
+  body: CreateReportCommandBody,
+): Promise<ReportCommandResult> {
+  return postOperations<ReportCommandResult>(`/reports/${encodeURIComponent(reportKey)}/commands`, body);
 }

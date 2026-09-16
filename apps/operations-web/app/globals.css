@@ -141,3 +141,32 @@ button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visibl
 @media (max-width: 760px) {
   .ops-calendar { gap:4px; }.ops-calendar-day { min-height:38px; padding:4px 5px; }.ops-calendar-state { display:none; }
 }
+/* Phase 10 · guarded report actions */
+.ops-muted { color:var(--muted); font-size:11px; }
+.report-action-bar { margin-top:18px; padding-top:14px; border-top:1px solid var(--line); }
+.ops-block-label { margin:0 0 10px; color:var(--muted); font-size:10px; font-weight:750; letter-spacing:.1em; text-transform:uppercase; }
+.report-action-buttons { display:flex; flex-wrap:wrap; gap:10px; }
+.ops-btn { min-height:40px; padding:0 16px; border:0; border-radius:10px; color:#fff; background:linear-gradient(100deg,var(--pink),var(--purple)); font-size:12px; font-weight:700; cursor:pointer; }
+.ops-btn:disabled { opacity:.55; cursor:default; }
+.ops-btn-danger { border:1px solid var(--pink); color:var(--pink); background:transparent; }
+.ops-btn-ghost { border:1px solid var(--line); color:var(--text); background:var(--raised); }
+.ops-link-button { padding:0; border:0; background:none; font:inherit; font-size:12px; cursor:pointer; }
+.ops-dialog { width:min(92vw,28rem); padding:24px; border:1px solid var(--line); border-radius:18px; background:var(--surface); color:var(--text); }
+.ops-dialog::backdrop { background:#02070fb3; }
+.ops-dialog h3 { margin:0 0 16px; font-size:17px; }
+.ops-dialog-summary { grid-template-columns:1fr 1fr; margin-bottom:16px; }
+.ops-dialog-note { margin:0 0 16px; color:var(--muted); font-size:12px; line-height:1.6; }
+.ops-dialog-note code { color:var(--green); }
+.ops-dialog form { display:grid; gap:16px; margin:0; }
+.ops-dialog-fields { display:grid; gap:16px; margin:0; padding:0; border:0; min-width:0; }
+.ops-dialog label { display:grid; gap:8px; color:var(--muted); font-size:10px; font-weight:750; letter-spacing:.06em; }
+.ops-dialog input:not([type=checkbox]):not([type=hidden]), .ops-dialog textarea { width:100%; min-height:44px; padding:8px 14px; border:1px solid var(--line); border-radius:10px; color:var(--text); background:var(--raised); font:inherit; letter-spacing:normal; }
+.ops-dialog textarea { resize:vertical; }
+.ops-check { display:flex!important; align-items:flex-start; gap:10px; }
+.ops-check input { width:auto!important; min-height:0!important; margin-top:2px; }
+.ops-check span { color:var(--text); font-size:12px; font-weight:500; letter-spacing:normal; }
+.ops-dialog-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:4px; }
+.ops-dialog-result { display:grid; gap:12px; }
+.ops-command-history { margin:0; padding:0; list-style:none; display:grid; gap:8px; }
+.ops-command-history li { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 12px; padding:9px 12px; border:1px solid var(--line); border-radius:11px; background:var(--raised); font-size:12px; }
+.ops-command-history li time { grid-column:1/-1; color:var(--muted); font-size:10px; }

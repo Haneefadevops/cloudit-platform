@@ -1,10 +1,26 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import axios from 'axios';
+import { createHash, randomBytes } from 'crypto';
 import { OperationsDataService } from './operations-data.service';
 import { operationsConfig } from './operations.config';
 import {
   ReportPdfClaimBody,
   verifyReportPdfClaim,
 } from './report-pdf-claim.util';
+import {
+  buildReportCommandCanonical,
+  expectedStateForCommand,
+  normalizeRejectReason,
+  rejectReasonDigest,
+  REPORT_RECIPIENT_POLICY_KEY,
+  signReportCommandCanonical,
+  verifyReportCommandAckBody,
+  verifyReportCommandClaimBody,
+} from './report-command-payload.util';
 import { nextCronRun } from './cron.util';
 import {
   AnalyticsRollupStatus,
@@ -502,6 +518,13 @@ export interface ReportsResponse {
     pdfAvailable: boolean;
     sendAttemptCount: number;
     deliveryFailureCategory: string | null;
+    recentCommand: {
+      commandType: string;
+      status: string;
+      resultCode: string | null;
+      requestedAt: string;
+      completedAt: string | null;
+    } | null;
     findings: {
       findingKey: string;
       category: string;
@@ -520,6 +543,116 @@ export interface ReportsResponse {
       occurredAt: string;
     }[];
   }[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 10 guarded report commands (approve-and-send / reject / retry-send).
+// The report_commands table stores only the SHA-256 hash of the wire nonce;
+// commands are created, CAS-dispatched and signed here, executed by n8n, and
+// acknowledged back through the internal claim/acknowledge endpoints.
+// ---------------------------------------------------------------------------
+
+const REPORT_KEY_PATTERN = /^[a-z0-9][a-z0-9_.-]{1,120}$/;
+const REQUEST_KEY_PATTERN = /^[A-Za-z0-9_-]{21,120}$/;
+
+interface ReportForCommandRow {
+  id: string;
+  report_key: string;
+  client_id: string;
+  client_key: string;
+  document_status: string | null;
+  row_version: number;
+  sent_at: Date | null;
+  pdf_available: boolean;
+}
+
+interface CommandStateRow {
+  command_type: string;
+  status: string;
+  result_code: string | null;
+  requested_at: Date | null;
+  completed_at: Date | null;
+}
+
+interface CreateCommandFnRow {
+  command_id: string;
+  command_key: string;
+  command_type: string;
+  status: string;
+  result_code: string | null;
+  expires_at: Date | null;
+  already_recorded: boolean;
+  denial_code: string | null;
+}
+
+interface DispatchCommandFnRow {
+  command_id: string;
+  status: string;
+  result_code: string | null;
+  denial_code: string | null;
+}
+
+interface ClaimCommandFnRow {
+  command_id: string;
+  report_key: string;
+  command_type: string;
+  expected_row_version: number | null;
+  expected_state: string | null;
+  status: string;
+  result_code: string | null;
+  denial_code: string | null;
+}
+
+interface AcknowledgeCommandFnRow {
+  command_id: string;
+  status: string;
+  result_code: string | null;
+  denial_code: string | null;
+}
+
+interface ReportCommandListRow {
+  command_type: string;
+  status: string;
+  result_code: string | null;
+  requested_at: Date | null;
+  completed_at: Date | null;
+}
+
+interface RecentCommandRow {
+  report_id: string;
+  report_key: string;
+  command_type: string;
+  status: string;
+  result_code: string | null;
+  requested_at: Date | null;
+  completed_at: Date | null;
+}
+
+export interface ReportCommandListItem {
+  commandType: string;
+  status: string;
+  resultCode: string | null;
+  requestedAt: string;
+  completedAt: string | null;
+}
+
+export interface ReportCommandOutcome {
+  generatedAt: string;
+  reportKey: string;
+  status: string;
+  resultCode: string | null;
+  denialCode: string | null;
+  alreadyRecorded: boolean;
+}
+
+function commandStateFromRow(row: CommandStateRow | undefined): {
+  status: string;
+  resultCode: string | null;
+} {
+  return {
+    status: row?.status ?? 'unknown',
+    resultCode: row?.result_code ?? null,
+  };
 }
 
 /**
@@ -1912,12 +2045,14 @@ export class OperationsService {
   }
 
   /**
-   * Read-only report metadata, sanitized findings and state history. This
-   * deliberately has no PDF reference, command-table access, or write path.
+   * Read-only report metadata, sanitized findings and state history, plus
+   * the latest guarded command outcome per report (safe columns only). This
+   * deliberately has no PDF reference or write path.
    */
   async getReports(): Promise<ReportsResponse> {
-    const [reportsResult, findingsResult, eventsResult] = await Promise.all([
-      this.data.query<ReportRow>(`
+    const [reportsResult, findingsResult, eventsResult, commandsResult] =
+      await Promise.all([
+        this.data.query<ReportRow>(`
         SELECT r.report_key, c.client_key, c.display_name AS client_display_name,
                r.report_month, r.report_type, r.overall_status, r.document_status,
                r.generated_at, r.coverage, r.finding_counts_by_severity,
@@ -1928,7 +2063,7 @@ export class OperationsService {
         ORDER BY r.report_month DESC, r.generated_at DESC NULLS LAST, r.report_key ASC
         LIMIT 50
       `),
-      this.data.query<ReportFindingRow>(`
+        this.data.query<ReportFindingRow>(`
         WITH selected_reports AS (
           SELECT r.id, r.client_id, r.report_key, r.report_month
           FROM operations.reports r
@@ -1944,7 +2079,7 @@ export class OperationsService {
         JOIN selected_reports r ON r.id = f.report_id AND r.client_id = f.client_id
         ORDER BY r.report_month DESC, f.severity DESC, f.finding_key ASC
       `),
-      this.data.query<ReportEventRow>(`
+        this.data.query<ReportEventRow>(`
         WITH selected_reports AS (
           SELECT r.id, r.client_id, r.report_key
           FROM operations.reports r
@@ -1958,7 +2093,23 @@ export class OperationsService {
         JOIN selected_reports r ON r.id = e.report_id AND r.client_id = e.client_id
         ORDER BY e.occurred_at DESC, e.event_key ASC
       `),
-    ]);
+        this.data.query<RecentCommandRow>(`
+        WITH selected_reports AS (
+          SELECT r.id, r.client_id, r.report_key
+          FROM operations.reports r
+          JOIN operations.clients c ON c.id = r.client_id
+          WHERE c.state = 'active'
+          ORDER BY r.report_month DESC, r.generated_at DESC NULLS LAST, r.report_key ASC
+          LIMIT 50
+        )
+        SELECT DISTINCT ON (c.report_id)
+               c.report_id, s.report_key, c.command_type, c.status, c.result_code,
+               c.requested_at, c.completed_at
+        FROM operations.report_commands c
+        JOIN selected_reports s ON s.id = c.report_id
+        ORDER BY c.report_id, c.requested_at DESC
+      `),
+      ]);
 
     const findingsByReport = new Map<
       string,
@@ -1995,6 +2146,20 @@ export class OperationsService {
       historyByReport.set(event.report_key, history);
     }
 
+    const recentCommandByReport = new Map<
+      string,
+      ReportsResponse['reports'][number]['recentCommand']
+    >();
+    for (const command of commandsResult.rows) {
+      recentCommandByReport.set(command.report_key, {
+        commandType: command.command_type,
+        status: command.status,
+        resultCode: command.result_code,
+        requestedAt: iso(command.requested_at) ?? '',
+        completedAt: iso(command.completed_at),
+      });
+    }
+
     return {
       generatedAt: new Date().toISOString(),
       reports: reportsResult.rows.map((report) => ({
@@ -2015,9 +2180,401 @@ export class OperationsService {
         pdfAvailable: report.pdf_available,
         sendAttemptCount: report.send_attempt_count,
         deliveryFailureCategory: report.delivery_failure_category,
+        recentCommand: recentCommandByReport.get(report.report_key) ?? null,
         findings: findingsByReport.get(report.report_key) ?? [],
         history: historyByReport.get(report.report_key) ?? [],
       })),
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Phase 10 guarded report commands
+  // -------------------------------------------------------------------------
+
+  /**
+   * Best-effort expiry/reconcile sweep. A failure here must never block the
+   * caller; expired commands are also enforced by the DB functions.
+   */
+  private async reconcileCommands(): Promise<void> {
+    try {
+      await this.data.query(
+        'SELECT operations_private.reconcile_report_commands(100)',
+      );
+    } catch {
+      // Swallowed deliberately: reconciliation is opportunistic.
+    }
+  }
+
+  /**
+   * Load the report row needed to create a command. Internal ids are used
+   * only as bound parameters and never surface in a response.
+   */
+  private async readReportForCommand(
+    reportKey: string,
+  ): Promise<ReportForCommandRow> {
+    if (!REPORT_KEY_PATTERN.test(reportKey)) {
+      throw new BadRequestException('Invalid request');
+    }
+    const result = await this.data.query<ReportForCommandRow>(
+      `
+        SELECT r.id, r.report_key, r.client_id, cl.client_key,
+               r.document_status, r.row_version, r.sent_at, r.pdf_available
+        FROM operations.reports r
+        JOIN operations.clients cl ON cl.id = r.client_id
+        WHERE r.report_key = $1
+      `,
+      [reportKey],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new NotFoundException('Not found');
+    }
+    return row;
+  }
+
+  /**
+   * Current lifecycle state of one command, mapped to safe camelCase fields.
+   */
+  private async readCommandState(commandKey: string): Promise<{
+    status: string;
+    resultCode: string | null;
+  }> {
+    const result = await this.data.query<CommandStateRow>(
+      `
+        SELECT c.command_type, c.status, c.result_code, c.requested_at, c.completed_at
+        FROM operations.report_commands c
+        WHERE c.command_key = $1
+      `,
+      [commandKey],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new NotFoundException('Not found');
+    }
+    return commandStateFromRow(row);
+  }
+
+  /**
+   * Create, persist, dispatch and relay one guarded report command. Denials
+   * are business outcomes and are returned as 200 bodies; only malformed
+   * input, missing configuration and infrastructure failures throw.
+   */
+  async createReportCommand(
+    reportKey: string,
+    body: { commandType?: unknown; requestKey?: unknown; reason?: unknown },
+  ): Promise<ReportCommandOutcome> {
+    await this.reconcileCommands();
+    const report = await this.readReportForCommand(reportKey);
+
+    const commandType = body?.commandType;
+    if (
+      commandType !== 'APPROVE_AND_SEND' &&
+      commandType !== 'REJECT' &&
+      commandType !== 'RETRY_SEND'
+    ) {
+      throw new BadRequestException('Invalid request');
+    }
+    const expectedState = expectedStateForCommand(commandType);
+
+    if (report.document_status !== expectedState || report.sent_at !== null) {
+      return {
+        generatedAt: new Date().toISOString(),
+        reportKey,
+        status: 'denied',
+        resultCode: 'rejected_state',
+        denialCode: 'rejected_state',
+        alreadyRecorded: false,
+      };
+    }
+
+    // A reason is only meaningful for REJECT; for the other command types a
+    // provided reason is ignored entirely.
+    const normalizedReason =
+      commandType === 'REJECT' ? normalizeRejectReason(body?.reason) : null;
+
+    const requestKey =
+      typeof body?.requestKey === 'string' ? body.requestKey : '';
+    if (!REQUEST_KEY_PATTERN.test(requestKey)) {
+      throw new BadRequestException('Invalid request');
+    }
+
+    const secret = operationsConfig.reportCommandSecret;
+    const token = operationsConfig.reportCommandToken;
+    if (!secret || !token) {
+      // Fail closed: the exception filter maps this to a bare 500.
+      throw new Error('report command configuration incomplete');
+    }
+
+    const commandKey = randomBytes(16).toString('hex');
+    const correlationId = randomBytes(16).toString('hex');
+    const nonce = randomBytes(32).toString('hex');
+    const nonceHash = createHash('sha256').update(nonce).digest('hex');
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const expiresAt = issuedAt + operationsConfig.reportCommandTtlSeconds;
+    const recipientPolicyKey =
+      commandType === 'REJECT' ? '-' : REPORT_RECIPIENT_POLICY_KEY;
+    const reasonDigest = rejectReasonDigest(normalizedReason);
+
+    const created = await this.data.query<CreateCommandFnRow>(
+      `
+        SELECT command_id, command_key, command_type, status, result_code,
+               expires_at, already_recorded, denial_code
+        FROM operations_private.create_report_command_request(
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10
+        )
+      `,
+      [
+        requestKey,
+        commandKey,
+        reportKey,
+        commandType,
+        report.row_version,
+        expectedState,
+        nonceHash,
+        new Date(expiresAt * 1000).toISOString(),
+        correlationId,
+        report.client_id,
+      ],
+    );
+    const createdRow = created.rows[0];
+    if (createdRow?.denial_code) {
+      return {
+        generatedAt: new Date().toISOString(),
+        reportKey,
+        status: 'denied',
+        resultCode: createdRow.denial_code,
+        denialCode: createdRow.denial_code,
+        alreadyRecorded: false,
+      };
+    }
+
+    const canonical = buildReportCommandCanonical({
+      commandKey,
+      commandType: commandType,
+      reportKey,
+      clientKey: report.client_key,
+      expectedRowVersion: report.row_version,
+      expectedState,
+      nonce,
+      issuedAt,
+      expiresAt,
+      correlationId,
+      recipientPolicyKey,
+      reasonDigest,
+    });
+    const signature = signReportCommandCanonical(canonical, secret);
+
+    const dispatched = await this.data.query<DispatchCommandFnRow>(
+      `
+        SELECT command_id, status, result_code, denial_code
+        FROM operations_private.dispatch_report_command($1, $2, $3)
+      `,
+      [commandKey, report.client_key, signature],
+    );
+    const dispatchRow = dispatched.rows[0];
+    if (dispatchRow?.denial_code) {
+      // A concurrent dispatch won the CAS race; report the winner's state.
+      const state = await this.readCommandState(commandKey);
+      return {
+        generatedAt: new Date().toISOString(),
+        reportKey,
+        status: state.status,
+        resultCode: state.resultCode,
+        denialCode: dispatchRow.denial_code,
+        alreadyRecorded: true,
+      };
+    }
+
+    try {
+      await axios.post(
+        operationsConfig.reportCommandUrl,
+        {
+          payload: {
+            version: 'v1',
+            commandKey,
+            commandType: commandType,
+            reportKey,
+            clientKey: report.client_key,
+            expectedRowVersion: report.row_version,
+            expectedState,
+            nonce,
+            issuedAt,
+            expiresAt,
+            correlationId,
+            recipientPolicyKey,
+            reasonDigest,
+          },
+          signature,
+          reason: normalizedReason ?? undefined,
+        },
+        {
+          headers: {
+            'content-type': 'application/json',
+            'x-cloudit-report-command-token': token,
+          },
+          timeout: 10_000,
+        },
+      );
+    } catch {
+      // Relay to n8n is best effort: redispatch of an unclaimed command is
+      // not supported, so the command remains dispatched until claimed or
+      // expired. That is the intended failure mode.
+    }
+
+    const state = await this.readCommandState(commandKey);
+    return {
+      generatedAt: new Date().toISOString(),
+      reportKey,
+      status: state.status,
+      resultCode: state.resultCode,
+      denialCode: null,
+      alreadyRecorded: false,
+    };
+  }
+
+  /**
+   * Recent command outcomes for one report, newest first. Only lifecycle
+   * columns are selected — never nonce, signature, request or command keys.
+   */
+  async getReportCommands(reportKey: string): Promise<{
+    generatedAt: string;
+    commands: ReportCommandListItem[];
+  }> {
+    await this.reconcileCommands();
+    if (!REPORT_KEY_PATTERN.test(reportKey)) {
+      throw new BadRequestException('Invalid request');
+    }
+    const result = await this.data.query<ReportCommandListRow>(
+      `
+        SELECT c.command_type, c.status, c.result_code, c.requested_at, c.completed_at
+        FROM operations.report_commands c
+        JOIN operations.reports r
+          ON r.client_id = c.client_id AND r.id = c.report_id
+        WHERE r.report_key = $1
+        ORDER BY c.requested_at DESC
+        LIMIT 20
+      `,
+      [reportKey],
+    );
+    return {
+      generatedAt: new Date().toISOString(),
+      commands: result.rows.map((row) => ({
+        commandType: row.command_type,
+        status: row.status,
+        resultCode: row.result_code,
+        requestedAt: iso(row.requested_at) ?? '',
+        completedAt: iso(row.completed_at),
+      })),
+    };
+  }
+
+  /**
+   * Which guarded actions the current report state admits. Purely derived
+   * from the safe report columns; no reconcile and no write path.
+   */
+  async getReportActions(reportKey: string): Promise<{
+    generatedAt: string;
+    reportKey: string;
+    actions: {
+      approveAndSend: boolean;
+      reject: boolean;
+      retrySend: boolean;
+    };
+  }> {
+    const report = await this.readReportForCommand(reportKey);
+    return {
+      generatedAt: new Date().toISOString(),
+      reportKey,
+      actions: {
+        approveAndSend:
+          report.document_status === 'DRAFT' &&
+          report.pdf_available &&
+          report.sent_at === null,
+        reject: report.document_status === 'DRAFT' && report.sent_at === null,
+        retrySend:
+          report.document_status === 'SEND_FAILED' && report.sent_at === null,
+      },
+    };
+  }
+
+  /**
+   * n8n executor entry point: verifies the wire nonce against the stored
+   * hash and CAS-claims the command, releasing its execution context.
+   */
+  async claimReportCommand(body: unknown): Promise<{
+    generatedAt: string;
+    result: 'accepted' | 'denied';
+    denialCode?: string;
+    command?: {
+      commandKey: string;
+      commandType: string;
+      reportKey: string;
+      expectedState: string;
+    };
+  }> {
+    const { commandKey, clientKey, nonce } = verifyReportCommandClaimBody(body);
+    const nonceHash = createHash('sha256').update(nonce).digest('hex');
+    const result = await this.data.query<ClaimCommandFnRow>(
+      `
+        SELECT command_id, report_key, command_type, expected_row_version,
+               expected_state, status, result_code, denial_code
+        FROM operations_private.claim_report_command($1, $2, $3)
+      `,
+      [commandKey, clientKey, nonceHash],
+    );
+    const row = result.rows[0];
+    if (row?.denial_code) {
+      return {
+        generatedAt: new Date().toISOString(),
+        result: 'denied',
+        denialCode: row.denial_code,
+      };
+    }
+    return {
+      generatedAt: new Date().toISOString(),
+      result: 'accepted',
+      command: {
+        commandKey,
+        commandType: row?.command_type ?? '',
+        reportKey: row?.report_key ?? '',
+        expectedState: row?.expected_state ?? '',
+      },
+    };
+  }
+
+  /**
+   * n8n executor entry point: reports the execution outcome of a claimed
+   * command (acknowledged, rejected_* or failed_safe).
+   */
+  async acknowledgeReportCommand(body: unknown): Promise<{
+    generatedAt: string;
+    result: 'accepted' | 'denied';
+    denialCode?: string;
+    status?: string;
+    resultCode?: string | null;
+  }> {
+    const { commandKey, clientKey, resultCode } =
+      verifyReportCommandAckBody(body);
+    const result = await this.data.query<AcknowledgeCommandFnRow>(
+      `
+        SELECT command_id, status, result_code, denial_code
+        FROM operations_private.acknowledge_report_command($1, $2, $3)
+      `,
+      [commandKey, clientKey, resultCode],
+    );
+    const row = result.rows[0];
+    if (row?.denial_code) {
+      return {
+        generatedAt: new Date().toISOString(),
+        result: 'denied',
+        denialCode: row.denial_code,
+      };
+    }
+    return {
+      generatedAt: new Date().toISOString(),
+      result: 'accepted',
+      status: row?.status ?? '',
+      resultCode: row?.result_code ?? null,
     };
   }
 }

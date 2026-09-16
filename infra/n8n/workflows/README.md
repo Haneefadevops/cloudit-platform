@@ -559,6 +559,122 @@ The workflow exports inactive. Activation, deployment, and the real-DRAFT gate
 remain owner-approved operations. Rollback is to deactivate/delete the relay
 and unset its three operations-web variables; report metadata remains readable.
 
+## Phase 10 — Guarded report command
+
+### `cloudit-guarded-report-command.json`
+
+This inactive webhook executes one signed, short-lived report command
+(`APPROVE_AND_SEND`, `REJECT`, or `RETRY_SEND`) against exactly one
+`MONTHLY_MAINTENANCE` row of the existing `cavetta_monthly_maintenance_reports`
+Data Table. `platform-api` signs a canonical 13-line payload
+(HMAC-SHA256, secret `OPERATIONS_REPORT_COMMAND_SECRET`) and POSTs it with the
+`x-cloudit-report-command-token` header. It has no email node, no S3/PDF
+regeneration branch, no schedule trigger, and takes no recipient field from the
+request input — the recipient policy is fixed per command type. It is not
+connected to the recovery workflow.
+
+Straight path: Header Auth webhook → **Validate Signed Command** (Code node,
+strict per-field checks + `timingSafeEqual` HMAC; every failure throws the one
+generic `Report command denied`) → **Claim Command** (POSTs
+`{ commandKey, clientKey, nonce }` — the wire nonce, echoed by the validation
+node because n8n HTTP nodes do not pass input fields through) → **Claim
+Accepted** → **Load Authoritative Report** (Data Table get,
+`reportMonth` + `MONTHLY_MAINTENANCE`, limit 2) → **Guard Authoritative Row**
+(requires exactly one row in the expected state; APPROVE additionally requires
+a valid private `pdfDriveFileId`/`pdfFileName` pair and empty `sentAt`) →
+**Guards Passed** → **Apply Command** (Data Table update; the update filter
+includes `documentStatus = expectedState`, which IS the compare-and-set guard)
+→ **CAS Applied** → **Acknowledge** (`resultCode: acknowledged`) → respond
+`{ commandKey, status, resultCode }`. Every denial path acknowledges the same
+`resultCode` to platform-api and responds with only
+`{ commandKey, status: 'denied', resultCode }`.
+
+Structural decisions (verified against the n8n source, not assumed):
+
+- **CAS-applied detection** uses `={{ Number($json.id) }} > 0`, not
+  `$json.length`: the Data Table update operation emits ONE item per updated
+  row and ZERO items when no row matched the filter, so the update output is
+  never an array. `alwaysOutputData` is set on **Apply Command** so the
+  CAS-false branch always runs (on a filler `{}` item with no `id`); a real
+  updated row always carries the numeric system column `id`.
+- **Null columns are never sent as NULL**: n8n's Data Table update sends
+  `null` mapping values as SQL `SET col = NULL` (it does not skip them), which
+  would wipe e.g. `approvedAt` on REJECT/RETRY_SEND. **Apply Command**
+  therefore maps `approvedAt` / `rejectedAt` / `rejectedReason` as
+  `guard value ?? current row value (Load Authoritative Report) ?? null` —
+  a "write back the same value" no-op — touching only `documentStatus` and the
+  timestamp/reason the command actually sets. `sentAt`, `sendAttemptCount`,
+  the pdf fields and every other column are never mapped.
+- **Object-key regex** allows spaces (`^[A-Za-z0-9 !/._-]+$`): the real private
+  R2 keys are `Cavetta Maintenance Reports/YYYY/<file>.pdf` (see the relay
+  and recovery workflows), and `..` is still rejected separately.
+- Cross-branch references always use explicit `{{ $('Node Name').first().json.field }}`
+  because n8n HTTP nodes do not pass input fields through on either output.
+
+**Internal callback contract** (both POST, always 200, credential
+`CloudIT Operations Internal API`):
+- `http://platform-api:3001/api/operations/internal/report-commands/claim` —
+  body `{ commandKey, clientKey, nonce }`; response
+  `{ generatedAt, result, denialCode?, command? }`.
+- `http://platform-api:3001/api/operations/internal/report-commands/acknowledge` —
+  body `{ commandKey, clientKey, resultCode }` with `resultCode` one of
+  `acknowledged | rejected_state | rejected_stale_version |
+  rejected_pdf_unavailable | rejected_recipient_policy | failed_safe`.
+
+**Required environment variables in n8n (protected server env file):**
+- `OPERATIONS_REPORT_COMMAND_SECRET` — at least 32 characters, no `$`; must
+  equal the `platform-api` value (used to HMAC-sign the canonical payload).
+- `OPERATIONS_REPORT_COMMAND_URL` — set in `platform-api` to
+  `http://n8n:5678/webhook/cloudit-report-command`.
+
+**Required n8n credentials (owner creates; secrets never enter the workflow):**
+- **CloudIT Report Command** (webhook): n8n credential type **Header Auth**;
+  header name `x-cloudit-report-command-token`, value =
+  `OPERATIONS_REPORT_COMMAND_TOKEN` (at least 32 characters, no `$`). Dedicated
+  to this workflow — never reuse the relay or ingest secrets.
+- **CloudIT Operations Internal API** (claim/acknowledge HTTP nodes): the
+  existing Header Auth credential with header `x-operations-internal-token`
+  and the existing `OPERATIONS_INTERNAL_API_TOKEN` value (same as Phase 9).
+
+**Semantic harness (no n8n required):**
+`node infra/n8n/workflows/tests/report-command-harness.mjs` extracts both Code
+nodes from the export and runs them with n8n-mimicking `$env` / `$json` /
+`$input` / `$` stubs: valid and tampered signatures, expiry, every per-field
+rejection, REJECT reason normalization, and all guard outcomes
+(state drift, pdf unavailable, `..` key, already-sent, zero/two rows), plus
+structural invariants (inactive, no email/S3/schedule nodes, webhook path,
+credential name, no pinData). Exit code is non-zero on any failure.
+
+**Import rule:** the workflow exports `active: false` and must be imported
+INACTIVE and stay inactive until the checklist below is complete.
+
+**Pre-activation checklist (owner action):**
+1. Apply the fresh + idempotent migration
+   `infra/postgres/operations/migrations/0011_report_command_lifecycle.sql`
+   and deploy the matching `platform-api`.
+2. Set the same random `OPERATIONS_REPORT_COMMAND_SECRET` (>= 32 chars, no `$`)
+   in the protected environments for n8n and `platform-api`.
+3. Create the **CloudIT Report Command** Header Auth credential (recipe above)
+   and set `OPERATIONS_REPORT_COMMAND_TOKEN` in `platform-api`.
+4. Create/link the **CloudIT Operations Internal API** credential on the claim
+   and acknowledge HTTP nodes.
+5. Confirm the Data Table still carries the `reportMonth` / `reportType` /
+   `documentStatus` / `approvedAt` / `rejectedAt` / `rejectedReason` /
+   `pdfDriveFileId` / `pdfFileName` / `sentAt` columns — **Apply Command**
+   writes `rejectedReason`, and n8n fails closed with `unknown column name` if
+   it is missing.
+6. Run the semantic harness — all cases must be green.
+7. Owner live-comparison of the report review/sender workflows against the
+   Data Table row state before activation; the sender owns `sentAt`,
+   `sendAttemptCount` and `pdfGeneratedAt`, this workflow never writes them.
+8. Activate only after the above. Rollback is to deactivate/delete the
+   workflow; the Data Table and report metadata are unchanged by denials.
+
+**Hard rule:** during construction and testing this workflow must never
+perform a real report action — no activation and no live commands against real
+report rows until the owner explicitly approves. Deny-only tests against
+non-existent or DRAFT-only fixture months are permitted.
+
 ## Importing into n8n
 
 1. Open your n8n instance.

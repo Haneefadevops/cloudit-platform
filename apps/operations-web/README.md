@@ -46,6 +46,22 @@ HTTPS or the private `http://n8n:5678` Docker-network endpoint. The token authen
 match the protected value in n8n and `platform-api`. When any value is absent or
 invalid, the Report Centre fails closed and renders no PDF links.
 
+## Report actions (Phase 10)
+
+Guarded report actions (approve & send, reject, retry send) render only when
+`OPERATIONS_MFA_REQUIRED=true`; while it is `false` the action routes fail
+closed with `rejected_mfa` and the portal shows a lock notice. Actions are
+same-origin POST-only: the command route enforces, in order, session auth, the
+MFA config gate, a per-session+IP rate limit (10 attempts per 10 minutes), a
+strict `Origin` check against `OPERATIONS_PUBLIC_ORIGIN`, a per-render HMAC
+CSRF token, and step-up TOTP on every action. The request body is bounded to
+8 KB and accepts only `commandType`, `requestKey`, `actionNonce`, `csrfToken`,
+`totpCode` and an optional 300-character reject reason — never row versions,
+states, recipients or actor identity. Idempotency: each render precomputes
+HMAC-derived `requestKey` values, so a double-click submits an identical key
+and the API answers `alreadyRecorded` instead of creating a second command.
+The UI and all responses expose safe states only.
+
 ## Local checks
 
 ```bash

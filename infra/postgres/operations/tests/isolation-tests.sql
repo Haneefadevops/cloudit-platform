@@ -1206,6 +1206,413 @@ RESET operations.global_role;
 RESET operations.user_id;
 
 -- ===========================================================================
+-- 9b. Phase 10 report-command lifecycle (0011 primitives)
+-- ===========================================================================
+
+-- Fixtures: one DRAFT report with private PDF metadata and one SEND_FAILED
+-- report, both for client A. Superuser insert bypasses RLS; rolled back later.
+RESET ROLE;
+RESET operations.global_role;
+RESET operations.user_id;
+
+INSERT INTO operations.reports
+  (client_id, report_key, report_month, document_status, pdf_available, source_system, observed_at, publisher_id, idempotency_key)
+SELECT c.id, 'report-p10-draft', '2026-10-01', 'DRAFT', true, 'n8n', now(),
+  (SELECT p.id FROM operations.publishers p WHERE p.client_id = c.id AND p.publisher_key = 'pub-a'),
+  'fixture-report-p10-draft'
+FROM operations.clients c
+WHERE c.client_key = 'test-client-a';
+
+INSERT INTO operations.reports
+  (client_id, report_key, report_month, document_status, pdf_available, source_system, observed_at, publisher_id, idempotency_key)
+SELECT c.id, 'report-p10-failed', '2026-11-01', 'SEND_FAILED', true, 'n8n', now(),
+  (SELECT p.id FROM operations.publishers p WHERE p.client_id = c.id AND p.publisher_key = 'pub-a'),
+  'fixture-report-p10-failed'
+FROM operations.clients c
+WHERE c.client_key = 'test-client-a';
+
+INSERT INTO operations.reports
+  (client_id, report_key, report_month, document_status, pdf_available, source_system, observed_at, publisher_id, idempotency_key)
+SELECT c.id, 'report-p10-reject', '2026-12-01', 'DRAFT', true, 'n8n', now(),
+  (SELECT p.id FROM operations.publishers p WHERE p.client_id = c.id AND p.publisher_key = 'pub-a'),
+  'fixture-report-p10-reject'
+FROM operations.clients c
+WHERE c.client_key = 'test-client-a';
+
+SET ROLE operations_owner;
+SET operations.global_role = 'cloud_owner';
+
+-- Create: happy path, and command operations never touch report state.
+DO $$
+DECLARE
+  v_owner uuid;
+  v_rec   record;
+  v_before jsonb; v_after jsonb;
+  v_count integer;
+BEGIN
+  SELECT id INTO v_owner FROM pg_temp.fx_users WHERE email = 'owner@test.invalid';
+  SELECT jsonb_build_object('document_status', document_status, 'row_version', row_version,
+    'sent_at', sent_at, 'updated_at', updated_at)
+    INTO v_before FROM operations.reports WHERE report_key = 'report-p10-draft';
+
+  SELECT * INTO v_rec FROM operations_private.create_report_command_request(
+    'req_' || repeat('a', 30), repeat('01', 16), 'report-p10-draft',
+    'APPROVE_AND_SEND', 1, 'DRAFT', repeat('cd', 32), now() + interval '2 minutes',
+    repeat('02', 16), v_owner,
+    (SELECT id FROM operations.clients WHERE client_key = 'test-client-a')
+  );
+  PERFORM pg_temp.t_assert('p10_command_created',
+    v_rec.command_id IS NOT NULL AND v_rec.status = 'pending'
+    AND v_rec.already_recorded = false AND v_rec.denial_code IS NULL,
+    'status=' || v_rec.status);
+
+  SELECT jsonb_build_object('document_status', document_status, 'row_version', row_version,
+    'sent_at', sent_at, 'updated_at', updated_at)
+    INTO v_after FROM operations.reports WHERE report_key = 'report-p10-draft';
+  PERFORM pg_temp.t_assert('p10_create_preserves_report_state', v_before = v_after, 'fingerprint match');
+
+  -- Duplicate submission with the same idempotency identity returns the same
+  -- command and never records a second one.
+  SELECT * INTO v_rec FROM operations_private.create_report_command_request(
+    'req_' || repeat('a', 30), repeat('03', 16), 'report-p10-draft',
+    'APPROVE_AND_SEND', 1, 'DRAFT', repeat('ce', 32), now() + interval '2 minutes',
+    repeat('04', 16), v_owner,
+    (SELECT id FROM operations.clients WHERE client_key = 'test-client-a')
+  );
+  SELECT count(*) INTO v_count FROM operations.report_commands
+  WHERE request_key = 'req_' || repeat('a', 30);
+  PERFORM pg_temp.t_assert('p10_duplicate_request_idempotent',
+    v_rec.already_recorded = true AND v_rec.status = 'pending' AND v_count = 1,
+    'count=' || v_count);
+END $$;
+
+-- Create: stale version is denied without a row; PDF absence is denied.
+DO $$
+DECLARE
+  v_owner uuid; v_rec record; v_count integer;
+BEGIN
+  SELECT id INTO v_owner FROM pg_temp.fx_users WHERE email = 'owner@test.invalid';
+  SELECT * INTO v_rec FROM operations_private.create_report_command_request(
+    'req_' || repeat('b', 30), repeat('05', 16), 'report-p10-draft',
+    'APPROVE_AND_SEND', 99, 'DRAFT', repeat('d1', 32), now() + interval '2 minutes',
+    repeat('06', 16), v_owner,
+    (SELECT id FROM operations.clients WHERE client_key = 'test-client-a')
+  );
+  PERFORM pg_temp.t_assert('p10_create_stale_version_denied',
+    v_rec.denial_code = 'rejected_stale_version' AND v_rec.command_id IS NULL,
+    v_rec.denial_code);
+  SELECT count(*) INTO v_count FROM operations.report_commands WHERE command_key = repeat('05', 16);
+  PERFORM pg_temp.t_assert('p10_denial_creates_no_command', v_count = 0, 'count=' || v_count);
+END $$;
+
+DO $$
+DECLARE
+  v_owner uuid; v_rec record;
+BEGIN
+  SELECT id INTO v_owner FROM pg_temp.fx_users WHERE email = 'owner@test.invalid';
+  -- pdf_available = false report (client B DRAFT fixture has no PDF flag set).
+  SELECT * INTO v_rec FROM operations_private.create_report_command_request(
+    'req_' || repeat('c', 30), repeat('07', 16), 'report-b-2026-09',
+    'APPROVE_AND_SEND', 1, 'DRAFT', repeat('d3', 32), now() + interval '2 minutes',
+    repeat('08', 16), v_owner,
+    (SELECT id FROM operations.clients WHERE client_key = 'test-client-b')
+  );
+  PERFORM pg_temp.t_assert('p10_create_pdf_unavailable_denied',
+    v_rec.denial_code = 'rejected_pdf_unavailable' AND v_rec.command_id IS NULL,
+    v_rec.denial_code);
+END $$;
+
+-- Viewer context cannot create commands (return-based denial, audited).
+DO $$
+DECLARE v_viewer uuid; v_rec record;
+BEGIN
+  SELECT id INTO v_viewer FROM pg_temp.fx_users WHERE email = 'viewer-a@test.invalid';
+  PERFORM set_config('operations.global_role', 'client_viewer', false);
+  PERFORM set_config('operations.user_id', v_viewer::text, false);
+  SELECT * INTO v_rec FROM operations_private.create_report_command_request(
+    'req_' || repeat('d', 30), repeat('09', 16), 'report-p10-draft',
+    'APPROVE_AND_SEND', 1, 'DRAFT', repeat('d5', 32), now() + interval '2 minutes',
+    repeat('0a', 16), v_viewer,
+    (SELECT id FROM operations.clients WHERE client_key = 'test-client-a')
+  );
+  PERFORM pg_temp.t_assert('p10_create_viewer_denied',
+    v_rec.denial_code = 'denied_role' AND v_rec.command_id IS NULL, v_rec.denial_code);
+  PERFORM set_config('operations.global_role', 'cloud_owner', false);
+END $$;
+
+-- Full lifecycle: dispatch -> claim -> acknowledge -> reconcile to SENT,
+-- with replay/expiry/stale/state/tenant denials along the way.
+DO $$
+DECLARE
+  v_owner uuid; v_rec record; v_final record;
+  v_fingerprint jsonb;
+BEGIN
+  SELECT id INTO v_owner FROM pg_temp.fx_users WHERE email = 'owner@test.invalid';
+
+  SELECT * INTO v_rec FROM operations_private.create_report_command_request(
+    'req_' || repeat('e', 30), repeat('0b', 16), 'report-p10-draft',
+    'APPROVE_AND_SEND', 1, 'DRAFT', repeat('d7', 32), now() + interval '5 minutes',
+    repeat('0c', 16), v_owner,
+    (SELECT id FROM operations.clients WHERE client_key = 'test-client-a')
+  );
+  PERFORM pg_temp.t_assert('p10_lifecycle_create', v_rec.status = 'pending', v_rec.status);
+
+  SELECT * INTO v_rec FROM operations_private.dispatch_report_command(
+    repeat('0b', 16), 'test-client-a', repeat('d9', 32));
+  PERFORM pg_temp.t_assert('p10_lifecycle_dispatch',
+    v_rec.status = 'dispatched' AND v_rec.result_code = 'dispatch_pending', v_rec.status);
+
+  -- Tenant mismatch: same command key under the wrong client is a uniform denial.
+  SELECT * INTO v_rec FROM operations_private.claim_report_command(
+    repeat('0b', 16), 'test-client-b', repeat('d7', 32));
+  PERFORM pg_temp.t_assert('p10_claim_tenant_mismatch_denied',
+    v_rec.denial_code = 'rejected_replay' AND v_rec.command_id IS NULL, v_rec.denial_code);
+
+  -- Wrong nonce is a replay denial and makes no change.
+  SELECT * INTO v_rec FROM operations_private.claim_report_command(
+    repeat('0b', 16), 'test-client-a', repeat('e1', 32));
+  PERFORM pg_temp.t_assert('p10_claim_wrong_nonce_denied',
+    v_rec.denial_code = 'rejected_replay' AND v_rec.command_id IS NULL, v_rec.denial_code);
+
+  SELECT * INTO v_rec FROM operations_private.claim_report_command(
+    repeat('0b', 16), 'test-client-a', repeat('d7', 32));
+  PERFORM pg_temp.t_assert('p10_lifecycle_claim',
+    v_rec.status = 'claimed' AND v_rec.result_code = 'accepted'
+    AND v_rec.command_type = 'APPROVE_AND_SEND' AND v_rec.expected_state = 'DRAFT',
+    v_rec.status);
+
+  -- The claim is one-use.
+  SELECT * INTO v_rec FROM operations_private.claim_report_command(
+    repeat('0b', 16), 'test-client-a', repeat('d7', 32));
+  PERFORM pg_temp.t_assert('p10_claim_replay_denied',
+    v_rec.denial_code = 'rejected_replay' AND v_rec.command_id IS NULL, v_rec.denial_code);
+
+  SELECT * INTO v_rec FROM operations_private.acknowledge_report_command(
+    repeat('0b', 16), 'test-client-a', 'acknowledged');
+  PERFORM pg_temp.t_assert('p10_lifecycle_acknowledge',
+    v_rec.status = 'acknowledged' AND v_rec.result_code = 'acknowledged', v_rec.status);
+
+  -- Sender outcome: mirror only changes through the authoritative publisher;
+  -- the reconciler completes the command with the safe outcome code.
+  RESET ROLE;
+  UPDATE operations.reports SET document_status = 'SENT', sent_at = now()
+  WHERE report_key = 'report-p10-draft';
+  SET ROLE operations_owner;
+  SET operations.global_role = 'cloud_owner';
+
+  PERFORM operations_private.reconcile_report_commands(100);
+  SELECT c.status, c.result_code INTO v_final FROM operations.report_commands AS c
+  WHERE c.command_key = repeat('0b', 16);
+  PERFORM pg_temp.t_assert('p10_reconcile_completes_sent',
+    v_final.status = 'completed' AND v_final.result_code = 'sent',
+    v_final.status || '/' || v_final.result_code);
+
+  SELECT jsonb_build_object('document_status', document_status, 'row_version', row_version,
+    'sent_at', sent_at IS NOT NULL)
+    INTO v_fingerprint FROM operations.reports WHERE report_key = 'report-p10-draft';
+  PERFORM pg_temp.t_assert('p10_sent_requires_real_sent_at',
+    v_fingerprint -> 'document_status' = '"SENT"' AND v_fingerprint -> 'sent_at' = 'true',
+    v_fingerprint::text);
+
+  -- A completed command cannot be replayed through any later stage.
+  SELECT * INTO v_rec FROM operations_private.complete_report_command(
+    repeat('0b', 16), 'test-client-a', 'sent');
+  PERFORM pg_temp.t_assert('p10_complete_replay_denied',
+    v_rec.denial_code = 'rejected_replay' AND v_rec.command_id IS NULL, v_rec.denial_code);
+END $$;
+
+-- Stale version and wrong state are rejected atomically at claim time.
+DO $$
+DECLARE
+  v_owner uuid; v_rec record;
+BEGIN
+  SELECT id INTO v_owner FROM pg_temp.fx_users WHERE email = 'owner@test.invalid';
+  SELECT * INTO v_rec FROM operations_private.create_report_command_request(
+    'req_' || repeat('f', 30), repeat('e3', 16), 'report-p10-failed',
+    'RETRY_SEND', 1, 'SEND_FAILED', repeat('e5', 32), now() + interval '5 minutes',
+    repeat('e7', 16), v_owner,
+    (SELECT id FROM operations.clients WHERE client_key = 'test-client-a')
+  );
+  PERFORM pg_temp.t_assert('p10_retry_create', v_rec.status = 'pending', v_rec.status);
+  PERFORM operations_private.dispatch_report_command(repeat('e3', 16), 'test-client-a', repeat('e9', 32));
+
+  -- Mirror drifts to a newer version before the webhook claims.
+  RESET ROLE;
+  UPDATE operations.reports SET row_version = row_version + 1
+  WHERE report_key = 'report-p10-failed';
+  SET ROLE operations_owner;
+  SET operations.global_role = 'cloud_owner';
+
+  SELECT * INTO v_rec FROM operations_private.claim_report_command(
+    repeat('e3', 16), 'test-client-a', repeat('e5', 32));
+  PERFORM pg_temp.t_assert('p10_claim_stale_version_terminates',
+    v_rec.denial_code = 'rejected_stale_version' AND v_rec.command_id IS NULL, v_rec.denial_code);
+  SELECT c.status, c.result_code INTO v_rec FROM operations.report_commands AS c
+  WHERE c.command_key = repeat('e3', 16);
+  PERFORM pg_temp.t_assert('p10_stale_version_terminal',
+    v_rec.status = 'rejected_stale_version' AND v_rec.result_code = 'rejected_stale_version',
+    v_rec.status);
+END $$;
+
+DO $$
+DECLARE
+  v_owner uuid; v_rec record;
+BEGIN
+  SELECT id INTO v_owner FROM pg_temp.fx_users WHERE email = 'owner@test.invalid';
+  SELECT * INTO v_rec FROM operations_private.create_report_command_request(
+    'req_' || repeat('0f', 30), repeat('f1', 16), 'report-p10-failed',
+    'RETRY_SEND', 2, 'SEND_FAILED', repeat('f3', 32), now() + interval '5 minutes',
+    repeat('f5', 16), v_owner,
+    (SELECT id FROM operations.clients WHERE client_key = 'test-client-a')
+  );
+  PERFORM operations_private.dispatch_report_command(repeat('f1', 16), 'test-client-a', repeat('f7', 32));
+
+  -- Authoritative state moved on (a real send can never be commanded again).
+  RESET ROLE;
+  UPDATE operations.reports SET document_status = 'SENT', sent_at = now()
+  WHERE report_key = 'report-p10-failed';
+  SET ROLE operations_owner;
+  SET operations.global_role = 'cloud_owner';
+
+  SELECT * INTO v_rec FROM operations_private.claim_report_command(
+    repeat('f1', 16), 'test-client-a', repeat('f3', 32));
+  PERFORM pg_temp.t_assert('p10_claim_wrong_state_terminates',
+    v_rec.denial_code = 'rejected_state' AND v_rec.command_id IS NULL, v_rec.denial_code);
+  SELECT c.status, c.result_code INTO v_rec FROM operations.report_commands AS c
+  WHERE c.command_key = repeat('f1', 16);
+  PERFORM pg_temp.t_assert('p10_wrong_state_terminal',
+    v_rec.status = 'rejected_state' AND v_rec.result_code = 'rejected_state', v_rec.status);
+END $$;
+
+-- Expiry: an expired in-flight command is terminally rejected, never actioned.
+DO $$
+DECLARE
+  v_owner uuid; v_rec record; v_handled integer;
+BEGIN
+  SELECT id INTO v_owner FROM pg_temp.fx_users WHERE email = 'owner@test.invalid';
+  SELECT * INTO v_rec FROM operations_private.create_report_command_request(
+    'req_' || repeat('1f', 30), repeat('f9', 16), 'report-p10-reject',
+    'REJECT', 1, 'DRAFT', repeat('fb', 32), now() + interval '5 minutes',
+    repeat('fd', 16), v_owner,
+    (SELECT id FROM operations.clients WHERE client_key = 'test-client-a')
+  );
+  PERFORM operations_private.dispatch_report_command(repeat('f9', 16), 'test-client-a', repeat('fe', 32));
+  -- The only legitimate way time passes: the row itself expires.
+  RESET ROLE;
+  UPDATE operations.report_commands SET expires_at = now() - interval '1 second'
+  WHERE command_key = repeat('f9', 16);
+  SET ROLE operations_owner;
+  SET operations.global_role = 'cloud_owner';
+
+  SELECT * INTO v_rec FROM operations_private.claim_report_command(
+    repeat('f9', 16), 'test-client-a', repeat('fb', 32));
+  PERFORM pg_temp.t_assert('p10_claim_expired_terminates',
+    v_rec.denial_code = 'rejected_expired' AND v_rec.command_id IS NULL, v_rec.denial_code);
+
+  -- A fresh in-flight command is swept by the reconciler once expired.
+  SELECT * INTO v_rec FROM operations_private.create_report_command_request(
+    'req_' || repeat('2f', 30), repeat('a1', 16), 'report-p10-reject',
+    'REJECT', 1, 'DRAFT', repeat('a3', 32), now() + interval '5 minutes',
+    repeat('a5', 16), v_owner,
+    (SELECT id FROM operations.clients WHERE client_key = 'test-client-a')
+  );
+  PERFORM operations_private.dispatch_report_command(repeat('a1', 16), 'test-client-a', repeat('a7', 32));
+  RESET ROLE;
+  UPDATE operations.report_commands SET expires_at = now() - interval '1 second'
+  WHERE command_key = repeat('a1', 16);
+  SET ROLE operations_owner;
+  SET operations.global_role = 'cloud_owner';
+  v_handled := operations_private.reconcile_report_commands(100);
+  SELECT c.status, c.result_code INTO v_rec FROM operations.report_commands AS c
+  WHERE c.command_key = repeat('a1', 16);
+  PERFORM pg_temp.t_assert('p10_reconcile_expires_inflight',
+    v_rec.status = 'rejected_expired' AND v_rec.result_code = 'rejected_expired' AND v_handled >= 1,
+    v_rec.status || ' handled=' || v_handled);
+END $$;
+
+-- Command-specific validation: APPROVE_AND_SEND requires a DRAFT precondition.
+DO $$
+BEGIN
+  PERFORM operations_private.create_report_command_request(
+    'req_' || repeat('3f', 30), repeat('a9', 16), 'report-p10-failed',
+    'APPROVE_AND_SEND', 2, 'SEND_FAILED', repeat('ab', 32), now() + interval '2 minutes',
+    repeat('ad', 16), NULL,
+    (SELECT id FROM operations.clients WHERE client_key = 'test-client-a')
+  );
+  PERFORM pg_temp.t_assert('p10_create_invalid_expected_state_raises', false, 'created');
+EXCEPTION WHEN raise_exception THEN
+  PERFORM pg_temp.t_assert('p10_create_invalid_expected_state_raises', SQLERRM = 'invalid_expected_state', SQLERRM);
+END $$;
+
+-- Closed result codes are enforced by the database, not by convention.
+RESET ROLE;
+DO $$
+BEGIN
+  INSERT INTO operations.report_commands
+    (client_id, report_id, command_key, command_type, expected_row_version, expected_state,
+     nonce, expires_at, status, result_code)
+  SELECT c.id, r.id, repeat('af', 16), 'REJECT', 1, 'DRAFT', repeat('b1', 32),
+    now() + interval '2 minutes', 'completed', 'smtp_gave_up_raw_error'
+  FROM operations.clients c JOIN operations.reports r
+    ON r.client_id = c.id AND r.report_key = 'report-p10-draft'
+  WHERE c.client_key = 'test-client-a';
+  PERFORM pg_temp.t_assert('p10_result_code_constraint', false, 'inserted');
+EXCEPTION WHEN check_violation THEN
+  PERFORM pg_temp.t_assert('p10_result_code_constraint', true, SQLERRM);
+END $$;
+
+-- The lifecycle wrote a complete append-only audit trail with closed codes only.
+SET ROLE operations_owner;
+SET operations.global_role = 'cloud_owner';
+
+DO $$
+DECLARE v_bad integer; v_missing integer;
+BEGIN
+  SELECT count(*) INTO v_bad FROM operations.audit_events
+  WHERE action LIKE 'report.command.%'
+    AND (safe_reason_code IS NULL OR safe_reason_code NOT IN (
+      'accepted', 'already_recorded', 'dispatch_pending', 'acknowledged',
+      'sent', 'send_failed', 'denied_role',
+      'rejected_replay', 'rejected_expired', 'rejected_stale_version',
+      'rejected_state', 'rejected_pdf_unavailable', 'rejected_recipient_policy',
+      'rejected_auth', 'rejected_csrf', 'rejected_mfa', 'rejected_rate_limit',
+      'failed_safe'));
+  PERFORM pg_temp.t_assert('p10_audit_closed_codes_only', v_bad = 0, 'bad=' || v_bad);
+
+  SELECT count(*) INTO v_missing FROM operations.report_commands c
+  WHERE c.command_key ~ '^[a-f0-9]{32}$'
+    AND NOT EXISTS (
+    SELECT 1 FROM operations.audit_events a
+    WHERE a.command_key = c.command_key AND a.action LIKE 'report.command.%'
+  );
+  PERFORM pg_temp.t_assert('p10_every_command_audited', v_missing = 0, 'missing=' || v_missing);
+END $$;
+
+-- The portal role has no direct report-state write path (structural).
+DO $$
+BEGIN
+  UPDATE operations.reports SET document_status = 'SENT' WHERE report_key = 'report-p10-draft';
+  PERFORM pg_temp.t_assert('p10_reports_not_writable_by_portal', false, 'updated');
+EXCEPTION WHEN insufficient_privilege THEN
+  PERFORM pg_temp.t_assert('p10_reports_not_writable_by_portal', true, SQLERRM);
+END $$;
+
+-- Cross-tenant command visibility: viewer B cannot see client A commands.
+DO $$
+DECLARE v_viewer uuid; v_count integer;
+BEGIN
+  SELECT id INTO v_viewer FROM pg_temp.fx_users WHERE email = 'viewer-b@test.invalid';
+  PERFORM set_config('operations.global_role', 'client_viewer', false);
+  PERFORM set_config('operations.user_id', v_viewer::text, false);
+  SELECT count(*) INTO v_count FROM operations.report_commands;
+  PERFORM pg_temp.t_assert('p10_commands_cross_tenant_hidden', v_count = 0, 'count=' || v_count);
+END $$;
+
+RESET ROLE;
+RESET operations.global_role;
+RESET operations.user_id;
+
+-- ===========================================================================
 -- 10. Append-only enforcement (even the provisioning admin is blocked)
 -- ===========================================================================
 
