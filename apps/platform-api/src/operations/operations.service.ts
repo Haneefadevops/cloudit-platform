@@ -655,6 +655,350 @@ function commandStateFromRow(row: CommandStateRow | undefined): {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Phase 11 incidents and audit history (read-only investigation views).
+// Every new surface is a GET-only, allowlist-validated projection of
+// already-sanitized columns; severity_echo and the ingest bookkeeping
+// columns (publisher_id, source_record_type, idempotency_key) are never
+// selected.
+// ---------------------------------------------------------------------------
+
+const INCIDENT_KEY_PATTERN = /^[a-z0-9][a-z0-9_.-]{1,120}$/;
+const CLIENT_KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{1,62}$/;
+const DOMAIN_KEY_PATTERN = /^[a-z0-9.-]+\.[a-z]{2,}$/;
+const AUDIT_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+const INCIDENT_STATES: readonly string[] = ['open', 'recovered', 'resolved'];
+const INCIDENT_SEVERITIES: readonly string[] = [
+  'info',
+  'warning',
+  'critical',
+  'none',
+];
+const INCIDENT_STATUS_COLORS: readonly string[] = [
+  'GREEN',
+  'AMBER',
+  'RED',
+  'NO_DATA',
+  'UNKNOWN',
+];
+const INCIDENT_EVENT_TYPES: readonly string[] = [
+  'detected',
+  'confirmed',
+  'recovered',
+  'resolved',
+  'rejected',
+  'updated',
+];
+const INCIDENT_SOURCES: readonly string[] = [
+  'n8n',
+  'uptime_kuma',
+  'github_actions',
+  'vercel',
+  'supabase',
+  'imagekit',
+];
+const AUDIT_ACTOR_TYPES: readonly string[] = [
+  'portal_user',
+  'publisher',
+  'system',
+  'n8n',
+];
+const AUDIT_RESULTS: readonly string[] = [
+  'success',
+  'denied',
+  'error',
+  'allowed',
+];
+
+interface IncidentListRow {
+  incident_key: string;
+  service_key: string;
+  state: string;
+  severity: string;
+  status_color: string | null;
+  failure_category: string | null;
+  occurrence_count: number;
+  safe_summary: string | null;
+  safe_action: string | null;
+  started_at: Date;
+  confirmed_at: Date | null;
+  recovered_at: Date | null;
+  resolved_at: Date | null;
+  observed_at: Date;
+  correlation_key: string | null;
+  endpoint_key: string | null;
+  endpoint_display_name: string | null;
+  domain_name: string | null;
+  client_key: string;
+  client_display_name: string;
+}
+
+interface IncidentDetailRow extends IncidentListRow {
+  // Internal id: bound parameter for the timeline query only, never projected.
+  client_id: string;
+}
+
+interface IncidentEventRow {
+  event_type: string;
+  occurred_at: Date;
+  severity: string | null;
+  status_color: string | null;
+  correlation_key: string | null;
+  event_key: string;
+}
+
+interface AuditEventRow {
+  event_key: string;
+  occurred_at: Date;
+  actor_type: string;
+  actor_key: string;
+  action: string;
+  target_type: string | null;
+  target_key: string | null;
+  result: string;
+  command_key: string | null;
+  safe_reason_code: string | null;
+  client_key: string | null;
+}
+
+export interface IncidentListItem {
+  incidentKey: string;
+  serviceKey: string;
+  endpointKey: string | null;
+  endpointDisplayName: string | null;
+  domainKey: string | null;
+  state: 'open' | 'recovered' | 'resolved';
+  severity: 'info' | 'warning' | 'critical' | 'none';
+  statusColor: 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA' | 'UNKNOWN' | null;
+  failureCategory: string | null;
+  occurrenceCount: number;
+  safeSummary: string | null;
+  safeAction: string | null;
+  startedAt: string;
+  confirmedAt: string | null;
+  recoveredAt: string | null;
+  resolvedAt: string | null;
+  lastObservedAt: string;
+  correlationKey: string | null;
+}
+
+export interface RepeatedFailureBucket {
+  failureCategory: string | null;
+  serviceKey: string;
+  endpointKey: string | null;
+  openCount: number;
+  totalOccurrences: number;
+  lastOccurredAt: string;
+}
+
+export interface IncidentsResponse {
+  generatedAt: string;
+  filters: {
+    state: string;
+    severity: string | null;
+    client: string | null;
+    domain: string | null;
+    source: string | null;
+  };
+  clients: {
+    clientKey: string;
+    clientName: string;
+    incidents: IncidentListItem[];
+  }[];
+  buckets: RepeatedFailureBucket[];
+}
+
+export interface IncidentDetailResponse {
+  generatedAt: string;
+  incident: IncidentListItem;
+  events: {
+    eventType:
+      | 'detected'
+      | 'confirmed'
+      | 'recovered'
+      | 'resolved'
+      | 'rejected'
+      | 'updated';
+    occurredAt: string;
+    severity: 'info' | 'warning' | 'critical' | 'none' | null;
+    statusColor: string | null;
+    correlationKey: string | null;
+  }[];
+  links: {
+    kind: 'endpoint' | 'report' | 'backup';
+    label: string;
+    refKey: string;
+  }[];
+}
+
+export interface AuditEventsResponse {
+  generatedAt: string;
+  filters: { category: string; from: string | null; to: string | null };
+  events: {
+    eventKey: string;
+    occurredAt: string;
+    actorType: 'portal_user' | 'publisher' | 'system' | 'n8n';
+    actorKey: string;
+    action: string;
+    targetType: string | null;
+    targetKey: string | null;
+    result: 'success' | 'denied' | 'error' | 'allowed';
+    safeReasonCode: string | null;
+    commandKey: string | null;
+    clientKey: string | null;
+  }[];
+  nextCursor: string | null;
+}
+
+function parseOptionalAllowlist(
+  raw: string | undefined,
+  allowlist: readonly string[],
+): string | null {
+  if (raw === undefined || raw === '') {
+    return null;
+  }
+  if (allowlist.includes(raw)) {
+    return raw;
+  }
+  throw new BadRequestException('Invalid request');
+}
+
+function parseOptionalPattern(
+  raw: string | undefined,
+  pattern: RegExp,
+): string | null {
+  if (raw === undefined || raw === '') {
+    return null;
+  }
+  if (pattern.test(raw)) {
+    return raw;
+  }
+  throw new BadRequestException('Invalid request');
+}
+
+function parseIncidentState(raw: string | undefined): string {
+  if (raw === undefined || raw === '') {
+    return 'all';
+  }
+  if (raw === 'all' || INCIDENT_STATES.includes(raw)) {
+    return raw;
+  }
+  throw new BadRequestException('Invalid request');
+}
+
+function parseAuditCategory(raw: string | undefined): string {
+  if (
+    raw === undefined ||
+    raw === '' ||
+    raw === 'all' ||
+    raw === 'report_actions' ||
+    raw === 'authentication' ||
+    raw === 'administrative'
+  ) {
+    return raw === undefined || raw === '' ? 'all' : raw;
+  }
+  throw new BadRequestException('Invalid request');
+}
+
+function parseAuditDate(raw: string | undefined): string | null {
+  if (raw === undefined || raw === '') {
+    return null;
+  }
+  if (!AUDIT_DATE_PATTERN.test(raw)) {
+    throw new BadRequestException('Invalid request');
+  }
+  const [year, month, day] = raw.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    throw new BadRequestException('Invalid request');
+  }
+  return raw;
+}
+
+function parseAuditLimit(raw: string | undefined): number {
+  if (raw === undefined || raw === '') {
+    return 50;
+  }
+  if (!/^\d+$/.test(raw)) {
+    throw new BadRequestException('Invalid request');
+  }
+  const limit = Number(raw);
+  if (limit < 1 || limit > 100) {
+    throw new BadRequestException('Invalid request');
+  }
+  return limit;
+}
+
+function encodeAuditCursor(occurredAt: Date, eventKey: string): string {
+  return Buffer.from(
+    `${occurredAt.toISOString()}|${eventKey}`,
+    'utf8',
+  ).toString('base64url');
+}
+
+function parseAuditCursor(
+  raw: string | undefined,
+): { occurredAt: string; eventKey: string } | null {
+  if (raw === undefined || raw === '') {
+    return null;
+  }
+  const decoded = Buffer.from(raw, 'base64url').toString('utf8');
+  const parts = decoded.split('|');
+  if (parts.length !== 2) {
+    throw new BadRequestException('Invalid request');
+  }
+  const [occurredAt, eventKey] = parts;
+  const time = Date.parse(occurredAt);
+  if (!Number.isFinite(time) || new Date(time).toISOString() !== occurredAt) {
+    throw new BadRequestException('Invalid request');
+  }
+  if (eventKey.length === 0 || eventKey.length > 160) {
+    throw new BadRequestException('Invalid request');
+  }
+  return { occurredAt, eventKey };
+}
+
+/**
+ * Map one incident row to the safe camelCase projection. Returns null when a
+ * value falls outside the closed-list mirrors (defensive; the CHECK
+ * constraints make this unreachable).
+ */
+function mapIncidentListItem(row: IncidentListRow): IncidentListItem | null {
+  if (
+    !INCIDENT_STATES.includes(row.state) ||
+    !INCIDENT_SEVERITIES.includes(row.severity) ||
+    (row.status_color !== null &&
+      !INCIDENT_STATUS_COLORS.includes(row.status_color))
+  ) {
+    return null;
+  }
+  return {
+    incidentKey: row.incident_key,
+    serviceKey: row.service_key,
+    endpointKey: row.endpoint_key,
+    endpointDisplayName: row.endpoint_display_name,
+    domainKey: row.domain_name,
+    state: row.state as IncidentListItem['state'],
+    severity: row.severity as IncidentListItem['severity'],
+    statusColor: row.status_color as IncidentListItem['statusColor'],
+    failureCategory: row.failure_category,
+    occurrenceCount: row.occurrence_count,
+    safeSummary: row.safe_summary,
+    safeAction: row.safe_action,
+    startedAt: iso(row.started_at) ?? '',
+    confirmedAt: iso(row.confirmed_at),
+    recoveredAt: iso(row.recovered_at),
+    resolvedAt: iso(row.resolved_at),
+    lastObservedAt: iso(row.observed_at) ?? '',
+    correlationKey: row.correlation_key,
+  };
+}
+
 /**
  * Read-mostly business logic for the operations endpoints. The Phase 9 nonce
  * claim is the only stateful call and cannot mutate a report. Response fields
@@ -2575,6 +2919,365 @@ export class OperationsService {
       result: 'accepted',
       status: row?.status ?? '',
       resultCode: row?.result_code ?? null,
+    };
+  }
+
+  /**
+   * Incident list with closed-allowlist filters and the repeated-failure
+   * buckets derived server-side over the filtered set. Only allowlisted,
+   * already-sanitized incident columns are selected; domain is derived via
+   * the endpoint join, never stored on the incident.
+   */
+  async getIncidents(filters: {
+    state?: string;
+    severity?: string;
+    client?: string;
+    domain?: string;
+    source?: string;
+  }): Promise<IncidentsResponse> {
+    const state = parseIncidentState(filters?.state);
+    const severity = parseOptionalAllowlist(
+      filters?.severity,
+      INCIDENT_SEVERITIES,
+    );
+    const clientKey = parseOptionalPattern(filters?.client, CLIENT_KEY_PATTERN);
+    const domainKey = parseOptionalPattern(filters?.domain, DOMAIN_KEY_PATTERN);
+    const source = parseOptionalAllowlist(filters?.source, INCIDENT_SOURCES);
+
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    if (state !== 'all') {
+      params.push(state);
+      conditions.push(`i.state = $${params.length}`);
+    }
+    if (severity !== null) {
+      params.push(severity);
+      conditions.push(`i.severity = $${params.length}`);
+    }
+    if (clientKey !== null) {
+      params.push(clientKey);
+      conditions.push(`c.client_key = $${params.length}`);
+    }
+    if (domainKey !== null) {
+      params.push(domainKey);
+      conditions.push(`d.domain_name = $${params.length}`);
+    }
+    if (source !== null) {
+      params.push(source);
+      conditions.push(`i.source_system = $${params.length}`);
+    }
+    const where =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = await this.data.query<IncidentListRow>(
+      `
+        SELECT i.incident_key, i.service_key, i.state, i.severity, i.status_color,
+               i.failure_category, i.occurrence_count, i.safe_summary, i.safe_action,
+               i.started_at, i.confirmed_at, i.recovered_at, i.resolved_at,
+               i.observed_at, i.correlation_key,
+               e.endpoint_key, e.display_name AS endpoint_display_name,
+               d.domain_name,
+               c.client_key, c.display_name AS client_display_name
+        FROM operations.incidents i
+        JOIN operations.clients c ON c.id = i.client_id
+        LEFT JOIN operations.endpoints e
+          ON e.client_id = i.client_id AND e.id = i.endpoint_id
+        LEFT JOIN operations.domains d
+          ON d.client_id = e.client_id AND d.id = e.domain_id
+        ${where}
+        ORDER BY c.client_key ASC, i.started_at DESC, i.incident_key ASC
+      `,
+      params,
+    );
+
+    const clients: IncidentsResponse['clients'] = [];
+    for (const row of result.rows) {
+      const item = mapIncidentListItem(row);
+      if (item === null) {
+        continue;
+      }
+      let group = clients.find((client) => client.clientKey === row.client_key);
+      if (group === undefined) {
+        group = {
+          clientKey: row.client_key,
+          clientName: row.client_display_name,
+          incidents: [],
+        };
+        clients.push(group);
+      }
+      group.incidents.push(item);
+    }
+
+    // Repeated-failure buckets over the filtered set: one bucket per
+    // (failure_category, service_key, endpoint_key), keeping only buckets
+    // with at least two total occurrences.
+    const bucketMap = new Map<
+      string,
+      {
+        failureCategory: string | null;
+        serviceKey: string;
+        endpointKey: string | null;
+        openCount: number;
+        totalOccurrences: number;
+        lastOccurredAt: Date;
+      }
+    >();
+    for (const row of result.rows) {
+      if (mapIncidentListItem(row) === null) {
+        continue;
+      }
+      const key = compositeKey(
+        row.failure_category ?? '',
+        row.service_key,
+        row.endpoint_key ?? '',
+      );
+      let bucket = bucketMap.get(key);
+      if (bucket === undefined) {
+        bucket = {
+          failureCategory: row.failure_category,
+          serviceKey: row.service_key,
+          endpointKey: row.endpoint_key,
+          openCount: 0,
+          totalOccurrences: 0,
+          lastOccurredAt: row.started_at,
+        };
+        bucketMap.set(key, bucket);
+      }
+      if (row.state === 'open') {
+        bucket.openCount += 1;
+      }
+      bucket.totalOccurrences += row.occurrence_count;
+      if (row.started_at > bucket.lastOccurredAt) {
+        bucket.lastOccurredAt = row.started_at;
+      }
+    }
+    const buckets: RepeatedFailureBucket[] = [...bucketMap.values()]
+      .filter((bucket) => bucket.totalOccurrences >= 2)
+      .sort(
+        (a, b) =>
+          b.totalOccurrences - a.totalOccurrences ||
+          b.lastOccurredAt.getTime() - a.lastOccurredAt.getTime() ||
+          String(a.failureCategory).localeCompare(String(b.failureCategory)) ||
+          a.serviceKey.localeCompare(b.serviceKey) ||
+          String(a.endpointKey).localeCompare(String(b.endpointKey)),
+      )
+      .map((bucket) => ({
+        failureCategory: bucket.failureCategory,
+        serviceKey: bucket.serviceKey,
+        endpointKey: bucket.endpointKey,
+        openCount: bucket.openCount,
+        totalOccurrences: bucket.totalOccurrences,
+        lastOccurredAt: bucket.lastOccurredAt.toISOString(),
+      }));
+
+    return {
+      generatedAt: new Date().toISOString(),
+      filters: {
+        state,
+        severity,
+        client: clientKey,
+        domain: domainKey,
+        source,
+      },
+      clients,
+      buckets,
+    };
+  }
+
+  /**
+   * One incident with its append-only recovery timeline and FK-backed
+   * investigation links. Returns null (mapped to 404 by the controller) for
+   * an unknown key or a key outside the incident pattern; a key may exist
+   * under more than one client, so the owner-scoped read picks one
+   * deterministically.
+   */
+  async getIncidentDetail(
+    incidentKey: string,
+  ): Promise<IncidentDetailResponse | null> {
+    if (!INCIDENT_KEY_PATTERN.test(incidentKey)) {
+      return null;
+    }
+    const result = await this.data.query<IncidentDetailRow>(
+      `
+        SELECT i.incident_key, i.service_key, i.state, i.severity, i.status_color,
+               i.failure_category, i.occurrence_count, i.safe_summary, i.safe_action,
+               i.started_at, i.confirmed_at, i.recovered_at, i.resolved_at,
+               i.observed_at, i.correlation_key, i.client_id,
+               e.endpoint_key, e.display_name AS endpoint_display_name,
+               d.domain_name,
+               c.client_key, c.display_name AS client_display_name
+        FROM operations.incidents i
+        JOIN operations.clients c ON c.id = i.client_id
+        LEFT JOIN operations.endpoints e
+          ON e.client_id = i.client_id AND e.id = i.endpoint_id
+        LEFT JOIN operations.domains d
+          ON d.client_id = e.client_id AND d.id = e.domain_id
+        WHERE i.incident_key = $1
+        ORDER BY c.client_key ASC
+        LIMIT 1
+      `,
+      [incidentKey],
+    );
+    const row = result.rows[0];
+    if (row === undefined) {
+      return null;
+    }
+    const incident = mapIncidentListItem(row);
+    if (incident === null) {
+      return null;
+    }
+
+    const eventsResult = await this.data.query<IncidentEventRow>(
+      `
+        SELECT e.event_type, e.occurred_at, e.severity, e.status_color,
+               e.correlation_key, e.event_key
+        FROM operations.incident_events e
+        JOIN operations.incidents i
+          ON i.client_id = e.client_id AND i.id = e.incident_id
+        WHERE i.incident_key = $1 AND i.client_id = $2
+        ORDER BY e.occurred_at ASC, e.event_key ASC
+      `,
+      [incidentKey, row.client_id],
+    );
+    const events: IncidentDetailResponse['events'] = [];
+    const orderedRows = [...eventsResult.rows].sort(
+      (a, b) =>
+        a.occurred_at.getTime() - b.occurred_at.getTime() ||
+        a.event_key.localeCompare(b.event_key),
+    );
+    for (const event of orderedRows) {
+      if (
+        !INCIDENT_EVENT_TYPES.includes(event.event_type) ||
+        (event.severity !== null &&
+          !INCIDENT_SEVERITIES.includes(event.severity)) ||
+        (event.status_color !== null &&
+          !INCIDENT_STATUS_COLORS.includes(event.status_color))
+      ) {
+        continue;
+      }
+      events.push({
+        eventType:
+          event.event_type as IncidentDetailResponse['events'][number]['eventType'],
+        occurredAt: event.occurred_at.toISOString(),
+        severity:
+          event.severity as IncidentDetailResponse['events'][number]['severity'],
+        statusColor: event.status_color,
+        correlationKey: event.correlation_key,
+      });
+    }
+
+    // FK-backed links only: an endpoint link when the incident carries an
+    // endpoint identity. Report/backup links would need a real join, which
+    // does not exist today, so none are fabricated.
+    const links: IncidentDetailResponse['links'] = [];
+    if (row.endpoint_key !== null && row.endpoint_display_name !== null) {
+      links.push({
+        kind: 'endpoint',
+        label: row.endpoint_display_name,
+        refKey: row.endpoint_key,
+      });
+    }
+
+    return { generatedAt: new Date().toISOString(), incident, events, links };
+  }
+
+  /**
+   * Append-only audit history with category and UTC calendar-day filters and
+   * keyset pagination. Rows with no client are global owner-only events and
+   * are included; the opaque cursor carries only (occurred_at, event_key).
+   */
+  async getAuditEvents(filters: {
+    category?: string;
+    from?: string;
+    to?: string;
+    cursor?: string;
+    limit?: string;
+  }): Promise<AuditEventsResponse> {
+    const category = parseAuditCategory(filters?.category);
+    const from = parseAuditDate(filters?.from);
+    const to = parseAuditDate(filters?.to);
+    if (from !== null && to !== null && from > to) {
+      throw new BadRequestException('Invalid request');
+    }
+    const limit = parseAuditLimit(filters?.limit);
+    const cursor = parseAuditCursor(filters?.cursor);
+
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    if (category === 'report_actions') {
+      conditions.push(`a.action LIKE 'report.command.%'`);
+    } else if (category === 'authentication') {
+      conditions.push(`a.action LIKE 'auth.%'`);
+    } else if (category === 'administrative') {
+      conditions.push(
+        `a.action NOT LIKE 'report.command.%' AND a.action NOT LIKE 'auth.%'`,
+      );
+    }
+    if (from !== null) {
+      params.push(from);
+      conditions.push(`a.occurred_at >= $${params.length}::date`);
+    }
+    if (to !== null) {
+      params.push(to);
+      conditions.push(`a.occurred_at < ($${params.length}::date + 1)`);
+    }
+    if (cursor !== null) {
+      params.push(cursor.occurredAt);
+      params.push(cursor.eventKey);
+      conditions.push(
+        `(a.occurred_at, a.event_key) < ($${params.length - 1}, $${params.length})`,
+      );
+    }
+
+    const result = await this.data.query<AuditEventRow>(
+      `
+        SELECT a.event_key, a.occurred_at, a.actor_type, a.actor_key, a.action,
+               a.target_type, a.target_key, a.result, a.command_key,
+               a.safe_reason_code, c.client_key
+        FROM operations.audit_events a
+        LEFT JOIN operations.clients c ON c.id = a.client_id
+        WHERE ${conditions.length > 0 ? conditions.join(' AND ') : 'TRUE'}
+        ORDER BY a.occurred_at DESC, a.event_key DESC
+        LIMIT ${limit + 1}
+      `,
+      params,
+    );
+
+    const hasMore = result.rows.length > limit;
+    const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
+    const events: AuditEventsResponse['events'] = [];
+    for (const row of pageRows) {
+      if (
+        !AUDIT_ACTOR_TYPES.includes(row.actor_type) ||
+        !AUDIT_RESULTS.includes(row.result)
+      ) {
+        continue;
+      }
+      events.push({
+        eventKey: row.event_key,
+        occurredAt: row.occurred_at.toISOString(),
+        actorType:
+          row.actor_type as AuditEventsResponse['events'][number]['actorType'],
+        actorKey: row.actor_key,
+        action: row.action,
+        targetType: row.target_type,
+        targetKey: row.target_key,
+        result: row.result as AuditEventsResponse['events'][number]['result'],
+        safeReasonCode: row.safe_reason_code,
+        commandKey: row.command_key,
+        clientKey: row.client_key,
+      });
+    }
+
+    const last = pageRows[pageRows.length - 1];
+    return {
+      generatedAt: new Date().toISOString(),
+      filters: { category, from, to },
+      events,
+      nextCursor:
+        hasMore && last
+          ? encodeAuditCursor(last.occurred_at, last.event_key)
+          : null,
     };
   }
 }

@@ -478,3 +478,153 @@ export async function createReportCommand(
 ): Promise<ReportCommandResult> {
   return postOperations<ReportCommandResult>(`/reports/${encodeURIComponent(reportKey)}/commands`, body);
 }
+
+export type IncidentStateFilter = "open" | "recovered" | "resolved" | "all";
+export type IncidentSeverityFilter = "info" | "warning" | "critical";
+export type IncidentSourceFilter =
+  | "n8n"
+  | "uptime_kuma"
+  | "github_actions"
+  | "vercel"
+  | "supabase"
+  | "imagekit";
+
+export interface IncidentListItem {
+  incidentKey: string;
+  serviceKey: string;
+  endpointKey: string | null;
+  endpointDisplayName: string | null;
+  domainKey: string | null;
+  state: "open" | "recovered" | "resolved";
+  severity: "info" | "warning" | "critical" | "none";
+  statusColor: HealthStatus | null;
+  failureCategory: string | null;
+  occurrenceCount: number;
+  safeSummary: string | null;
+  safeAction: string | null;
+  startedAt: string;
+  confirmedAt: string | null;
+  recoveredAt: string | null;
+  resolvedAt: string | null;
+  lastObservedAt: string;
+  correlationKey: string | null;
+}
+
+export interface RepeatedFailureBucket {
+  failureCategory: string | null;
+  serviceKey: string;
+  endpointKey: string | null;
+  openCount: number;
+  totalOccurrences: number;
+  lastOccurredAt: string;
+}
+
+export interface IncidentsResponse {
+  generatedAt: string;
+  filters: {
+    state: string;
+    severity: string | null;
+    client: string | null;
+    domain: string | null;
+    source: string | null;
+  };
+  clients: {
+    clientKey: string;
+    clientName: string;
+    incidents: IncidentListItem[];
+  }[];
+  buckets: RepeatedFailureBucket[];
+}
+
+export interface IncidentDetailResponse {
+  generatedAt: string;
+  incident: IncidentListItem;
+  events: {
+    eventType: "detected" | "confirmed" | "recovered" | "resolved" | "rejected" | "updated";
+    occurredAt: string;
+    severity: "info" | "warning" | "critical" | "none" | null;
+    statusColor: string | null;
+    correlationKey: string | null;
+  }[];
+  links: {
+    kind: "endpoint" | "report" | "backup";
+    label: string;
+    refKey: string;
+  }[];
+}
+
+export interface AuditEventsResponse {
+  generatedAt: string;
+  filters: { category: string; from: string | null; to: string | null };
+  events: {
+    eventKey: string;
+    occurredAt: string;
+    actorType: "portal_user" | "publisher" | "system" | "n8n";
+    actorKey: string;
+    action: string;
+    targetType: string | null;
+    targetKey: string | null;
+    result: "success" | "denied" | "error" | "allowed";
+    safeReasonCode: string | null;
+    commandKey: string | null;
+    clientKey: string | null;
+  }[];
+  nextCursor: string | null;
+}
+
+export interface OperationsIncidentFilters {
+  state?: IncidentStateFilter;
+  severity?: IncidentSeverityFilter;
+  client?: string;
+  domain?: string;
+  source?: IncidentSourceFilter;
+}
+
+export interface OperationsAuditEventFilters {
+  category?: AuditCategoryFilter;
+  from?: string;
+  to?: string;
+  cursor?: string;
+}
+
+export type AuditCategoryFilter = "report_actions" | "authentication" | "administrative" | "all";
+
+function buildQuery(params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
+export async function getOperationsIncidents(
+  filters: OperationsIncidentFilters = {},
+): Promise<IncidentsResponse> {
+  return fetchOperations<IncidentsResponse>(
+    `/incidents${buildQuery({
+      state: filters.state && filters.state !== "all" ? filters.state : undefined,
+      severity: filters.severity,
+      client: filters.client,
+      domain: filters.domain,
+      source: filters.source,
+    })}`,
+  );
+}
+
+export async function getOperationsIncidentDetail(incidentKey: string): Promise<IncidentDetailResponse> {
+  return fetchOperations<IncidentDetailResponse>(`/incidents/${encodeURIComponent(incidentKey)}`);
+}
+
+export async function getOperationsAuditEvents(
+  filters: OperationsAuditEventFilters = {},
+): Promise<AuditEventsResponse> {
+  return fetchOperations<AuditEventsResponse>(
+    `/audit-events${buildQuery({
+      category: filters.category && filters.category !== "all" ? filters.category : undefined,
+      from: filters.from,
+      to: filters.to,
+      cursor: filters.cursor,
+    })}`,
+  );
+}

@@ -139,6 +139,62 @@ export class OperationsController {
     return this.operationsService.getReportActions(reportKey);
   }
 
+  @Get('incidents')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({
+    summary:
+      'Incident list with filters and repeated-failure buckets (read-only)',
+  })
+  async getIncidents(
+    @Query('state') state?: string,
+    @Query('severity') severity?: string,
+    @Query('client') client?: string,
+    @Query('domain') domain?: string,
+    @Query('source') source?: string,
+  ) {
+    return this.operationsService.getIncidents({
+      state,
+      severity,
+      client,
+      domain,
+      source,
+    });
+  }
+
+  @Get('incidents/:incidentKey')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Incident detail with recovery timeline and links (read-only)',
+  })
+  async getIncident(@Param('incidentKey') incidentKey: string) {
+    const detail = await this.operationsService.getIncidentDetail(incidentKey);
+    if (detail === null) {
+      throw new NotFoundException('Not found');
+    }
+    return detail;
+  }
+
+  @Get('audit-events')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Append-only audit history with keyset pagination (read-only)',
+  })
+  async getAuditEvents(
+    @Query('category') category?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.operationsService.getAuditEvents({
+      category,
+      from,
+      to,
+      cursor,
+      limit,
+    });
+  }
+
   @Post('internal/report-commands/claim')
   @ApiOperation({
     summary: 'Executor claim: verify wire nonce and release command context',

@@ -8,6 +8,9 @@ import { VercelPage } from "../../../../components/vercel-page";
 import { ImagekitPage } from "../../../../components/imagekit-page";
 import { BackupsPage } from "../../../../components/backups-page";
 import { ReportsPage } from "../../../../components/reports-page";
+import { IncidentsPage, type IncidentsSearchParams } from "../../../../components/incidents-page";
+import { IncidentDetailPage } from "../../../../components/incident-detail-page";
+import { AuditLogPage, type AuditLogSearchParams } from "../../../../components/audit-log-page";
 import type { WorkflowsWindow } from "../../../../lib/operations-api";
 
 const sections = new Set(["overview", "clients", "workflows", "infrastructure", "vercel", "imagekit", "backups", "reports", "incidents", "audit-log", "settings"]);
@@ -18,7 +21,7 @@ export default async function ProtectedSectionPage({
   searchParams,
 }: {
   params: { section: string; detail?: string[] };
-  searchParams: { window?: string };
+  searchParams: { window?: string } & IncidentsSearchParams & AuditLogSearchParams;
 }) {
   if (!sections.has(params.section)) notFound();
   if (params.section === "overview") return <OverviewPage />;
@@ -27,6 +30,12 @@ export default async function ProtectedSectionPage({
   if (params.section === "imagekit") return <ImagekitPage />;
   if (params.section === "backups") return <BackupsPage />;
   if (params.section === "reports") return <ReportsPage />;
+  if (params.section === "incidents") {
+    const incidentKey = params.detail?.[0];
+    if (incidentKey) return <IncidentDetailPage incidentKey={incidentKey} />;
+    return <IncidentsPage searchParams={searchParams} />;
+  }
+  if (params.section === "audit-log") return <AuditLogPage searchParams={searchParams} />;
   if (params.section === "workflows") {
     const workflowKey = params.detail?.[0];
     if (workflowKey) return <WorkflowDetailPage workflowKey={workflowKey} />;
