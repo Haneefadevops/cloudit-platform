@@ -114,7 +114,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Validate the binary before responding. Do not log or convert PDF bytes to JSON.\nconst buffer = await $helpers.getBinaryDataBuffer(0, 'data');\nif (buffer.length < 5 || buffer.length > 25 * 1024 * 1024 || buffer.subarray(0, 5).toString('ascii') !== '%PDF-') throw new Error('PDF retrieval denied');\nconst item = $input.item;\nif (!item.binary?.data) throw new Error('PDF retrieval denied');\nitem.binary.data.mimeType = 'application/pdf';\nitem.binary.data.fileExtension = 'pdf';\nitem.binary.data.fileName = 'report.pdf';\nreturn item;"
+        "jsCode": "// Validate the binary before responding. Do not log or convert PDF bytes to JSON.\nconst buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nif (buffer.length < 5 || buffer.length > 25 * 1024 * 1024 || buffer.subarray(0, 5).toString('ascii') !== '%PDF-') throw new Error('PDF retrieval denied');\nconst item = $input.item;\nif (!item.binary?.data) throw new Error('PDF retrieval denied');\nitem.binary.data.mimeType = 'application/pdf';\nitem.binary.data.fileExtension = 'pdf';\nitem.binary.data.fileName = 'report.pdf';\nreturn item;"
       },
       "id": "be66ecab-c76f-4fb6-875c-a61601488666",
       "name": "Validate PDF Binary",
