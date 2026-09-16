@@ -364,8 +364,11 @@ recorded here so the implementation can be audited against intent.
   owner session could trigger report actions; all command-protocol protections
   (signed commands, replay/expiry/stale/wrong-state denial, exactly-once,
   safe audit) are unchanged.
-- **Deferred**: kickoff step 7 (controlled non-real production acceptance) is
-  still outstanding and should be run with a non-real report before any real
-  report action. A real report may be approved/rejected/sent only with a
-  separate explicit authorization. No real report was touched during
-  construction.
+- **Deferred**: kickoff step 7 (controlled non-real production acceptance) was
+  deferred by owner decision to the October 2026 cycle: the September report
+  (snapshots 00:00, draft 09:00 Europe/Malta on 1 October 2026) will be the
+  first report put through the command lifecycle, and the pipeline will be
+  exercised then — with a controlled non-real test first if any doubt remains.
+  August stays `DRAFT` and untouched. A real report may be
+  approved/rejected/sent only with a separate explicit authorization. No real
+  report was touched during construction.
