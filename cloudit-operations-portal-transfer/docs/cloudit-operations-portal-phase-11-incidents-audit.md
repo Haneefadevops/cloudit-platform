@@ -479,3 +479,25 @@ respected via existing CSS.
   PostgreSQL 16 container (default `postgres` untouched); operations
   isolation suite **123/123**; disposable container and volume removed.
   No new migration exists, as designed.
+
+## Incident evidence publisher (2026-09-17, owner-approved n8n addition)
+
+Production acceptance review found `operations.incidents` empty: the live
+`Cavetta - Incident Monitor` (owner-supplied read-only export) records to
+its Data Table but never published portal evidence, and the publisher
+`cavetta-production-n8n` was already allowed to ingest `incident`. Fix, per
+the approved option A: a **new, separate, inactive** workflow
+`infra/n8n/workflows/cloudit-incident-evidence-publisher.json` — the live
+Incident Monitor is **not modified**. Every 15 minutes it reads recent
+`cavetta_maintenance_events` rows, maps `CONFIRMED_DOWN` /
+`RECOVERED` / `RECOVERED_DURING_CONFIRMATION` to sanitized `incident`
+records (monitor 4 has no registered endpoint and is published without
+`endpointKey`; `REJECTED_MONITOR_EVENT` rows are skipped), validates loudly,
+and publishes through the existing `CloudIT - Publish Operations Evidence`
+sub-workflow as `cavetta-production-n8n`. Stable per-event idempotency keys
+make replays dedupe without inflating `occurrence_count`; records are
+applied chronologically. Harness
+`infra/n8n/workflows/tests/incident-publisher-harness.mjs`: **34/34**.
+Production activation (import, bind the `cavetta_maintenance_events` table
+and the publisher sub-workflow, activate) is an owner-executed step, after
+which the Phase 11 gate walkthrough follows.

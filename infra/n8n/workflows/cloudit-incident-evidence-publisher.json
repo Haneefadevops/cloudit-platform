@@ -1,0 +1,243 @@
+{
+  "name": "CloudIT - Incident Evidence Publisher",
+  "id": "c6d7e8f9-a0b1-4c2d-8e3f-4a5b6c7d8e11",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c31",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getMany",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "cavetta_maintenance_events"
+        },
+        "limit": 500,
+        "orderBy": true,
+        "orderByColumn": "eventAt",
+        "orderByDirection": "ASC"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c32",
+      "name": "Load Maintenance Events",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// CloudIT Operations Portal — Phase 11 incident evidence publisher.\n//\n// Maps sanitized rows of the n8n Data Table \"cavetta_maintenance_events\"\n// (written by the \"Cavetta - Incident Monitor\" workflow) into 'incident'\n// envelopes for the shared \"CloudIT - Publish Operations Evidence\"\n// sub-workflow (operations_ingest.insert_incident, migration 0005).\n//\n// IMPORT BINDING: the \"Load Maintenance Events\" Data Table node is exported\n// with an EMPTY dataTableId value that MUST be re-bound to the\n// \"cavetta_maintenance_events\" table on import (list mode keeps the cached\n// name \"cavetta_maintenance_events\"). Same convention as the Execute\n// Workflow \"Publish Evidence\" node, whose workflowId is bound on import.\n//\n// Sanitization (safe_text strips URLs): safeSummary is built ONLY from the\n// fixed monitor name and the derived failure category — never from the row\n// URL or the raw detail text. The monitor map is FIXED here, mirroring the\n// Incident Monitor's approvedMonitors: monitor 4 (Cavetta Home Contacts)\n// has NO registered operations endpoint (migration 0006 seed), so its\n// records omit endpointKey entirely — an unregistered endpointKey rejects\n// the WHOLE batch (endpoint_not_registered).\n//\n// REJECTED_MONITOR_EVENT rows and unknown alert types (including Uptime\n// Kuma TEST heartbeats) are skipped entirely so a stray row can never\n// reject the batch. Records are sorted by eventAt ascending: chronological\n// application must leave the correct FINAL state when one window holds\n// both a DOWN and an UP for the same monitor.\n//\n// incidentKey is stable per monitor (repeated downtimes upsert ONE\n// incident row and add occurrence_count); idempotencyKey is stable per\n// source event (replays dedupe to 'duplicate' and never re-increment).\n//\n// All timestamps are computed at RUN TIME — never hardcode a test clock:\n// publishedAt must be within +/-5 minutes of ingestion (0004\n// stale_timestamp).\n\nconst WINDOW_MS = 48 * 60 * 60 * 1000; // eventAt lookback window\nconst FRESH_MS = 24 * 60 * 60 * 1000; // freshUntil = now + 24h\n\n// Fixed monitor map: mirror of the Incident Monitor's approvedMonitors,\n// extended with the operations endpoint key (null = not registered).\nconst MONITORS = {\n  1: { name: 'Cavetta Home', endpointKey: 'cavetta.website' },\n  2: { name: 'Cavetta Home Properties', endpointKey: 'cavetta.listings' },\n  3: { name: 'Cavetta Home Sitemap', endpointKey: 'cavetta.sitemap' },\n  4: { name: 'Cavetta Home Contacts', endpointKey: null },\n  5: { name: 'Cavetta Home Robot', endpointKey: 'cavetta.robots' }\n};\n\nfunction sanitizeKeyPart(value) {\n  // idempotencyKey charset guard: keep only [a-zA-Z0-9_.-]\n  return String(value ?? '').replace(/[^a-zA-Z0-9_.-]/g, '');\n}\n\nfunction deriveFailureCategory(detail) {\n  const d = String(detail ?? '').toLowerCase();\n  if (d.includes('http 5')) return 'http_5xx';\n  if (d.includes('http 4')) return 'http_4xx';\n  if (d.includes('enotfound') || d.includes('dns')) return 'dns';\n  if (d.includes('etimedout') || d.includes('timeout') || d.includes('timed out')) return 'timeout';\n  if (d.includes('cert') || d.includes('tls') || d.includes('ssl')) return 'tls';\n  return 'unknown_sanitized';\n}\n\nfunction mapEvents(events, now) {\n  const publishedAt = now.toISOString();\n  const freshUntil = new Date(now.getTime() + FRESH_MS).toISOString();\n  const nowMs = now.getTime();\n  const records = [];\n\n  for (const event of events) {\n    const alertType = String(event?.alertType ?? '');\n    const monitorId = Number(event?.monitorId);\n    const monitor = MONITORS[monitorId];\n\n    // REJECTED_MONITOR_EVENT rows are audit noise from the incident monitor\n    // and never reach the operations portal.\n    if (alertType === 'REJECTED_MONITOR_EVENT') continue;\n    // Unknown monitors and unknown alert types (incl. Uptime Kuma TEST\n    // heartbeats) are skipped defensively.\n    if (!monitor) continue;\n    if (\n      alertType !== 'CONFIRMED_DOWN' &&\n      alertType !== 'RECOVERED' &&\n      alertType !== 'RECOVERED_DURING_CONFIRMATION'\n    ) {\n      continue;\n    }\n\n    const eventAt = String(event?.eventAt ?? '');\n    const eventAtMs = Date.parse(eventAt);\n    if (!eventAt || Number.isNaN(eventAtMs)) continue;\n    if (nowMs - eventAtMs > WINDOW_MS) continue; // outside the 48h lookback\n\n    const checkedAtRaw = String(event?.checkedAt ?? '');\n    const checkedAt = !Number.isNaN(Date.parse(checkedAtRaw)) ? checkedAtRaw : eventAt;\n\n    const incidentKey = 'cavetta-uptime-' + monitorId;\n    const idempotencyKey =\n      'incident-cavetta-uptime-' + monitorId + '-' + alertType + '-' +\n      sanitizeKeyPart(eventAt);\n\n    let record;\n    if (alertType === 'CONFIRMED_DOWN') {\n      const failureCategory = deriveFailureCategory(event?.detail);\n      record = {\n        contractVersion: '1.0',\n        recordType: 'incident',\n        idempotencyKey,\n        environmentKey: 'production',\n        sourceSystem: 'n8n',\n        observedAt: publishedAt,\n        publishedAt,\n        freshUntil,\n        status: 'RED',\n        severity: 'critical',\n        correlationKey: null,\n        payload: {\n          incidentKey,\n          serviceKey: incidentKey,\n          state: 'open',\n          severity: 'critical',\n          failureCategory,\n          startedAt: eventAt,\n          confirmedAt: checkedAt,\n          occurrenceCount: 1,\n          safeSummary: (monitor.name + ' confirmed down (' + failureCategory + ')').slice(0, 300),\n          safeAction: 'Manual investigation required'\n        }\n      };\n    } else if (alertType === 'RECOVERED') {\n      record = {\n        contractVersion: '1.0',\n        recordType: 'incident',\n        idempotencyKey,\n        environmentKey: 'production',\n        sourceSystem: 'n8n',\n        observedAt: publishedAt,\n        publishedAt,\n        freshUntil,\n        status: 'GREEN',\n        severity: 'info',\n        correlationKey: null,\n        payload: {\n          incidentKey,\n          serviceKey: incidentKey,\n          state: 'recovered',\n          severity: 'info',\n          // startedAt is REQUIRED by insert_incident (migration 0005); a\n          // bare recovery without a prior DOWN seeds it from eventAt.\n          // occurrenceCount 0: recoveries never increment occurrence_count.\n          startedAt: eventAt,\n          recoveredAt: eventAt,\n          occurrenceCount: 0,\n          safeSummary: monitor.name + ' recovered',\n          safeAction: 'None'\n        }\n      };\n    } else {\n      // RECOVERED_DURING_CONFIRMATION\n      const failureCategory = deriveFailureCategory(event?.detail);\n      record = {\n        contractVersion: '1.0',\n        recordType: 'incident',\n        idempotencyKey,\n        environmentKey: 'production',\n        sourceSystem: 'n8n',\n        observedAt: publishedAt,\n        publishedAt,\n        freshUntil,\n        status: 'GREEN',\n        severity: 'info',\n        correlationKey: null,\n        payload: {\n          incidentKey,\n          serviceKey: incidentKey,\n          state: 'recovered',\n          severity: 'info',\n          failureCategory,\n          startedAt: eventAt,\n          recoveredAt: checkedAt,\n          occurrenceCount: 0,\n          safeSummary: (monitor.name + ' recovered during confirmation (' + failureCategory + ')').slice(0, 300),\n          safeAction: 'None'\n        }\n      };\n    }\n\n    // Monitor 4 has no registered endpoint: omit the key entirely rather\n    // than send an unregistered one.\n    if (monitor.endpointKey) {\n      record.payload.endpointKey = monitor.endpointKey;\n    }\n\n    records.push(record);\n  }\n\n  // Chronological application: when a window holds both a DOWN and an UP\n  // for the same monitor, the later event must apply LAST so the upserted\n  // incident ends in the correct final state.\n  records.sort((a, b) => {\n    const ta = a.payload.startedAt ?? a.payload.recoveredAt ?? '';\n    const tb = b.payload.startedAt ?? b.payload.recoveredAt ?? '';\n    return ta < tb ? -1 : ta > tb ? 1 : 0;\n  });\n\n  return { records, publisherKey: 'cavetta-production-n8n' };\n}\n\nreturn mapEvents($input.all().map((item) => item.json), new Date());"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c33",
+      "name": "Build Incident Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Fails LOUDLY (a descriptive Error, visible in the n8n run, no secrets)\n// instead of letting the ingest service reject the batch with a cryptic\n// 422 — same style as the endpoint collector's Validate Records.\n//\n// Checks every envelope against the parse_envelope rules (migration 0004)\n// and every payload against the strict insert_incident allowlist\n// (migration 0005): an unknown payload key rejects the WHOLE batch with\n// unknown_field, so any offending key is listed here before publishing.\n//\n// An empty records array is VALID: it is flagged with \"skipped\" so the\n// \"Has Records?\" IF node routes to the no-op \"Nothing To Publish\" node\n// instead of publishing an empty batch to the ingest service.\n\nconst batch = $json;\nconst records = Array.isArray(batch?.records) ? batch.records : null;\n\nif (records === null) {\n  throw new Error('Validate Records: \"records\" is missing or not an array');\n}\n\nif (records.length === 0) {\n  return { ...batch, skipped: true };\n}\n\nconst ENVELOPE_REQUIRED = ['contractVersion', 'recordType', 'idempotencyKey', 'environmentKey', 'sourceSystem', 'observedAt', 'publishedAt', 'freshUntil', 'status', 'severity', 'payload'];\nconst ENVELOPE_TIMES = ['observedAt', 'publishedAt', 'freshUntil'];\nconst PAYLOAD_ALLOWED = ['incidentKey', 'serviceKey', 'endpointKey', 'state', 'severity', 'failureCategory', 'startedAt', 'confirmedAt', 'recoveredAt', 'resolvedAt', 'occurrenceCount', 'safeSummary', 'safeAction'];\nconst PAYLOAD_REQUIRED = ['incidentKey', 'serviceKey', 'state', 'severity', 'startedAt'];\nconst PAYLOAD_TIMES = ['startedAt', 'confirmedAt', 'recoveredAt', 'resolvedAt'];\nconst STATUSES = ['GREEN', 'AMBER', 'RED', 'NO_DATA', 'UNKNOWN'];\nconst SEVERITIES = ['info', 'warning', 'critical', 'none'];\nconst STATES = ['open', 'recovered', 'resolved'];\nconst CATEGORIES = ['timeout', 'dns', 'tls', 'http_4xx', 'http_5xx', 'authentication', 'authorization', 'rate_limit', 'quota', 'provider_unavailable', 'invalid_response', 'missing_evidence', 'overdue', 'stuck_send', 'unknown_sanitized'];\n\nfor (let i = 0; i < records.length; i++) {\n  const r = records[i];\n  const tag = 'Validate Records: record ' + i + ' (' + (r?.payload?.incidentKey) + ')';\n  if (typeof r !== 'object' || r === null) {\n    throw new Error(tag + ' is not an object');\n  }\n  for (const k of ENVELOPE_REQUIRED) {\n    if (r[k] === undefined || r[k] === null) {\n      throw new Error(tag + ' is missing envelope field \"' + k + '\"');\n    }\n  }\n  if (r.correlationKey === undefined) {\n    throw new Error(tag + ' is missing envelope field \"correlationKey\"');\n  }\n  if (r.contractVersion !== '1.0') {\n    throw new Error(tag + ' has contractVersion \"' + r.contractVersion + '\" (expected 1.0)');\n  }\n  if (r.recordType !== 'incident') {\n    throw new Error(tag + ' has recordType \"' + r.recordType + '\" (expected incident)');\n  }\n  if (r.environmentKey !== 'production') {\n    throw new Error(tag + ' has environmentKey \"' + r.environmentKey + '\" (expected production)');\n  }\n  if (r.sourceSystem !== 'n8n') {\n    throw new Error(tag + ' has sourceSystem \"' + r.sourceSystem + '\" (expected n8n)');\n  }\n  if (!STATUSES.includes(r.status)) {\n    throw new Error(tag + ' has invalid status \"' + r.status + '\"');\n  }\n  if (!SEVERITIES.includes(r.severity)) {\n    throw new Error(tag + ' has invalid severity \"' + r.severity + '\"');\n  }\n  if (typeof r.idempotencyKey !== 'string' || r.idempotencyKey.length === 0) {\n    throw new Error(tag + ' has an empty or non-string idempotencyKey');\n  }\n  if (r.idempotencyKey.length > 160 || r.idempotencyKey.includes('@') || r.idempotencyKey.includes('://')) {\n    throw new Error(tag + ' has an illegal idempotencyKey \"' + r.idempotencyKey + '\"');\n  }\n  for (const k of ENVELOPE_TIMES) {\n    if (Number.isNaN(Date.parse(r[k]))) {\n      throw new Error(tag + ' has a non-ISO envelope timestamp \"' + k + '\": ' + r[k]);\n    }\n  }\n  if (typeof r.payload !== 'object' || r.payload === null) {\n    throw new Error(tag + ' has no payload object');\n  }\n  const offending = Object.keys(r.payload).filter((k) => !PAYLOAD_ALLOWED.includes(k));\n  if (offending.length > 0) {\n    throw new Error(tag + ' has payload keys outside the insert_incident allowlist: ' + offending.join(', '));\n  }\n  for (const k of PAYLOAD_REQUIRED) {\n    if (r.payload[k] === undefined || r.payload[k] === null) {\n      throw new Error(tag + ' is missing required payload field \"' + k + '\"');\n    }\n  }\n  if (!STATES.includes(r.payload.state)) {\n    throw new Error(tag + ' has invalid payload state \"' + r.payload.state + '\"');\n  }\n  if (!SEVERITIES.includes(r.payload.severity)) {\n    throw new Error(tag + ' has invalid payload severity \"' + r.payload.severity + '\"');\n  }\n  if (r.payload.failureCategory !== undefined && r.payload.failureCategory !== null && !CATEGORIES.includes(r.payload.failureCategory)) {\n    throw new Error(tag + ' has invalid failureCategory \"' + r.payload.failureCategory + '\"');\n  }\n  if (!Number.isInteger(r.payload.occurrenceCount) || r.payload.occurrenceCount < 0 || r.payload.occurrenceCount > 100000) {\n    throw new Error(tag + ' has an invalid occurrenceCount ' + r.payload.occurrenceCount);\n  }\n  for (const k of PAYLOAD_TIMES) {\n    const v = r.payload[k];\n    if (v !== undefined && v !== null && Number.isNaN(Date.parse(v))) {\n      throw new Error(tag + ' has a non-ISO payload timestamp \"' + k + '\": ' + v);\n    }\n  }\n  // URL leak guard: safe_text strips URLs upstream, so a URL here means the\n  // mapping is broken — fail before it reaches the portal.\n  if (typeof r.payload.safeSummary !== 'string' || r.payload.safeSummary.length > 500 || r.payload.safeSummary.includes('://')) {\n    throw new Error(tag + ' has an invalid or URL-bearing safeSummary');\n  }\n  if (typeof r.payload.safeAction !== 'string' || r.payload.safeAction.length > 300 || r.payload.safeAction.includes('://')) {\n    throw new Error(tag + ' has an invalid or URL-bearing safeAction');\n  }\n}\n\nreturn batch;"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c34",
+      "name": "Validate Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d01",
+              "leftValue": "={{ $json.records.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt",
+                "name": "filter.operator.gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c35",
+      "name": "Has Records?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "records": "{{ JSON.stringify($json.records) }}",
+            "publisherKey": "{{ $json.publisherKey }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "records",
+              "displayName": "records",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "any",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "publisherKey",
+              "displayName": "publisherKey",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c36",
+      "name": "Publish Evidence",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Quiet no-op for lookback windows with no publishable maintenance events.\n// Returns a small summary object so the run log shows exactly why nothing\n// was sent to the operations portal.\nreturn {\n  skipped: true,\n  recordCount: 0,\n  reason: 'No publishable maintenance events in the 48-hour lookback window'\n};"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c37",
+      "name": "Nothing To Publish",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        520
+      ]
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Load Maintenance Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Maintenance Events": {
+      "main": [
+        [
+          {
+            "node": "Build Incident Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Incident Records": {
+      "main": [
+        [
+          {
+            "node": "Validate Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Records": {
+      "main": [
+        [
+          {
+            "node": "Has Records?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Records?": {
+      "main": [
+        [
+          {
+            "node": "Publish Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Nothing To Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "tags": []
+}
