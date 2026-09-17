@@ -171,12 +171,14 @@ function AuditLogContent({ data, filters }: { data: AuditEventsResponse; filters
         </div>
       )}
 
-      <nav className="window-links" aria-label="Audit log pages">
-        {filters.cursor ? <Link href={auditHref(filters, { cursor: null })}>Newer</Link> : null}
-        {data.nextCursor ? (
-          <Link href={auditHref(filters, { cursor: data.nextCursor })}>Older</Link>
-        ) : null}
-      </nav>
+      {filters.cursor || data.nextCursor ? (
+        <nav className="window-links" aria-label="Audit log pages">
+          {filters.cursor ? <Link href={auditHref(filters, { cursor: null })}>Newer</Link> : null}
+          {data.nextCursor ? (
+            <Link href={auditHref(filters, { cursor: data.nextCursor })}>Older</Link>
+          ) : null}
+        </nav>
+      ) : null}
     </div>
   );
 }
