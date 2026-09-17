@@ -268,7 +268,7 @@ check('map: unclassifiable detail -> unknown_sanitized', () => {
   assert(records[0].payload.failureCategory === 'unknown_sanitized', `failureCategory mismatch: ${records[0].payload.failureCategory}`);
 });
 
-check('map: RECOVERED -> recovered / info, no failureCategory key, occurrenceCount 0', () => {
+check('map: RECOVERED -> recovered / info, no failureCategory key, occurrenceCount 1', () => {
   const { records } = runMap([
     row({ alertType: 'RECOVERED', severity: 'information', detail: 'Recovered after outage', eventAt: '2026-09-15T11:30:00.000Z', checkedAt: '2026-09-15T11:30:00.000Z', actionRequired: 'None' }),
   ]);
@@ -278,7 +278,7 @@ check('map: RECOVERED -> recovered / info, no failureCategory key, occurrenceCou
   assert(p.severity === 'info', `severity mismatch: ${p.severity}`);
   assert(records[0].status === 'GREEN', `status mismatch: ${records[0].status}`);
   assert(!('failureCategory' in p), 'RECOVERED payload must omit failureCategory entirely');
-  assert(p.occurrenceCount === 0, 'occurrenceCount must be 0 for recoveries');
+  assert(p.occurrenceCount === 1, 'occurrenceCount must be 1 for recoveries (DB CHECK 1..100000)');
   assert(p.recoveredAt === '2026-09-15T11:30:00.000Z', 'recoveredAt must be eventAt');
   assert(p.safeSummary === 'Cavetta Home recovered', `safeSummary mismatch: ${p.safeSummary}`);
   assert(p.safeAction === 'None', `safeAction mismatch: ${p.safeAction}`);
@@ -294,7 +294,7 @@ check('map: RECOVERED_DURING_CONFIRMATION -> recovered with derived failureCateg
   assert(p.failureCategory === 'http_4xx' || p.failureCategory === 'unknown_sanitized', `failureCategory mismatch: ${p.failureCategory}`);
   assert(p.startedAt === '2026-09-15T11:40:00.000Z', 'startedAt must be eventAt');
   assert(p.recoveredAt === '2026-09-15T11:42:00.000Z', 'recoveredAt must be checkedAt');
-  assert(p.occurrenceCount === 0, 'occurrenceCount must be 0');
+  assert(p.occurrenceCount === 1, 'occurrenceCount must be 1 (DB CHECK 1..100000)');
 });
 
 check('map: REJECTED_MONITOR_EVENT rows are skipped entirely', () => {
