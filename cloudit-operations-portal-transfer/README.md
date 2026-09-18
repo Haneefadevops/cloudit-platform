@@ -50,7 +50,7 @@ Operations Portal planned for `operations.cloudit.lk`.
   The new `CloudIT - Incident Evidence Publisher` workflow (separate from
   the Incident Monitor, owner-imported and activated) feeds real incident
   evidence. Controlled non-real gate test passed and fully cleaned up on
-  18 September 2026; awaiting the owner's explicit gate approval. See
+  18 September 2026; **gate approved by the owner — Phase 11 complete.** See
   `docs/cloudit-operations-portal-phase-11-incidents-audit.md`.
 - The scheduled 1 October 2026 Phase 5E acceptance remains pending and its real
   report must remain `DRAFT` during review.

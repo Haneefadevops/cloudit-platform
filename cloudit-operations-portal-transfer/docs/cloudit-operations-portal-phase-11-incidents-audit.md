@@ -483,7 +483,7 @@ respected via existing CSS.
   `operations_private.record_audit_event`
   (`incident.test_cleanup`, event `ca38cf80-fd56-48ec-ba9f-70411e4751fc`).
   No pins, mocks, fixed clocks or temporary rows remain.
-- **Status**: awaiting the owner's explicit gate approval.
+- **Status**: **gate approved by the owner — Phase 11 complete.**
 
 ## Local acceptance (2026-09-16, all green)
 
