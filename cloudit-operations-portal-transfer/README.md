@@ -44,6 +44,14 @@ Operations Portal planned for `operations.cloudit.lk`.
   limiting, strict Origin and CSRF HMAC checks still enforced. Login-time
   TOTP remains optional (`OPERATIONS_MFA_REQUIRED=false`). See
   `docs/cloudit-operations-portal-phase-10-report-actions.md`.
+- Phase 11 (incidents and audit history): built, deployed and live.
+  Incidents list/detail with filters, repeated-failure buckets, recovery
+  timeline and safe investigation links; append-only audit-history viewer.
+  The new `CloudIT - Incident Evidence Publisher` workflow (separate from
+  the Incident Monitor, owner-imported and activated) feeds real incident
+  evidence. Controlled non-real gate test passed and fully cleaned up on
+  18 September 2026; awaiting the owner's explicit gate approval. See
+  `docs/cloudit-operations-portal-phase-11-incidents-audit.md`.
 - The scheduled 1 October 2026 Phase 5E acceptance remains pending and its real
   report must remain `DRAFT` during review.
 - `ticketing_enabled` must remain `false`.

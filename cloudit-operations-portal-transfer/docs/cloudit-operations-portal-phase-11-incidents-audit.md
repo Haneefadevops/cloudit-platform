@@ -455,6 +455,36 @@ respected via existing CSS.
 - Bucket ordering: `totalOccurrences` DESC, then `lastOccurredAt` DESC,
   then category/service/endpoint ASC (design fixed only the primary sort).
 
+## Production acceptance record (2026-09-18)
+
+- **Deployed commits**: `ad42f2c` (Phase 11 build), `2ea8b55` (doc date fix),
+  `f795501` (audit pagination cosmetic fix), `7e3ad1b` (incident evidence
+  publisher export), `a38dc99` (publisher occurrenceCount fix, found during
+  the controlled gate run: recoveries must send `occurrenceCount` 1, not 0 —
+  the DB CHECK range is 1..100000 and the whole batch was correctly rejected
+  with `field_out_of_range`).
+- **Incident evidence publisher**: imported, bound
+  (`cavetta_maintenance_events` table + `CloudIT - Publish Operations
+  Evidence` sub-workflow) and **activated** by the owner. The live
+  `Cavetta - Incident Monitor` workflow was never modified.
+- **Controlled gate test (separately authorized, non-real)**: two
+  unmistakable `phase11-gate-test` Data Table rows (CONFIRMED_DOWN then
+  RECOVERED for monitor 1) published through the real pipeline and verified
+  in production: list with stats/buckets/filters (state, severity, source,
+  domain), incident detail with **detected → recovered timeline**, and the
+  endpoint **investigation link** to the Infrastructure section. Phase 10
+  action audit reviewed in `/audit-log` (report.command lifecycle with
+  closed safe codes, plus ingestion denial evidence).
+- **Complete cleanup verified 2026-09-18**: both test Data Table rows
+  deleted; `operations.incident_events` test rows deleted (2) and
+  `operations.incidents` test row deleted (1); append-only triggers
+  re-enabled on both tables; final `SELECT count(*) FROM
+  operations.incidents` = **0**; permanent audit note recorded via
+  `operations_private.record_audit_event`
+  (`incident.test_cleanup`, event `ca38cf80-fd56-48ec-ba9f-70411e4751fc`).
+  No pins, mocks, fixed clocks or temporary rows remain.
+- **Status**: awaiting the owner's explicit gate approval.
+
 ## Local acceptance (2026-09-16, all green)
 
 - **platform-api**: full Jest **9 suites / 148 tests, all passing** (2 new
