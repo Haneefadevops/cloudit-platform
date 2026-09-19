@@ -1,0 +1,32 @@
+# @cloudit/operations-agent
+
+Read-only operations agent for the CloudIT AI Maintenance programme
+(see `cloudit-operations-portal-transfer/docs/cloudit-operations-portal-ai-maintenance-operator-plan.md`).
+
+**Phase C scope:** deterministic read-only runtime — sanitized evidence reads,
+deterministic assessments, workflow-portal sync observation, job/budget/audit
+controls and kill switches. No AI calls, no Telegram, no alerts, no repairs.
+Everything runs against synthetic/local evidence.
+
+## Path ownership (Programme Phase C)
+
+| Path | Owner |
+| --- | --- |
+| `src/supervisor/**`, `test/supervisor/**` | Worker A |
+| `src/sync/**`, `test/sync/**` | Worker B |
+| `src/platform/**`, `test/platform/**` | Worker C |
+| `package.json`, `tsconfig*.json`, `jest.config.js`, `.gitignore`, `src/main.ts`, `src/app.module.ts`, `src/config/**`, `test/bootstrap.spec.ts`, this file | Coordinator |
+
+Workers never edit paths outside their assignment; shared wiring goes through
+the coordinator. Import shared contracts with
+`@cloudit/operations-agent-contracts` (mapped to source for tests; resolves to
+the built package at runtime). Configuration only via `AgentConfigService` —
+never read `process.env` directly.
+
+## Commands
+
+```bash
+npm test          # jest, offline only
+npm run typecheck # tsc --noEmit
+npm run build     # emits dist/
+```
