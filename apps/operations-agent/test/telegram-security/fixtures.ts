@@ -199,20 +199,57 @@ export function buildStubEvidencePort(overrides: EvidencePortOverrides = {}): St
   return {
     getStatus: () => ({
       overall: 'AMBER',
-      summary: `status ${tag}`,
+      sourcesTotal: 7,
+      sourcesRed: poison ? 1 : 0,
+      sourcesAmber: 2,
+      openIncidents: 2,
       generatedAt: '2026-09-25T10:00:00.000Z',
     }),
     listIncidents: () => [
-      { severity: 'RED', key: 'incident-synthetic-1', summary: `incident ${tag}` },
-      { severity: 'AMBER', key: 'incident-synthetic-2', summary: `incident two ${tag}` },
+      {
+        incidentKey: `incident-synthetic-1-${tag}`,
+        severity: 'RED',
+        serviceKey: `service-${tag}`,
+        state: 'open',
+        startedAt: '2026-09-25T09:00:00.000Z',
+      },
+      {
+        incidentKey: 'incident-synthetic-2',
+        severity: 'AMBER',
+        serviceKey: 'service-b',
+        state: 'open',
+        startedAt: '2026-09-25T09:30:00.000Z',
+      },
     ],
-    getSyncSummary: () => ({ state: 'MATCH', summary: `sync ${tag}` }),
-    getBudgetSummary: () => ({ state: 'OK', summary: `budget ${tag}` }),
+    getSyncSummary: () => ({
+      state: poison ? 'DRIFT' : 'MATCH',
+      driftCount: poison ? 1 : 0,
+      staleCount: 0,
+      scannedAt: '2026-09-25T10:00:00.000Z',
+    }),
+    getBudgetSummary: () => ({
+      dayCallsUsed: 3,
+      dayCallsMax: 10,
+      monthEurUsed: poison ? `9.99 ${tag}` : '1.23',
+      monthEurCeiling: 7,
+    }),
     getFinding: (key: string) =>
       key === CANARY_FINDING_KEY
-        ? { key, summary: `finding ${tag}`, detail: poison ? CANARY_TEXT : 'synthetic detail' }
+        ? {
+            findingKey: key,
+            severity: 'warning',
+            safeTitle: `Finding ${tag}`,
+            safeSummary: poison ? `summary ${tag}` : 'synthetic summary',
+            recommendedRunbook: 'none',
+          }
         : key === CLEAN_FINDING_KEY
-          ? { key, summary: 'finding synthetic clean', detail: 'synthetic detail' }
+          ? {
+              findingKey: key,
+              severity: 'info',
+              safeTitle: 'Synthetic finding',
+              safeSummary: 'synthetic summary',
+              recommendedRunbook: 'none',
+            }
           : undefined,
   };
 }

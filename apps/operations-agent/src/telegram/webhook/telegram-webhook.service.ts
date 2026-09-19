@@ -183,7 +183,7 @@ export class TelegramWebhookService {
       );
     }
     const updateId = (update as Record<string, unknown>).update_id;
-    if (typeof updateId !== 'number' || !Number.isInteger(updateId)) {
+    if (typeof updateId !== 'number' || !Number.isSafeInteger(updateId) || updateId <= 0) {
       return this.finish(
         { status: 'rejected', statusCode: 400 },
         {

@@ -6,6 +6,7 @@
  */
 
 import { TelegramWebhookService } from '../../src/telegram/webhook';
+import type { WebhookOutcome } from '../../src/telegram/telegram.types';
 import {
   ALLOWED_CHAT_ID,
   ALLOWED_USER_ID,
@@ -91,14 +92,14 @@ describe('TelegramWebhookService — denial-path information leakage', () => {
       name: '429 rate limited',
       statusCode: 429,
       run: async (service) => {
-        let last;
+        let last: WebhookOutcome | undefined;
         for (let i = 0; i < 4; i += 1) {
           last = await service.handle(
             buildBody(buildUpdate({ text: '/status top-secret-inbound-body' })),
             authedHeaders(),
           );
         }
-        return last;
+        return last!;
       },
     },
   ];

@@ -39,7 +39,7 @@ describe('TelegramWebhookService — user/chat allowlist authorization', () => {
         authedHeaders(),
       );
       expect(outcome.statusCode).toBe(403);
-      expect(['rejected', 'ignored']).toContain(outcome.status);
+      expect(outcome.status).toBe('unauthorized');
       outcomes.push(outcome);
     }
 

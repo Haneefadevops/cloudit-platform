@@ -97,7 +97,7 @@ describe('TelegramWebhookService — webhook secret authentication', () => {
       buildWebhookOptions({ commandHandler: handler, audit }),
     );
 
-    await service.handle(buildBody(buildUpdate({ text: '/status' })), authedHeaders(undefined));
+    await service.handle(buildBody(buildUpdate({ text: '/status' })), noSecretHeaders());
 
     expect(handler.invocations).toHaveLength(0);
     expect(audit.events).toHaveLength(1);

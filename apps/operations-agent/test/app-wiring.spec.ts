@@ -1,8 +1,10 @@
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
 import { AuditService } from '../src/platform/audit/audit.service';
-import { AUDIT_SINK } from '../src/supervisor';
+import { SupervisorModule, AUDIT_SINK } from '../src/supervisor';
 import { SYNC_AUDIT_SINK, SyncService } from '../src/sync';
+import { TelegramCommandService } from '../src/telegram/commands';
+import { TELEGRAM_COMMAND_HANDLER, TelegramWebhookService } from '../src/telegram/webhook';
 
 /**
  * Coordinator wiring spec: proves the application composes and that every
@@ -27,6 +29,27 @@ describe('AppModule composition (coordinator wiring)', () => {
 
     const sync = moduleRef.get(SyncService);
     await expect(sync.scan()).rejects.toThrow(/not bound/);
+
+    await moduleRef.close();
+  });
+
+  it('composes the Telegram webhook with the commands handler (inert by default)', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+
+    const webhook = moduleRef.get(TelegramWebhookService);
+    const handler = moduleRef.get(TELEGRAM_COMMAND_HANDLER);
+    expect(handler).toBeInstanceOf(TelegramCommandService);
+
+    // Inert by default: no webhook secret is configured, so even a perfectly
+    // formed request is denied before any command runs.
+    const outcome = await webhook.handle(
+      JSON.stringify({
+        update_id: 1,
+        message: { chat: { id: 1 }, from: { id: 1 }, text: '/status' },
+      }),
+      { 'x-telegram-bot-api-secret-token': 'x' },
+    );
+    expect(outcome.statusCode).toBe(401);
 
     await moduleRef.close();
   });
