@@ -1,4 +1,6 @@
-// Phase B skeleton. Contract modules are added by the phase workers under
-// their owned paths (src/contracts, src/canonicalization, src/security);
-// the coordinator wires the public exports here during integration.
-export {};
+// @cloudit/operations-agent-contracts — public API.
+// Sub-modules are owned by phase workers (see README); exports are wired here
+// centrally by the coordinator.
+export * from './contracts';
+export * from './canonicalization';
+export * from './security';
