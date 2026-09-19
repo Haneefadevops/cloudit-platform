@@ -17,7 +17,7 @@
     "baseUrl": "./",
     "paths": {
       "@cloudit/operations-agent-contracts": [
-        "../packages/operations-agent-contracts/src/index.ts"
+        "../../packages/operations-agent-contracts/src/index.ts"
       ]
     }
   },

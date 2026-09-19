@@ -8,6 +8,6 @@ module.exports = {
   },
   moduleNameMapper: {
     '^@cloudit/operations-agent-contracts$':
-      '<rootDir>/../packages/operations-agent-contracts/src/index.ts',
+      '<rootDir>/../../packages/operations-agent-contracts/src/index.ts',
   },
 };
