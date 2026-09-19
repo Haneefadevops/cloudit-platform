@@ -22,6 +22,20 @@ export interface AgentConfig {
   n8nApiBaseUrl: string;
   /** Scan interval for the sync observer. */
   syncScanIntervalMs: number;
+  /**
+   * Telegram bot settings. Token and webhook secret are runtime secrets:
+   * they are read from the environment, never logged, and never required
+   * unless the Telegram capability is enabled (fail-closed).
+   */
+  telegram: {
+    botToken: string | undefined;
+    webhookSecret: string | undefined;
+    allowedUserIds: readonly number[];
+    allowedChatIds: readonly number[];
+    maxBodyBytes: number;
+    maxCommandArgs: number;
+    rateLimitPerMinute: number;
+  };
 }
 
 const DEFAULTS: AgentConfig = {
@@ -34,6 +48,15 @@ const DEFAULTS: AgentConfig = {
   operationsApiBaseUrl: 'http://127.0.0.1:3017',
   n8nApiBaseUrl: 'http://127.0.0.1:5678',
   syncScanIntervalMs: 900_000,
+  telegram: {
+    botToken: undefined,
+    webhookSecret: undefined,
+    allowedUserIds: [],
+    allowedChatIds: [],
+    maxBodyBytes: 65_536,
+    maxCommandArgs: 8,
+    rateLimitPerMinute: 20,
+  },
 };
 
 function readBoolean(env: NodeJS.ProcessEnv, key: string, fallback: boolean): boolean {
@@ -62,6 +85,29 @@ function readUrl(env: NodeJS.ProcessEnv, key: string, fallback: string): string 
     throw new Error(`Invalid URL protocol for ${key}`);
   }
   return parsed.toString().replace(/\/$/, '');
+}
+
+function readOptionalSecret(env: NodeJS.ProcessEnv, key: string): string | undefined {
+  const raw = env[key];
+  if (raw === undefined || raw === '') return undefined;
+  if (raw.length < 8) throw new Error(`Invalid value for ${key}: too short`);
+  return raw;
+}
+
+function readIdList(env: NodeJS.ProcessEnv, key: string): readonly number[] {
+  const raw = env[key];
+  if (raw === undefined || raw.trim() === '') return [];
+  return raw
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part !== '')
+    .map((part) => {
+      const value = Number(part);
+      if (!Number.isInteger(value) || value <= 0) {
+        throw new Error(`Invalid numeric id in ${key}`);
+      }
+      return value;
+    });
 }
 
 @Injectable()
@@ -97,9 +143,39 @@ export class AgentConfigService {
         'SYNC_SCAN_INTERVAL_MS',
         DEFAULTS.syncScanIntervalMs,
       ),
+      telegram: {
+        botToken: readOptionalSecret(env, 'TELEGRAM_BOT_TOKEN'),
+        webhookSecret: readOptionalSecret(env, 'TELEGRAM_WEBHOOK_SECRET'),
+        allowedUserIds: readIdList(env, 'TELEGRAM_ALLOWED_USER_IDS'),
+        allowedChatIds: readIdList(env, 'TELEGRAM_ALLOWED_CHAT_IDS'),
+        maxBodyBytes: readPositiveNumber(env, 'TELEGRAM_MAX_BODY_BYTES', DEFAULTS.telegram.maxBodyBytes),
+        maxCommandArgs: readPositiveNumber(
+          env,
+          'TELEGRAM_MAX_COMMAND_ARGS',
+          DEFAULTS.telegram.maxCommandArgs,
+        ),
+        rateLimitPerMinute: readPositiveNumber(
+          env,
+          'TELEGRAM_RATE_LIMIT_PER_MINUTE',
+          DEFAULTS.telegram.rateLimitPerMinute,
+        ),
+      },
     };
     if (this.config.aiMonthlyEurCeiling > 15) {
       throw new Error('AI_MONTHLY_EUR_CEILING must not exceed the EUR 15 owner budget');
+    }
+    if (this.config.telegramCommandsEnabled) {
+      const t = this.config.telegram;
+      if (!t.botToken || !t.webhookSecret) {
+        throw new Error(
+          'TELEGRAM_COMMANDS_ENABLED requires TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET',
+        );
+      }
+      if (t.allowedUserIds.length === 0 || t.allowedChatIds.length === 0) {
+        throw new Error(
+          'TELEGRAM_COMMANDS_ENABLED requires non-empty TELEGRAM_ALLOWED_USER_IDS and TELEGRAM_ALLOWED_CHAT_IDS',
+        );
+      }
     }
     this.logger.log(
       `agent config loaded: ai=${this.config.aiEnabled} telegram=${this.config.telegramCommandsEnabled} ` +

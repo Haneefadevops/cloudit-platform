@@ -15,6 +15,15 @@ const BASE: AgentConfig = {
   operationsApiBaseUrl: 'http://127.0.0.1:3017',
   n8nApiBaseUrl: 'http://127.0.0.1:5678',
   syncScanIntervalMs: 900_000,
+  telegram: {
+    botToken: undefined,
+    webhookSecret: undefined,
+    allowedUserIds: [],
+    allowedChatIds: [],
+    maxBodyBytes: 65_536,
+    maxCommandArgs: 8,
+    rateLimitPerMinute: 20,
+  },
 };
 
 function makeBudget(overrides: Partial<AgentConfig> = {}, start = '2026-09-21T12:00:00.000Z') {

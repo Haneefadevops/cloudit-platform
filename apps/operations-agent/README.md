@@ -15,7 +15,10 @@ Everything runs against synthetic/local evidence.
 | `src/supervisor/**`, `test/supervisor/**` | Worker A |
 | `src/sync/**`, `test/sync/**` | Worker B |
 | `src/platform/**`, `test/platform/**` | Worker C |
-| `package.json`, `tsconfig*.json`, `jest.config.js`, `.gitignore`, `src/main.ts`, `src/app.module.ts`, `src/config/**`, `test/bootstrap.spec.ts`, this file | Coordinator |
+| `src/telegram/webhook/**`, `test/telegram-webhook/**` | Worker A (Phase D) |
+| `src/telegram/commands/**`, `test/telegram-commands/**` | Worker B (Phase D) |
+| `test/telegram-security/**` | Worker C (Phase D) |
+| `package.json`, `tsconfig*.json`, `jest.config.js`, `.gitignore`, `src/main.ts`, `src/app.module.ts`, `src/config/**`, `src/telegram/telegram.types.ts`, `src/telegram/index.ts`, `test/bootstrap.spec.ts`, `test/app-wiring.spec.ts`, `test/telegram-config.spec.ts`, this file | Coordinator |
 
 Workers never edit paths outside their assignment; shared wiring goes through
 the coordinator. Import shared contracts with
