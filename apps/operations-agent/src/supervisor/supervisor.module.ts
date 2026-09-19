@@ -1,4 +1,5 @@
 import { DynamicModule, Module, Provider } from '@nestjs/common';
+import { AuditService } from '../platform/audit/audit.service';
 import { AUDIT_SINK, AuditSink, InMemoryAuditSink } from './audit-sink';
 import { SupervisorService } from './supervisor.service';
 import {
@@ -12,8 +13,10 @@ export interface SupervisorModuleOptions {
   /** Deterministic thresholds/freshness windows; safe defaults when omitted. */
   supervisor?: SupervisorOptions;
   /**
-   * Audit port binding. The coordinator passes the platform audit service at
-   * integration; defaults to an in-memory sink (tests, offline runs).
+   * Audit port binding. When PlatformModule is present (application context)
+   * the sink binds to its global append-only AuditService so all modules
+   * record to one store; standalone compilations and explicit options fall
+   * back to an in-memory sink.
    */
   auditSink?: AuditSink;
 }
@@ -22,11 +25,19 @@ export interface SupervisorModuleOptions {
 export class SupervisorModule {
   static register(options: SupervisorModuleOptions = {}): DynamicModule {
     const resolved: ResolvedSupervisorOptions = resolveSupervisorOptions(options.supervisor);
-    const sink = options.auditSink ?? new InMemoryAuditSink();
+
+    const sinkProvider: Provider = options.auditSink
+      ? { provide: AUDIT_SINK, useValue: options.auditSink }
+      : {
+          provide: AUDIT_SINK,
+          useFactory: (audit: AuditService | undefined): AuditSink =>
+            audit ?? new InMemoryAuditSink(),
+          inject: [{ token: AuditService, optional: true }],
+        };
 
     const providers: Provider[] = [
       { provide: SUPERVISOR_OPTIONS, useValue: resolved },
-      { provide: AUDIT_SINK, useValue: sink },
+      sinkProvider,
       SupervisorService,
     ];
 

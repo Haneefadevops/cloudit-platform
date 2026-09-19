@@ -1,4 +1,5 @@
 import { Module, Provider } from '@nestjs/common';
+import { AuditService } from '../platform/audit/audit.service';
 import { InMemoryAuditSink } from './audit-sink';
 import { SyncService } from './sync.service';
 import {
@@ -9,9 +10,15 @@ import {
   SYNC_PORTAL_CATALOGUE_SOURCE,
 } from './tokens';
 
+/**
+ * Default audit sink: binds to the global platform AuditService when
+ * PlatformModule is present so every module records to one append-only store;
+ * falls back to an in-memory sink in standalone compilations and tests.
+ */
 const defaultAuditSink: Provider = {
   provide: SYNC_AUDIT_SINK,
-  useFactory: () => new InMemoryAuditSink(),
+  useFactory: (audit: AuditService | undefined) => audit ?? new InMemoryAuditSink(),
+  inject: [{ token: AuditService, optional: true }],
 };
 
 /** Deterministic wall clock; tests and the coordinator may override. */

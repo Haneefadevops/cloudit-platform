@@ -8,7 +8,7 @@
  * runs in tests or until a coordinator-owned component calls start().
  */
 
-import { Module } from '@nestjs/common';
+import { DynamicModule, Global, Module, Provider } from '@nestjs/common';
 import { AgentConfigModule } from '../config/agent-config.module';
 import { AuditService } from './audit/audit.service';
 import { BudgetService } from './budget/budget.service';
@@ -18,6 +18,12 @@ import { JOB_SCHEDULER } from './jobs/job-scheduler';
 import { DURABLE_OUTBOX } from './outbox/durable-outbox';
 import { InMemoryOutbox } from './outbox/in-memory-outbox';
 
+/**
+ * Global so the append-only audit sink (and the other runtime controls) can be
+ * bound by the supervisor and sync modules without import cycles. Instantiated
+ * once per application; every module records to the same store.
+ */
+@Global()
 @Module({
   imports: [AgentConfigModule],
   providers: [
