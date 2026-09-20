@@ -25,6 +25,14 @@ const BASE: AgentConfig = {
     maxCommandArgs: 8,
     rateLimitPerMinute: 20,
   },
+  ai: {
+    routineModel: 'gpt-5.6-luna',
+    escalationModel: 'gpt-5.6-terra',
+    requestTimeoutMs: 30_000,
+    maxInputTokens: 8_000,
+    maxOutputTokens: 1_000,
+    maxEscalationsPerDay: 3,
+  },
 };
 
 function stubConfig(overrides: Partial<AgentConfig> = {}): AgentConfigService {

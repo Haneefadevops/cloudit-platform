@@ -36,6 +36,20 @@ export interface AgentConfig {
     maxCommandArgs: number;
     rateLimitPerMinute: number;
   };
+  /**
+   * AI adapter settings (Phase E). Model aliases are configuration, not
+   * verified provider facts; they must be reverified against official
+   * documentation before any live enablement (operator-plan 8.2). Nothing in
+   * this block can enable AI by itself — aiEnabled remains the master switch.
+   */
+  ai: {
+    routineModel: string;
+    escalationModel: string;
+    requestTimeoutMs: number;
+    maxInputTokens: number;
+    maxOutputTokens: number;
+    maxEscalationsPerDay: number;
+  };
 }
 
 const DEFAULTS: AgentConfig = {
@@ -56,6 +70,14 @@ const DEFAULTS: AgentConfig = {
     maxBodyBytes: 65_536,
     maxCommandArgs: 8,
     rateLimitPerMinute: 20,
+  },
+  ai: {
+    routineModel: 'gpt-5.6-luna',
+    escalationModel: 'gpt-5.6-terra',
+    requestTimeoutMs: 30_000,
+    maxInputTokens: 8_000,
+    maxOutputTokens: 1_000,
+    maxEscalationsPerDay: 3,
   },
 };
 
@@ -160,6 +182,18 @@ export class AgentConfigService {
           DEFAULTS.telegram.rateLimitPerMinute,
         ),
       },
+      ai: {
+        routineModel: env.AI_ROUTINE_MODEL?.trim() || DEFAULTS.ai.routineModel,
+        escalationModel: env.AI_ESCALATION_MODEL?.trim() || DEFAULTS.ai.escalationModel,
+        requestTimeoutMs: readPositiveNumber(env, 'AI_REQUEST_TIMEOUT_MS', DEFAULTS.ai.requestTimeoutMs),
+        maxInputTokens: readPositiveNumber(env, 'AI_MAX_INPUT_TOKENS', DEFAULTS.ai.maxInputTokens),
+        maxOutputTokens: readPositiveNumber(env, 'AI_MAX_OUTPUT_TOKENS', DEFAULTS.ai.maxOutputTokens),
+        maxEscalationsPerDay: readPositiveNumber(
+          env,
+          'AI_MAX_ESCALATIONS_PER_DAY',
+          DEFAULTS.ai.maxEscalationsPerDay,
+        ),
+      },
     };
     if (this.config.aiMonthlyEurCeiling > 15) {
       throw new Error('AI_MONTHLY_EUR_CEILING must not exceed the EUR 15 owner budget');
@@ -176,6 +210,12 @@ export class AgentConfigService {
           'TELEGRAM_COMMANDS_ENABLED requires non-empty TELEGRAM_ALLOWED_USER_IDS and TELEGRAM_ALLOWED_CHAT_IDS',
         );
       }
+    }
+    if (this.config.ai.maxEscalationsPerDay > 10) {
+      throw new Error('AI_MAX_ESCALATIONS_PER_DAY must not exceed 10');
+    }
+    if (this.config.ai.maxOutputTokens > 2_000) {
+      throw new Error('AI_MAX_OUTPUT_TOKENS must not exceed 2000 (plan 8.3 target is <= 1000)');
     }
     this.logger.log(
       `agent config loaded: ai=${this.config.aiEnabled} telegram=${this.config.telegramCommandsEnabled} ` +
