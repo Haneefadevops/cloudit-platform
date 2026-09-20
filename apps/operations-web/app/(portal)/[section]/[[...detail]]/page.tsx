@@ -11,9 +11,10 @@ import { ReportsPage } from "../../../../components/reports-page";
 import { IncidentsPage, type IncidentsSearchParams } from "../../../../components/incidents-page";
 import { IncidentDetailPage } from "../../../../components/incident-detail-page";
 import { AuditLogPage, type AuditLogSearchParams } from "../../../../components/audit-log-page";
+import { AiMaintenancePage } from "../../../../components/ai-maintenance-page";
 import type { WorkflowsWindow } from "../../../../lib/operations-api";
 
-const sections = new Set(["overview", "clients", "workflows", "infrastructure", "vercel", "imagekit", "backups", "reports", "incidents", "audit-log", "settings"]);
+const sections = new Set(["overview", "clients", "workflows", "infrastructure", "vercel", "imagekit", "backups", "reports", "incidents", "ai-maintenance", "audit-log", "settings"]);
 const workflowWindows = new Set<WorkflowsWindow>(["24h", "7d", "30d"]);
 
 export default async function ProtectedSectionPage({
@@ -36,6 +37,7 @@ export default async function ProtectedSectionPage({
     return <IncidentsPage searchParams={searchParams} />;
   }
   if (params.section === "audit-log") return <AuditLogPage searchParams={searchParams} />;
+  if (params.section === "ai-maintenance") return <AiMaintenancePage />;
   if (params.section === "workflows") {
     const workflowKey = params.detail?.[0];
     if (workflowKey) return <WorkflowDetailPage workflowKey={workflowKey} />;

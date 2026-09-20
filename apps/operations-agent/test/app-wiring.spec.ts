@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
+import { AiAdapterService, AiMaintenanceReadModel } from '../src/ai';
 import { AuditService } from '../src/platform/audit/audit.service';
 import { SupervisorModule, AUDIT_SINK } from '../src/supervisor';
 import { SYNC_AUDIT_SINK, SyncService } from '../src/sync';
@@ -50,6 +51,49 @@ describe('AppModule composition (coordinator wiring)', () => {
       { 'x-telegram-bot-api-secret-token': 'x' },
     );
     expect(outcome.statusCode).toBe(401);
+
+    await moduleRef.close();
+  });
+
+  it('composes the AI adapter and read model (inert by default) and records AI audit events into the shared store', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+
+    const adapter = moduleRef.get(AiAdapterService);
+    const readModel = moduleRef.get(AiMaintenanceReadModel);
+    const platformAudit = moduleRef.get(AuditService);
+
+    // The read model fails closed until real sources are bound: no findings,
+    // budget zeroed, all switches off, drift unknown.
+    const projection = readModel.getProjection();
+    expect(projection.findings).toEqual([]);
+    expect(projection.budget.aiEnabled).toBe(false);
+    expect(projection.killSwitches.aiEnabled).toBe(false);
+    expect(projection.drift.state).toBe('unknown');
+
+    // Inert by default: the 'ai' kill switch is off and the LLM port is the
+    // fail-closed stand-in, so any assessment collapses to the deterministic
+    // fallback and one closed audit event lands in the shared store.
+    const before = platformAudit.count();
+    const result = await adapter.assess({
+      deterministic: {
+        assessment: 'AMBER',
+        summary: 'synthetic deterministic assessment',
+        evidenceKeys: ['ev:synthetic:1'],
+        confidence: 'MEDIUM',
+        issueCode: 'NO_ISSUE',
+        recommendedRunbook: 'none',
+        automationEligibility: 'OWNER_REQUIRED',
+      },
+      conflictingSignals: false,
+      evidenceHash: 'sha256:app-wiring',
+    });
+    expect(result.fallback).toBe(true);
+    expect(result.model).toBe('deterministic');
+    expect(platformAudit.count()).toBe(before + 1);
+    const lastEvent = platformAudit.getEvents()[platformAudit.count() - 1];
+    expect(lastEvent.eventType).toBe('ai_assessment');
+    expect(lastEvent.actor).toBe('agent:ai-adapter');
+    expect(lastEvent.reasonCode).toBe('AI_DISABLED');
 
     await moduleRef.close();
   });
