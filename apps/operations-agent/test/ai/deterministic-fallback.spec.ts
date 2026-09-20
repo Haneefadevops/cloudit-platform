@@ -1,4 +1,4 @@
-import { validateHealthAssessment } from '@cloudit/operations-agent-contracts';
+import { HealthAssessment, SECRET_CANARY_FIXTURES, detectCanaryLeak, validateHealthAssessment } from '@cloudit/operations-agent-contracts';
 import { buildDeterministicFallback } from '../../src/ai';
 import { DETERMINISTIC_RED } from './fixtures';
 
@@ -10,11 +10,22 @@ describe('buildDeterministicFallback', () => {
     expect(fallback.issueCode).toBe(DETERMINISTIC_RED.issueCode);
   });
 
-  it('uses the fixed template summary with the finding count', () => {
+  it('retains the supervisor-written summary verbatim (summary is supervisor-owned)', () => {
     const fallback = buildDeterministicFallback(DETERMINISTIC_RED);
+    expect(fallback.summary).toBe(DETERMINISTIC_RED.summary);
+  });
+
+  it('replaces the summary with the fixed template when the deterministic text carries a secret canary', () => {
+    const canary = SECRET_CANARY_FIXTURES[0].value;
+    const laced: HealthAssessment = {
+      ...DETERMINISTIC_RED,
+      summary: `collector note mentions ${canary}`,
+    };
+    const fallback = buildDeterministicFallback(laced);
     expect(fallback.summary).toBe(
       `Deterministic assessment retained. findings=${DETERMINISTIC_RED.evidenceKeys.length}`,
     );
+    expect(detectCanaryLeak(JSON.stringify(fallback)).leaked).toBe(false);
   });
 
   it('collapses AI-owned fields to safe defaults (LOW / none / OWNER_REQUIRED)', () => {

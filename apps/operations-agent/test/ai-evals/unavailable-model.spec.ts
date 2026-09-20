@@ -15,7 +15,7 @@ const LLM_ERROR_CODES = ['timeout', 'rate_limited', 'server', 'refused', 'networ
 describe('AiAdapterService — unavailable-model evals', () => {
   it.each(LLM_ERROR_CODES)('falls back deterministically on LlmError code "%s" with exactly one call', async (code) => {
     const client = FakeLlmClient.throwing(
-      withCode(new LlmError(`synthetic provider failure (${code})`), code),
+      withCode(new LlmError(code, `synthetic provider failure (${code})`), code),
     );
     const service = new AiAdapterService(buildAdapterOptions({ client }));
 
@@ -51,7 +51,7 @@ describe('AiAdapterService — unavailable-model evals', () => {
 
   it('retains NO_DATA through a provider failure (never infers GREEN from absence)', async () => {
     const client = FakeLlmClient.throwing(
-      withCode(new LlmError('synthetic provider failure (network)'), 'network'),
+      withCode(new LlmError('network', 'synthetic provider failure (network)'), 'network'),
     );
     const service = new AiAdapterService(buildAdapterOptions({ client }));
 

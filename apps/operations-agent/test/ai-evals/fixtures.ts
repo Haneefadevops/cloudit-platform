@@ -150,9 +150,12 @@ export class FakeLlmClient {
 /**
  * Attach a synthetic failure `code` to an error regardless of the LlmError
  * constructor arity, so unavailable-model evals work even if the constructor
- * signature drifts during integration.
+ * signature drifts during integration. Immutable error types (e.g. a frozen
+ * LlmError) are respected: when the error already carries the requested code
+ * it is returned unchanged.
  */
 export function withCode<T extends Error>(error: T, code: string): T {
+  if ((error as { code?: unknown }).code === code) return error;
   Object.defineProperty(error, 'code', { value: code, enumerable: true, configurable: true });
   return error;
 }

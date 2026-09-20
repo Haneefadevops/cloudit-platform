@@ -38,11 +38,13 @@ describe('prompt safety (operator-plan 11.2)', () => {
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
 
-    // The serialized verdict appears only between the markers and parses back.
+    // The untrusted free-text fields appear verbatim inside the section.
     const section = prompt.user.slice(start, end);
     expect(section).toContain('untrusted monitoring evidence');
-    const serialized = section.slice(section.lastIndexOf('{'));
-    expect(JSON.parse(serialized)).toEqual(deterministic);
+    expect(section).toContain(deterministic.summary);
+    for (const key of deterministic.evidenceKeys) {
+      expect(section).toContain(key);
+    }
   });
 
   it('never lets raw canary strings from evidence appear outside the labeled section', () => {

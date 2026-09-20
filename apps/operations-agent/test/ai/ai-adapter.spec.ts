@@ -297,7 +297,7 @@ describe('AiAdapterService shadow mode', () => {
   });
 
   describe('deterministic fallback builder integration', () => {
-    it('fallback assessment keeps deterministic verdict fields but fixed template summary', async () => {
+    it('fallback assessment keeps the deterministic verdict fields and supervisor summary', async () => {
       const { service } = makeAdapter(async (): Promise<LlmResponse> => {
         throw new LlmError('network');
       });
@@ -308,7 +308,6 @@ describe('AiAdapterService shadow mode', () => {
       });
       expect(result.assessment).toEqual({
         ...DETERMINISTIC_RED,
-        summary: `Deterministic assessment retained. findings=${DETERMINISTIC_RED.evidenceKeys.length}`,
         confidence: 'LOW',
         recommendedRunbook: 'none',
         automationEligibility: 'OWNER_REQUIRED',

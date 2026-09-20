@@ -13,13 +13,15 @@
  * from evidence; evidence wrapped via labelUntrustedText) -> client.complete
  * (LlmError or unexpected throw -> deterministic fallback) -> parse JSON ->
  * validateHealthAssessment -> contradiction check (deterministic always wins)
- * -> budget.record + one audit event. Cost estimate uses a synthetic
+ * -> secret-canary scan (schema-valid replies echoing secret-shaped content
+ * are discarded) -> budget.record + one audit event. Cost estimate uses a synthetic
  * placeholder rate table (see cost.ts; plan 8.2 requires reverification);
  * costEur is 0 on fallback.
  */
 
 import {
   HealthAssessment,
+  detectCanaryLeak,
   validateHealthAssessment,
 } from '@cloudit/operations-agent-contracts';
 import { estimateCostEur } from './cost';
@@ -104,6 +106,7 @@ export type AiOutcomeCode =
   | 'LLM_MALFORMED_JSON'
   | 'LLM_INVALID_ASSESSMENT'
   | 'LLM_CONTRADICTS_DETERMINISTIC'
+  | 'LLM_SECRET_CANARY'
   | 'UNEXPECTED_ERROR';
 
 /** Internal control-flow signal; carries a safe outcome code, never raw text. */
@@ -229,6 +232,12 @@ export class AiAdapterService {
     //    discards the model output.
     if (validated.value.assessment !== input.deterministic.assessment) {
       throw new AssessmentAborted('LLM_CONTRADICTS_DETERMINISTIC');
+    }
+
+    // 8b. Secret-canary scan (plan 11.2): a schema-valid reply that echoes
+    //     secret-shaped content is discarded just like a contradiction.
+    if (detectCanaryLeak(JSON.stringify(validated.value)).leaked) {
+      throw new AssessmentAborted('LLM_SECRET_CANARY');
     }
 
     // 9. Cost estimate (synthetic rate table) + budget record + audit.
