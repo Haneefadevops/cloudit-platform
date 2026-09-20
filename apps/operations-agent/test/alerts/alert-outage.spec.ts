@@ -19,7 +19,7 @@ describe('AlertEngine outage fallback', () => {
     expect(decision.message?.kind).toBe('red_alert');
     expect(outbox.entries).toHaveLength(1);
     expect(outbox.entries[0]).toEqual({
-      entryId: `alert-outage-${ENV}-WF_STALE-${FIXED_NOW_MS}`,
+      entryId: `alert-outage-${ENV}-WF_STALE-${FIXED_NOW_MS}-1`,
       type: 'telegram_alert',
       payload: decision.message,
     });

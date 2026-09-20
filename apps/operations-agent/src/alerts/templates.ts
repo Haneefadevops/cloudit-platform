@@ -12,8 +12,24 @@ import { detectCanaryLeak } from '@cloudit/operations-agent-contracts';
 
 export const ALERT_TEXT_MAX_CHARS = 400;
 
+const REDACTED = '[redacted-by-security-policy]';
+
+/**
+ * A template component (environment/subject) may itself carry secret-shaped
+ * content when upstream validation was bypassed. Defense in depth: any
+ * component that trips the canary scan is redacted in the rendered text, so
+ * no channel — including the subjectKey — can leak through a template.
+ */
+function safeComponent(value: string): string {
+  try {
+    return detectCanaryLeak(value).leaked ? REDACTED : value;
+  } catch {
+    return REDACTED;
+  }
+}
+
 function boundedSafeTemplate(environmentKey: string, subjectKey: string): string {
-  const text = `CloudIT alert [environment=${environmentKey} subject=${subjectKey}]. Details withheld by security policy.`;
+  const text = `CloudIT alert [environment=${safeComponent(environmentKey)} subject=${safeComponent(subjectKey)}]. Details withheld by security policy.`;
   return text.length <= ALERT_TEXT_MAX_CHARS ? text : text.slice(0, ALERT_TEXT_MAX_CHARS);
 }
 

@@ -99,6 +99,9 @@ export class AlertEngine {
   private readonly sendLog: number[] = [];
   /** Queued-outage appends per subject since construction (outage bound). */
   private readonly outagePending = new Map<string, number>();
+  /** Monotonic outbox sequence: entryIds must be unique per occurrence even
+   * under a fixed clock, or the durable outbox rejects the append. */
+  private outboxSequence = 0;
 
   constructor(private readonly options: AlertEngineOptions) {
     this.now = options.now ?? (() => Date.now());
@@ -219,8 +222,9 @@ export class AlertEngine {
         return this.finish('SUPPRESSED_OUTAGE_BOUND', subjectKey, undefined);
       }
       const occurredAtMillis = this.now();
+      this.outboxSequence += 1;
       this.options.outbox.append({
-        entryId: `alert-outage-${environmentKey}-${subjectKey}-${occurredAtMillis}`,
+        entryId: `alert-outage-${environmentKey}-${subjectKey}-${occurredAtMillis}-${this.outboxSequence}`,
         type: 'telegram_alert',
         payload: message,
       });

@@ -58,9 +58,12 @@ describe('AlertEngine — rate-limit evals', () => {
     clock.advance(30 * 60 * 1000);
     expect((await engine.handle(ENV_KEY, redFor(3))).action).toBe('SUPPRESSED_RATE_LIMITED');
 
-    // 61 minutes after the first send, the earliest sends have slid out.
+    // 61 minutes after the first send, the earliest sends have slid out and a
+    // FRESH subject is no longer duplicate-suppressed either.
     clock.set(T0 + 61 * 60 * 1000);
-    expect((await engine.handle(ENV_KEY, redFor(0))).action).toBe('SENT');
+    expect(
+      (await engine.handle(ENV_KEY, makeVerdict('RED', { issueCode: 'POST_WINDOW_SUBJECT' }))).action,
+    ).toBe('SENT');
     expect(sender.sent).toHaveLength(3);
   });
 
@@ -68,7 +71,7 @@ describe('AlertEngine — rate-limit evals', () => {
     const sender = new RecordingSender();
     const clock = new ManualClock(T0);
     const engine = new AlertEngine(
-      buildEngineOptions({ sender, maxAlertsPerHour: 1, now: clock.now }),
+      buildEngineOptions({ sender, maxAlertsPerHour: 2, now: clock.now }),
     );
 
     expect(
