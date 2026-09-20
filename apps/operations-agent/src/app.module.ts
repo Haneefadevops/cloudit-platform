@@ -21,7 +21,7 @@ import {
   findingsBinding,
   killSwitchStatesBinding,
 } from './ai-bindings';
-import { AlertEngine, AlertMessage } from './alerts';
+import { AlertEngine, AlertMessage, createTelegramSender } from './alerts';
 import {
   AI_AUDIT,
   AI_BUDGET_GATE,
@@ -59,10 +59,11 @@ const failClosedLlmClient: LlmClient = {
 };
 
 /**
- * Fail-closed Telegram sender (Phase F). The real sendMessage client is a
- * later, separately gated piece; until it is bound every dispatch attempt
- * rejects, which drives the engine's honest outage path: the alert is queued
- * to the durable outbox and audited. Nothing contacts Telegram.
+ * Fail-closed Telegram sender stand-in, used only while no bot token /
+ * allow-listed chat is configured (the default everywhere except the
+ * explicitly configured server). Every dispatch attempt rejects, which
+ * drives the engine's honest outage path: the alert is queued to the
+ * durable outbox and audited. Nothing contacts Telegram.
  */
 const failClosedAlertSender = {
   send(_message: AlertMessage): Promise<never> {
@@ -244,7 +245,17 @@ const aiProviders: Provider[] = [
                 throw new Error('Telegram kill switch service unavailable (fail closed)');
               },
             },
-        sender: failClosedAlertSender,
+        sender: (() => {
+          // Real sender only when the server is explicitly configured with a
+          // token and at least one allow-listed chat; otherwise the
+          // fail-closed stand-in keeps every dispatch on the audited outage
+          // path. Alerts go to the FIRST allow-listed chat ID (the owner
+          // decides whether that is a DM or a group when placing secrets).
+          const telegram = config.get().telegram;
+          return telegram.botToken && telegram.allowedChatIds.length > 0
+            ? createTelegramSender({ token: telegram.botToken, chatId: telegram.allowedChatIds[0] })
+            : failClosedAlertSender;
+        })(),
         outbox: outbox
           ? {
               append: (entry: { entryId: string; type: string; payload: unknown }) =>
@@ -305,10 +316,11 @@ const aiProviders: Provider[] = [
  * states; findings and drift stay fail-closed until real projections exist.
  *
  * The alert composition (Phase F) is inert by default: the engine is gated
- * by the 'telegram' kill switch (off), and the sender is a fail-closed
- * stand-in — nothing contacts Telegram. An enabled-but-unbound sender would
- * queue alerts to the durable outbox and audit them (the honest outage
- * path), never losing an alert.
+ * by the 'telegram' kill switch (off), so nothing dispatches until the owner
+ * enables it on the server. The sender is the real Telegram Bot API sender
+ * when the server env provides a token and an allow-listed chat; without
+ * that config the fail-closed stand-in keeps every attempt on the audited
+ * outage path (queued to the durable outbox, never lost).
  *
  * The remediation composition (Phase G) is execute-nothing by design: the
  * engine proposes Tier-A runbooks, replays dedup while a proposal is live,

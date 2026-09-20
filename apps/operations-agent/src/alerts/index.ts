@@ -23,3 +23,12 @@ export {
   renderRecovery,
   renderDigest,
 } from './templates';
+export {
+  TelegramSender,
+  TelegramSenderOptions,
+  TELEGRAM_TEXT_MAX_CHARS,
+  TELEGRAM_TEXT_TRUNCATION_SUFFIX,
+  TELEGRAM_DESCRIPTION_MAX_CHARS,
+  DEFAULT_TELEGRAM_TIMEOUT_MS,
+  createTelegramSender,
+} from './telegram-sender';

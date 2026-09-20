@@ -140,8 +140,48 @@ describe('AppModule composition (coordinator wiring)', () => {
     await moduleRef.close();
   });
 
-  it('composes the remediation engine (execute-nothing) and records remediation audit events into the shared store', async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  it('binds the real Telegram sender when the server env provides token and chat, and stays inert while the switch is off', async () => {
+    // Server-like env: token + allow-listed chat present, but the master
+    // switch stays OFF. AgentConfigService reads process.env at construction,
+    // so set the values before compiling the module.
+    const savedToken = process.env.TELEGRAM_BOT_TOKEN;
+    const savedChats = process.env.TELEGRAM_ALLOWED_CHAT_IDS;
+    process.env.TELEGRAM_BOT_TOKEN = 'synthetic-token-for-wiring-spec-0000';
+    process.env.TELEGRAM_ALLOWED_CHAT_IDS = '424242';
+    try {
+      const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+
+      const alerts = moduleRef.get(AlertEngine);
+      const platformAudit = moduleRef.get(AuditService);
+      const outbox = moduleRef.get(DURABLE_OUTBOX);
+
+      // The real sender is composed, but the 'telegram' kill switch is still
+      // off: dispatch is blocked before any sender call, exactly one closed
+      // audit event lands, and nothing contacts Telegram.
+      const before = platformAudit.count();
+      const decision = await alerts.handle('default', {
+        assessment: 'RED',
+        summary: 'synthetic deterministic assessment',
+        evidenceKeys: ['ev:synthetic:1'],
+        confidence: 'MEDIUM',
+        issueCode: 'WF_STALE_SNAPSHOT',
+        recommendedRunbook: 'none',
+        automationEligibility: 'OWNER_REQUIRED',
+      });
+      expect(decision.action).toBe('BLOCKED_KILL_SWITCH');
+      expect(platformAudit.count()).toBe(before + 1);
+      expect(outbox.pendingEntries()).toHaveLength(0);
+
+      await moduleRef.close();
+    } finally {
+      if (savedToken === undefined) delete process.env.TELEGRAM_BOT_TOKEN;
+      else process.env.TELEGRAM_BOT_TOKEN = savedToken;
+      if (savedChats === undefined) delete process.env.TELEGRAM_ALLOWED_CHAT_IDS;
+      else process.env.TELEGRAM_ALLOWED_CHAT_IDS = savedChats;
+    }
+  });
+
+  it('composes the remediation engine (execute-nothing) and records remediation audit events into the shared store', async () => {    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
 
     const remediation = moduleRef.get(RemediationEngine);
     const platformAudit = moduleRef.get(AuditService);
