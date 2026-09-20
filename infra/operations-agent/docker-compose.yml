@@ -1,0 +1,41 @@
+services:
+  operations-agent:
+    build:
+      context: ../..
+      dockerfile: infra/operations-agent/Dockerfile
+    image: cloudit/operations-agent:latest
+    container_name: operations-agent
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Secrets come only from the protected server file infra/operations-agent/.env
+    # (created from .env.example by deploy.sh; the real .env is git-ignored).
+    # Empty values in the example resolve to the agent's safe disabled defaults.
+    env_file:
+      - ./.env
+    environment:
+      - NODE_ENV=production
+    networks:
+      - cloudit
+    # Headless watchdog: no published port and no reverse-proxy route.
+    ports: []
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+networks:
+  cloudit:
+    external: true

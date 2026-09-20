@@ -130,6 +130,21 @@ sync_whatsapp_agent_db_credentials() {
   log "Synced whatsapp-agent-api/.env DATABASE_URL with shared Postgres credentials"
 }
 
+ensure_operations_agent_env() {
+  local env_file="$PROJECT_ROOT/infra/operations-agent/.env"
+  local example="$PROJECT_ROOT/infra/operations-agent/.env.example"
+
+  if [ ! -f "$env_file" ] && [ -f "$example" ]; then
+    cp "$example" "$env_file"
+    log "Created infra/operations-agent/.env from .env.example (all switches off)"
+  fi
+
+  if [ ! -f "$env_file" ]; then
+    log "WARNING: infra/operations-agent/.env not found; agent will use safe disabled defaults"
+    return 0
+  fi
+}
+
 ensure_chatwoot_env() {
   local cw_env="$PROJECT_ROOT/infra/chatwoot/.env"
   local cw_example="$PROJECT_ROOT/infra/chatwoot/.env.example"
@@ -231,6 +246,14 @@ tag_previous_image "operations-ingest"
 build_service "operations-ingest"
 docker compose -f infra/operations-ingest/docker-compose.yml up -d
 wait_for_service operations-ingest
+
+ensure_operations_agent_env
+
+log "Building and starting the operations agent (inert by default; switches live only in its protected env)..."
+tag_previous_image "operations-agent"
+build_service "operations-agent"
+docker compose -f infra/operations-agent/docker-compose.yml up -d
+wait_for_service operations-agent
 
 log "Running pre-deployment checks and migrations..."
 "$PROJECT_ROOT/infra/scripts/predeploy.sh"
