@@ -27,6 +27,9 @@ Everything runs against synthetic/local evidence.
 | `src/remediation/**`, `test/remediation/**` | Worker A (Phase G) |
 | `test/remediation-evals/**` | Worker C (Phase G) |
 | `src/alerts/telegram-sender.ts`, `test/alerts/telegram-sender.spec.ts` | Worker A (sender binding) |
+| `src/observer/evidence-source.ts`, `test/observer/evidence-source.spec.ts` | Worker A (soak driver) |
+| `src/observer/soak-driver.ts`, `test/observer/soak-driver.spec.ts` | Worker B (soak driver) |
+| `test/observer-evals/**` | Worker C (soak driver) |
 | `package.json`, `tsconfig*.json`, `jest.config.js`, `.gitignore`, `src/main.ts`, `src/app.module.ts`, `src/config/**`, `src/telegram/telegram.types.ts`, `src/telegram/index.ts`, `test/bootstrap.spec.ts`, `test/app-wiring.spec.ts`, `test/telegram-config.spec.ts`, `test/ai-config.spec.ts`, this file | Coordinator |
 
 Workers never edit paths outside their assignment; shared wiring goes through

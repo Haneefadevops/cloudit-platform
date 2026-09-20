@@ -62,6 +62,22 @@ export interface AgentConfig {
     /** Bounded retry attempts when the sender is unavailable (outage fallback). */
     outageRetryMaxAttempts: number;
   };
+  /**
+   * Soak-driver observation settings. Read-only: the agent connects to the
+   * operations DB with the SELECT-only operations_reader role. Without a
+   * password the observer stays inert (fail closed); nothing writes, ever.
+   */
+  observer?: {
+    dbHost: string;
+    dbPort: number;
+    dbName: string;
+    dbUser: string;
+    dbPassword: string | undefined;
+    /** Tick interval for evidence reads + assessment. Default 900_000 (15 min). */
+    intervalMs: number;
+    /** UTC hour (0-23) for the daily digest. Default 7. */
+    digestHourUtc: number;
+  };
 }
 
 const DEFAULTS: AgentConfig = {
@@ -94,6 +110,15 @@ const DEFAULTS: AgentConfig = {
   alerts: {
     maxAlertsPerHour: 6,
     outageRetryMaxAttempts: 3,
+  },
+  observer: {
+    dbHost: 'postgres',
+    dbPort: 5432,
+    dbName: 'operations',
+    dbUser: 'operations_reader',
+    dbPassword: undefined,
+    intervalMs: 900_000,
+    digestHourUtc: 7,
   },
 };
 
@@ -222,6 +247,21 @@ export class AgentConfigService {
           DEFAULTS.alerts!.outageRetryMaxAttempts,
         ),
       },
+      observer: {
+        dbHost: env.OPERATIONS_DB_HOST?.trim() || DEFAULTS.observer!.dbHost,
+        dbPort: readPositiveNumber(env, 'OPERATIONS_DB_PORT', DEFAULTS.observer!.dbPort),
+        dbName: env.OPERATIONS_DB_NAME?.trim() || DEFAULTS.observer!.dbName,
+        dbUser: env.OPERATIONS_DB_USER?.trim() || DEFAULTS.observer!.dbUser,
+        dbPassword: readOptionalSecret(env, 'OPERATIONS_DB_PASSWORD'),
+        intervalMs: readPositiveNumber(env, 'OBSERVER_INTERVAL_MS', DEFAULTS.observer!.intervalMs),
+        digestHourUtc: (() => {
+          const hour = Number(env.OBSERVER_DIGEST_HOUR_UTC ?? DEFAULTS.observer!.digestHourUtc);
+          if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+            throw new Error('OBSERVER_DIGEST_HOUR_UTC must be an integer between 0 and 23');
+          }
+          return hour;
+        })(),
+      },
     };
     if (this.config.aiMonthlyEurCeiling > 15) {
       throw new Error('AI_MONTHLY_EUR_CEILING must not exceed the EUR 15 owner budget');
@@ -250,6 +290,9 @@ export class AgentConfigService {
     }
     if (this.config.alerts!.outageRetryMaxAttempts > 10) {
       throw new Error('ALERTS_OUTAGE_RETRY_MAX_ATTEMPTS must not exceed 10');
+    }
+    if (this.config.observer!.intervalMs < 60_000) {
+      throw new Error('OBSERVER_INTERVAL_MS must be at least 60_000 (one minute)');
     }
     this.logger.log(
       `agent config loaded: ai=${this.config.aiEnabled} telegram=${this.config.telegramCommandsEnabled} ` +
