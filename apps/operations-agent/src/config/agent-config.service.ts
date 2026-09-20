@@ -50,6 +50,18 @@ export interface AgentConfig {
     maxOutputTokens: number;
     maxEscalationsPerDay: number;
   };
+  /**
+   * Alert/digest settings (Phase F). Optional so existing full-config test
+   * fixtures keep compiling; the service always fills DEFAULTS.alerts when
+   * built from the environment. Nothing here enables alerts by itself — the
+   * 'telegram' kill switch remains the master gate.
+   */
+  alerts?: {
+    /** Maximum outbound alert messages per rolling UTC hour. */
+    maxAlertsPerHour: number;
+    /** Bounded retry attempts when the sender is unavailable (outage fallback). */
+    outageRetryMaxAttempts: number;
+  };
 }
 
 const DEFAULTS: AgentConfig = {
@@ -78,6 +90,10 @@ const DEFAULTS: AgentConfig = {
     maxInputTokens: 8_000,
     maxOutputTokens: 1_000,
     maxEscalationsPerDay: 3,
+  },
+  alerts: {
+    maxAlertsPerHour: 6,
+    outageRetryMaxAttempts: 3,
   },
 };
 
@@ -194,6 +210,18 @@ export class AgentConfigService {
           DEFAULTS.ai.maxEscalationsPerDay,
         ),
       },
+      alerts: {
+        maxAlertsPerHour: readPositiveNumber(
+          env,
+          'ALERTS_MAX_ALERTS_PER_HOUR',
+          DEFAULTS.alerts!.maxAlertsPerHour,
+        ),
+        outageRetryMaxAttempts: readPositiveNumber(
+          env,
+          'ALERTS_OUTAGE_RETRY_MAX_ATTEMPTS',
+          DEFAULTS.alerts!.outageRetryMaxAttempts,
+        ),
+      },
     };
     if (this.config.aiMonthlyEurCeiling > 15) {
       throw new Error('AI_MONTHLY_EUR_CEILING must not exceed the EUR 15 owner budget');
@@ -216,6 +244,12 @@ export class AgentConfigService {
     }
     if (this.config.ai.maxOutputTokens > 2_000) {
       throw new Error('AI_MAX_OUTPUT_TOKENS must not exceed 2000 (plan 8.3 target is <= 1000)');
+    }
+    if (this.config.alerts!.maxAlertsPerHour > 60) {
+      throw new Error('ALERTS_MAX_ALERTS_PER_HOUR must not exceed 60');
+    }
+    if (this.config.alerts!.outageRetryMaxAttempts > 10) {
+      throw new Error('ALERTS_OUTAGE_RETRY_MAX_ATTEMPTS must not exceed 10');
     }
     this.logger.log(
       `agent config loaded: ai=${this.config.aiEnabled} telegram=${this.config.telegramCommandsEnabled} ` +
