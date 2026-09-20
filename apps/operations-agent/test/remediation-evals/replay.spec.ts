@@ -43,15 +43,22 @@ describe('RemediationEngine — replay evals', () => {
     expect(engine.listProposals(ENV_A)).toHaveLength(1);
   });
 
-  it('replays return the live proposal (status transitions are visible)', () => {
+  it('replays return the live proposal while it is non-terminal; a terminal approval ends dedup', () => {
     const engine = new RemediationEngine(buildEngineOptions());
 
     const first = engine.propose(ENV_A, ISSUE_EVIDENCE_STALE);
-    engine.approve(first.proposal!.proposalId);
     const replay = engine.propose(ENV_A, ISSUE_EVIDENCE_STALE);
-
     expect(replay.action).toBe('REPLAY_IGNORED');
-    expect(replay.proposal!.status).toBe('APPROVED');
+    expect(replay.proposal!.proposalId).toBe(first.proposal!.proposalId);
+    expect(replay.proposal!.status).toBe('PROPOSED');
+
+    // A terminal decision ends replay dedup: the same issueCode afterwards is
+    // a new occurrence and mints a fresh proposal.
+    engine.approve(first.proposal!.proposalId);
+    const after = engine.propose(ENV_A, ISSUE_EVIDENCE_STALE);
+    expect(after.action).toBe('PROPOSED');
+    expect(after.proposal!.proposalId).not.toBe(first.proposal!.proposalId);
+    expect(engine.listProposals(ENV_A)).toHaveLength(2);
   });
 
   it('the same issueCode in a different environment is an independent proposal', () => {

@@ -175,8 +175,12 @@ export interface BuildEngineOptionsOverrides {
 export function buildEngineOptions(
   overrides: BuildEngineOptionsOverrides = {},
 ): RemediationEngineOptionsShape {
+  // Blind-integration rule: the engine's built-in default registry contents
+  // are implementation-owned and unknowable from outside, so every eval that
+  // asserts specific issueCodes injects the synthetic registry explicitly
+  // (this default) instead of relying on the built-in one.
   const options: RemediationEngineOptionsShape = {
-    ...(overrides.registry !== undefined ? { registry: overrides.registry } : {}),
+    registry: overrides.registry ?? DEFAULT_REGISTRY,
     ...(overrides.audit !== undefined ? { audit: overrides.audit } : {}),
     ...(overrides.maxFailures !== undefined ? { maxFailures: overrides.maxFailures } : {}),
     ...(overrides.cooldownMs !== undefined ? { cooldownMs: overrides.cooldownMs } : {}),

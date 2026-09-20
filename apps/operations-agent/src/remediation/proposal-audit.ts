@@ -4,13 +4,27 @@
  * Exactly one event per propose()/approve()/reject() call. Safe
  * machine-readable codes only; the summary is a fixed bounded template
  * (<= 200 chars) with the action and subjectKey — never runbook free text.
- * The coordinator adapts this into the contracts AuditEvent later; do NOT add
+ * Defense in depth: a subjectKey that trips the secret-canary scan (out-of-
+ * contract input, since issueCode is closed-code validated upstream) is
+ * redacted in the summary and evidenceKeys so no channel can leak. The
+ * coordinator adapts this into the contracts AuditEvent later; do NOT add
  * eventId/environmentKey here.
  */
 
+import { detectCanaryLeak } from '@cloudit/operations-agent-contracts';
 import type { ProposalAction } from './remediation-engine';
 
 export const REMEDIATION_AUDIT_SUMMARY_MAX_CHARS = 200;
+
+const REDACTED_SUBJECT = '[redacted-by-security-policy]';
+
+function safeSubject(subjectKey: string): string {
+  try {
+    return detectCanaryLeak(subjectKey).leaked ? REDACTED_SUBJECT : subjectKey;
+  } catch {
+    return REDACTED_SUBJECT;
+  }
+}
 
 export type RemediationAuditResultCode = 'PROPOSED' | 'ACCEPTED' | 'REJECTED' | 'IGNORED' | 'BLOCKED';
 
@@ -45,7 +59,8 @@ export function buildRemediationAuditEvent(
   subjectKey: string,
   occurredAtIso: string,
 ): RemediationProposalAuditEvent {
-  let summary = `remediation proposal action=${action} subject=${subjectKey}`;
+  const subject = safeSubject(subjectKey);
+  let summary = `remediation proposal action=${action} subject=${subject}`;
   if (summary.length > REMEDIATION_AUDIT_SUMMARY_MAX_CHARS) {
     summary = summary.slice(0, REMEDIATION_AUDIT_SUMMARY_MAX_CHARS);
   }
@@ -56,6 +71,6 @@ export function buildRemediationAuditEvent(
     reasonCode: action,
     resultCode: resultCodeOf(action),
     summary,
-    evidenceKeys: [subjectKey],
+    evidenceKeys: [subject],
   };
 }

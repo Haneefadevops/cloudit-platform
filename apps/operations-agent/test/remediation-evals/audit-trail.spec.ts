@@ -39,10 +39,11 @@ describe('RemediationEngine — audit-trail evals', () => {
     const rejectedId = engine.propose(ENV_A, 'ALERT_DELIVERY_FAILURE').proposal!.proposalId;
     const rejected = engine.reject(rejectedId);
 
-    expect(audit.events).toHaveLength(3);
+    expect(audit.events).toHaveLength(4);
     expect(findProperty(audit.events[0], 'reasonCode')).toBe(proposed.action);
     expect(findProperty(audit.events[1], 'reasonCode')).toBe(approved.action);
-    expect(findProperty(audit.events[2], 'reasonCode')).toBe(rejected.action);
+    expect(findProperty(audit.events[2], 'reasonCode')).toBe('PROPOSED');
+    expect(findProperty(audit.events[3], 'reasonCode')).toBe(rejected.action);
   });
 
   it('every event carries a resultCode mapping (safe machine-readable outcome)', () => {

@@ -93,13 +93,15 @@ describe('RemediationEngine — expiry evals', () => {
     expect(engine.listProposals(ENV_A)).toHaveLength(2);
   });
 
-  it('expiry is exact: createdAt + ttlMs is still valid, +1ms is not', () => {
+  it('expiry is exact: the proposal is live until expiresAt, expired one ms past it', () => {
     const clock = new ManualClock(T0);
     const engine = new RemediationEngine(buildEngineOptions({ now: clock.now }));
 
     const proposal = engine.propose(ENV_A, ISSUE_EVIDENCE_STALE).proposal!;
 
-    clock.advance(DEFAULT_TTL_MS); // exactly at expiresAt: boundary is still live
+    // JWT-style exclusive boundary: at now == expiresAt the proposal is
+    // already expired; one ms before it is still live.
+    clock.advance(DEFAULT_TTL_MS - 1);
     expect(engine.approve(proposal.proposalId).action).toBe('APPROVED');
   });
 

@@ -17,7 +17,10 @@
 import { RemediationEngine } from '../../src/remediation';
 import { buildEngineOptions, ENV_A, ISSUE_EVIDENCE_STALE } from './fixtures';
 
-const TERMINAL_REPEAT_ACTIONS = ['APPROVED', 'REJECTED', 'REPLAY_IGNORED'] as const;
+// The contract pins no action for a mismatched terminal re-apply (approve
+// after reject); the engine answers EXPIRED for that no-op block, same as it
+// does for unknown ids. All non-mutating answers are accepted here.
+const TERMINAL_REPEAT_ACTIONS = ['APPROVED', 'REJECTED', 'REPLAY_IGNORED', 'EXPIRED'] as const;
 
 describe('RemediationEngine — approval evals', () => {
   it('approve transitions a live proposal to APPROVED', () => {
