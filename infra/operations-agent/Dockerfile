@@ -3,7 +3,11 @@ WORKDIR /workspace
 COPY package.json package-lock.json ./
 COPY apps/operations-agent/package.json apps/operations-agent/package.json
 COPY packages/operations-agent-contracts/package.json packages/operations-agent-contracts/package.json
-RUN npm ci --workspace=@cloudit/operations-agent --include-workspace-root=false
+# npm ci hoists every dependency into the root node_modules; the workspace
+# dir only appears when something is nested. Create it so the later COPYs
+# have a stable source whether or not nesting occurs.
+RUN npm ci --workspace=@cloudit/operations-agent --include-workspace-root=false \
+  && mkdir -p apps/operations-agent/node_modules
 
 FROM node:20-alpine AS builder
 WORKDIR /workspace
