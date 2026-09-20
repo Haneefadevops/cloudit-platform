@@ -1,7 +1,9 @@
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
 import { AiAdapterService, AiMaintenanceReadModel } from '../src/ai';
+import { AlertEngine } from '../src/alerts';
 import { AuditService } from '../src/platform/audit/audit.service';
+import { DURABLE_OUTBOX } from '../src/platform/outbox/durable-outbox';
 import { SupervisorModule, AUDIT_SINK } from '../src/supervisor';
 import { SYNC_AUDIT_SINK, SyncService } from '../src/sync';
 import { TelegramCommandService } from '../src/telegram/commands';
@@ -94,6 +96,45 @@ describe('AppModule composition (coordinator wiring)', () => {
     expect(lastEvent.eventType).toBe('ai_assessment');
     expect(lastEvent.actor).toBe('agent:ai-adapter');
     expect(lastEvent.reasonCode).toBe('AI_DISABLED');
+
+    await moduleRef.close();
+  });
+
+  it('composes the alert engine (inert by default) with real read-model budget/kill-switch bindings', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+
+    const alerts = moduleRef.get(AlertEngine);
+    const platformAudit = moduleRef.get(AuditService);
+    const outbox = moduleRef.get(DURABLE_OUTBOX);
+
+    // Read model shows the REAL budget meter limits and switch states.
+    const readModel = moduleRef.get(AiMaintenanceReadModel);
+    const projection = readModel.getProjection();
+    expect(projection.budget.aiEnabled).toBe(false);
+    expect(projection.budget.dayCallsMax).toBe(10);
+    expect(projection.budget.monthEurCeiling).toBe(7);
+    expect(projection.killSwitches.telegramCommandsEnabled).toBe(false);
+
+    // Inert by default: the 'telegram' kill switch is off, so dispatch is
+    // blocked before any sender call and exactly one closed audit event
+    // lands in the shared store. Nothing contacts Telegram.
+    const before = platformAudit.count();
+    const decision = await alerts.handle('default', {
+      assessment: 'RED',
+      summary: 'synthetic deterministic assessment',
+      evidenceKeys: ['ev:synthetic:1'],
+      confidence: 'MEDIUM',
+      issueCode: 'WF_STALE_SNAPSHOT',
+      recommendedRunbook: 'none',
+      automationEligibility: 'OWNER_REQUIRED',
+    });
+    expect(decision.action).toBe('BLOCKED_KILL_SWITCH');
+    expect(platformAudit.count()).toBe(before + 1);
+    const lastEvent = platformAudit.getEvents()[platformAudit.count() - 1];
+    expect(lastEvent.eventType).toBe('alert_dispatch');
+    expect(lastEvent.actor).toBe('agent:alerts');
+    expect(lastEvent.reasonCode).toBe('BLOCKED_KILL_SWITCH');
+    expect(outbox.pendingEntries()).toHaveLength(0);
 
     await moduleRef.close();
   });
