@@ -4,7 +4,7 @@ import type {
   HealthStatus,
 } from '@cloudit/operations-agent-contracts';
 import { AlertEngine, AlertMessage, DigestEntry } from '../../src/alerts';
-import { resolveSupervisorOptions, SupervisorRunResult, SupervisorService } from '../../src/supervisor';
+import { resolveSupervisorOptions, DEFAULT_SOURCE_KEYS, SupervisorRunResult, SupervisorService } from '../../src/supervisor';
 import {
   ObserverAuditEvent,
   SoakDriver,
@@ -450,16 +450,26 @@ describe('SoakDriver', () => {
     expect(h.alerts.digests[0].environmentKey).toBe('production');
     expect(h.alerts.digests[0].period).toBe('daily');
     const entries = h.alerts.digests[0].entries;
-    expect(entries.map((e) => e.subjectKey)).toEqual([
-      'public-website',
-      'database',
-      'incidents',
-      'backups-daily',
+    // Reconciliation decision: the digest is the full source board — every
+    // known source key appears, unobserved sources as UNKNOWN — so a missing
+    // row is visible rather than silently absent.
+    expect(entries.map((e) => e.subjectKey)).toEqual([...DEFAULT_SOURCE_KEYS]);
+    const expectedCategory = new Map([
+      ['public-website', 'GREEN'],
+      ['database', 'RED'],
+      ['incidents', 'AMBER'],
+      ['backups-daily', 'UNKNOWN'],
     ]);
-    expect(entries.map((e) => e.category)).toEqual(['GREEN', 'RED', 'AMBER', 'UNKNOWN']);
+    expect(entries.map((e) => e.category)).toEqual(
+      DEFAULT_SOURCE_KEYS.map((key) => expectedCategory.get(key) ?? 'UNKNOWN'),
+    );
     for (const entry of entries) {
-      expect(entry.summary.length).toBeLessThanOrEqual(200);
-      expect(entry.lastOccurredAt).toBe(iso(Date.UTC(2025, 0, 15, 7, 0, 0)));
+      if (expectedCategory.has(entry.subjectKey)) {
+        expect(entry.summary.length).toBeLessThanOrEqual(200);
+        expect(entry.lastOccurredAt).toBe(iso(Date.UTC(2025, 0, 15, 7, 0, 0)));
+      } else {
+        expect(entry.summary).toBe('no recent observation');
+      }
     }
 
     // Same UTC day, even later: no second digest.

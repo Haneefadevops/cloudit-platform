@@ -142,9 +142,16 @@ describeEvidenceSource('EvidenceSource — bounds under hostile rows', () => {
     const client = hostileClient();
     await read(client, { maxRowsPerFamily: 3 });
     for (const query of client.queries) {
-      const limit = /\blimit\s+(\d+)/i.exec(query.text);
+      // The limit may be a literal (LIMIT 5) or a bound parameter (LIMIT $3);
+      // either way the row cap arrives as the maxRowsPerFamily parameter.
+      const limit = /\blimit\s+(\d+|\$\d+)/i.exec(query.text);
       expect(limit).not.toBeNull();
-      expect(Number(limit![1])).toBeLessThanOrEqual(3);
+      if (limit![1].startsWith('$')) {
+        const position = Number(limit![1].slice(1)) - 1;
+        expect(Number(query.values?.[position])).toBeLessThanOrEqual(3);
+      } else {
+        expect(Number(limit![1])).toBeLessThanOrEqual(3);
+      }
     }
   });
 });

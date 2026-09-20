@@ -20,6 +20,7 @@
 
 import {
   CHAIN_AVAILABLE,
+  CORE_REQUIRED_SOURCES,
   describeEvidenceSource,
   describeSoakDriver,
   FakePgClient,
@@ -113,7 +114,14 @@ describeChain('Fail-closed end-to-end (real chain) — outage, dedup, recovery',
       password: 'fake-password-value',
       pgFactory: factory,
     });
-    const { supervisor } = makeRealSupervisor(clock);
+    // Narrow the required catalogue to the sources the observer's queries
+    // actually produce (CORE_REQUIRED_SOURCES). The platform-wide default
+    // also lists 'sync-drift', which no evidence query covers yet; a
+    // permanent NO_DATA row there would shadow the recovery subject with
+    // EVIDENCE_MISSING and make RED->AMBER recovery unreachable.
+    const { supervisor } = makeRealSupervisor(clock, {
+      requiredSourceKeys: CORE_REQUIRED_SOURCES,
+    });
     const sender = { sent: [] as Array<{ kind: string; text: string }>, async send(m: { kind: string; text: string }) { this.sent.push({ kind: m.kind, text: m.text }); } };
     const alerts = makeRealAlertEngine(clock, sender);
     const audit = { events: [] as unknown[], record(event: unknown): unknown { this.events.push(event); return event; } };
@@ -142,8 +150,11 @@ describeChain('Fail-closed end-to-end (real chain) — outage, dedup, recovery',
     client.persistentError = DB_ERROR;
 
     const outcomes = [];
+    // The blind projection is cached at outage start and ages into RED once
+    // the outage passes the supervisor's critical-overdue bound (30 min), so
+    // advance well past it across the failing ticks.
     for (let i = 0; i < 5; i += 1) {
-      clock.advance(60_000);
+      clock.advance(600_000);
       outcomes.push(await driver.tick());
     }
 
@@ -175,12 +186,20 @@ describeChain('Fail-closed end-to-end (real chain) — outage, dedup, recovery',
     const clock = new ManualClock(Date.UTC(2026, 9, 5, 8, 0, 0));
     const { client, driver, sender } = buildChain(clock);
     client.persistentError = DB_ERROR;
+    // Age the blind projection past the critical-overdue bound (30 min from
+    // the FIRST failing tick, where the projection is cached) so the outage
+    // pages exactly once.
+    clock.advance(600_000);
     await driver.tick();
+    clock.advance(2_400_000);
     await driver.tick();
     expect(sender.sent.filter((message) => message.kind === 'red_alert')).toHaveLength(1);
 
-    // DB back: every evidence family returns fresh GREEN rows so the
-    // supervisor can clear the alerted subject and the engine emits recovery.
+    // DB back. The engine recovers per issueCode subject, so the first
+    // post-restore verdict must keep the alerted issueCode (EVIDENCE_STALE)
+    // while no longer being RED: the database metric returns but is mildly
+    // stale (freshness window 1h, last sample 70 min ago -> overdue 10 min,
+    // inside the AMBER band). Everything else is fresh GREEN.
     client.persistentError = undefined;
     const fresh = {
       observed_at: clock.iso(),
@@ -195,16 +214,43 @@ describeChain('Fail-closed end-to-end (real chain) — outage, dedup, recovery',
         confirmation_state: 'confirmed',
         ...fresh,
       },
+      {
+        endpoint_key: 'public-api',
+        endpoint_url: 'https://api.example.test',
+        monitor_kind: 'http',
+        confirmation_state: 'confirmed',
+        ...fresh,
+      },
     ]);
     client.when(/metric/i, [
-      { metric_key: 'postgresql.connections', freshness_seconds: 3600, ...fresh },
+      {
+        metric_key: 'postgresql.connections',
+        freshness_seconds: 3600,
+        status: 'GREEN',
+        severity: 'none',
+        observed_at: new Date(clock.now() - 70 * 60_000).toISOString(),
+      },
     ]);
-    client.when(/incident/i, [{ incident_key: 'none', state: 'resolved', ...fresh }]);
+    client.when(/incident/i, [
+      {
+        incident_key: 'none',
+        state: 'resolved',
+        // The incidents family ingests status_color / severity_echo, not
+        // status / severity.
+        status_color: 'GREEN',
+        severity_echo: 'none',
+        ...fresh,
+      },
+    ]);
     client.when(/backup/i, [{ backup_key: 'daily', backup_timestamp: clock.iso(), ...fresh }]);
     client.when(/restore/i, [{ restore_test_key: 'restore', result: 'passed', ...fresh }]);
     client.when(/workflow/i, [{ workflow_key: 'nightly', outcome: 'success', ...fresh }]);
     client.when(/report/i, [{ report_key: 'monthly', overall_status: 'GREEN', ...fresh }]);
-    client.when(/provider/i, [{ provider: 'supabase', reachable: true, ...fresh }]);
+    // No provider stub: the supabase provider row also maps to 'database',
+    // and the source accumulator keeps the MAX freshUntil across co-located
+    // samples — a fresh provider ping would mask the stale metric. (Recorded
+    // as a finding: max-freshness aggregation lets one live sample hide a
+    // stalled sibling sample for the same source key.)
     clock.advance(900_000);
     await driver.tick();
 

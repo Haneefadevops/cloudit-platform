@@ -26,6 +26,7 @@
 import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import type { HealthAssessment } from '@cloudit/operations-agent-contracts';
 import type { DigestEntry } from '../alerts';
+import { DEFAULT_SOURCE_KEYS } from '../supervisor';
 import type { SupervisorRunResult } from '../supervisor';
 import type { EvidenceSource } from './evidence-source';
 
@@ -354,13 +355,17 @@ export class SoakDriver implements OnModuleInit, OnModuleDestroy {
   }
 
   private digestEntries(): DigestEntry[] {
+    // The digest is the full source board: every known source key appears,
+    // with UNKNOWN for sources that produced no observation yet — a missing
+    // row must be visible, not silently absent.
     const entries: DigestEntry[] = [];
-    for (const [subjectKey, state] of this.digestState) {
+    for (const sourceKey of DEFAULT_SOURCE_KEYS) {
+      const state = this.digestState.get(sourceKey);
       entries.push({
-        subjectKey,
-        category: state.category,
-        summary: state.summary,
-        lastOccurredAt: state.lastOccurredAt,
+        subjectKey: sourceKey,
+        category: state?.category ?? 'UNKNOWN',
+        summary: state?.summary ?? 'no recent observation',
+        lastOccurredAt: state?.lastOccurredAt ?? new Date(this.now()).toISOString(),
       });
       if (entries.length >= DIGEST_MAX_ENTRIES) break;
     }

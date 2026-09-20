@@ -85,7 +85,11 @@ describe('observer — read-only guarantee', () => {
       const client = new FakePgClient();
       const laced = laceStrings(endpointObservationRow(), CANARIES.join(' '));
       client.when(/endpoint/i, [laced]);
-      await read(client);
+      // Lacing free-text fields can corrupt structured ones (e.g. observed_at);
+      // a fail-closed rejection is correct — the guarantee under test is that
+      // no non-SELECT was ever issued, before or after the rejection.
+      await read(client).catch(() => undefined);
+      expect(client.queries.length).toBeGreaterThan(0);
       for (const query of client.queries) {
         expect(query.text).toMatch(SELECT_ONLY);
       }
@@ -126,7 +130,9 @@ describe('observer — read-only guarantee', () => {
     it('evidence-source.ts SQL strings never open with a DML keyword', () => {
       const source = observerSourceText('evidence-source');
       if (source === undefined) return;
-      const stringLiterals = source.match(/(['"`])[^'"`]*\1/g) ?? [];
+      const stringLiterals = (source.match(/(['"`])[^'"`]*\1/g) ?? []).map((literal) =>
+        literal.slice(1, -1),
+      );
       const sqlLike = stringLiterals.filter((literal) =>
         /\b(from|where|join|limit)\b/i.test(literal),
       );

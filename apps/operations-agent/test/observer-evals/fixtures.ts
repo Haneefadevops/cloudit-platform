@@ -768,9 +768,13 @@ export interface BlindProjection {
 }
 
 /**
- * The all-UNKNOWN synthetic projection the contract requires the driver to
- * build inline when evidence.read fails: every core source UNKNOWN, severity
- * critical, criticality required, fixed safe summary, timestamps = now.
+ * The all-UNKNOWN synthetic projection the driver feeds the supervisor when
+ * evidence.read fails: every core source UNKNOWN, severity critical,
+ * criticality required, fixed safe summary. Semantics agreed at integration:
+ * the projection is built ONCE at outage start (timestamps = first failure,
+ * byte-stable across the outage) so it ages UNKNOWN -> AMBER -> RED with the
+ * supervisor's stale-required escalation — one deduped alert, then recovery.
+ * A blind observer has read zero samples.
  */
 export function makeBlindProjection(
   clientKey: string,
@@ -789,7 +793,7 @@ export function makeBlindProjection(
       freshUntil: iso,
       criticality: 'required',
       safeSummary: 'observer blind: evidence read failed',
-      counts: { samples: 1 },
+      counts: { samples: 0 },
     })),
   };
 }
@@ -814,13 +818,21 @@ export class RecordingSender {
   }
 }
 
-export function makeRealSupervisor(clock: ManualClock): {
+export function makeRealSupervisor(
+  clock: ManualClock,
+  options: { requiredSourceKeys?: readonly string[] } = {},
+): {
   supervisor: SupervisorService;
   audit: RecordingAuditSink;
 } {
   const audit = new RecordingAuditSink();
   const supervisor = new SupervisorService(
-    resolveSupervisorOptions({ now: () => new Date(clock.now()) }),
+    resolveSupervisorOptions({
+      now: () => new Date(clock.now()),
+      ...(options.requiredSourceKeys
+        ? { requiredSourceKeys: [...options.requiredSourceKeys] }
+        : {}),
+    }),
     audit,
   );
   return { supervisor, audit };
@@ -931,9 +943,13 @@ export function keywordsOutsideStrings(source: string): string[] {
   let state: 'normal' | 'single' | 'double' | 'template' | 'lineComment' | 'blockComment' =
     'normal';
   let word = '';
+  let wordPrefix = '';
   const flushWord = (): void => {
-    if (word && DML_KEYWORD.test(word)) found.push(word.toUpperCase());
+    // Method calls like `.replace(` are JavaScript, not SQL — a word
+    // immediately preceded by a dot can never be a statement keyword.
+    if (word && wordPrefix !== '.' && DML_KEYWORD.test(word)) found.push(word.toUpperCase());
     word = '';
+    wordPrefix = '';
   };
   while (i < source.length) {
     const ch = source[i];
@@ -992,6 +1008,7 @@ export function keywordsOutsideStrings(source: string): string[] {
       continue;
     }
     if (/[A-Za-z]/.test(ch)) {
+      if (word === '') wordPrefix = i > 0 ? source[i - 1] : '';
       word += ch;
     } else {
       flushWord();

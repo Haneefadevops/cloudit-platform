@@ -260,10 +260,16 @@ function mapSeverity(raw: unknown, status: EvidenceSourceStatus): Severity {
 }
 
 function parseObservedAtMs(raw: unknown): number {
-  if (typeof raw !== 'string' || raw.length === 0) {
+  // Real pg returns timestamptz columns as Date objects; the projection
+  // validator wants ISO strings. Accept both at the boundary.
+  let ms: number;
+  if (raw instanceof Date) {
+    ms = raw.getTime();
+  } else if (typeof raw === 'string' && raw.length > 0) {
+    ms = Date.parse(raw);
+  } else {
     throw new Error('evidence row is missing observed_at');
   }
-  const ms = Date.parse(raw);
   if (Number.isNaN(ms) || ms < 0 || ms > OBSERVED_AT_MAX_MS) {
     throw new Error('evidence row has an invalid observed_at');
   }
