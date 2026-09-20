@@ -24,6 +24,8 @@ Everything runs against synthetic/local evidence.
 | `test/alerts-evals/**` | Worker C (Phase F) |
 | `src/ai-bindings/**` | Worker B (Phase F) |
 | `test/ai-bindings/**` | Worker B (Phase F) |
+| `src/remediation/**`, `test/remediation/**` | Worker A (Phase G) |
+| `test/remediation-evals/**` | Worker C (Phase G) |
 | `package.json`, `tsconfig*.json`, `jest.config.js`, `.gitignore`, `src/main.ts`, `src/app.module.ts`, `src/config/**`, `src/telegram/telegram.types.ts`, `src/telegram/index.ts`, `test/bootstrap.spec.ts`, `test/app-wiring.spec.ts`, `test/telegram-config.spec.ts`, `test/ai-config.spec.ts`, this file | Coordinator |
 
 Workers never edit paths outside their assignment; shared wiring goes through
