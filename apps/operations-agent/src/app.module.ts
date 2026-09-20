@@ -34,6 +34,7 @@ import {
   AI_KILL_SWITCH_SOURCE,
   AI_NOW,
 } from './ai/tokens';
+import { RemediationEngine } from './remediation';
 import { PlatformModule } from './platform/platform.module';
 import { AuditService } from './platform/audit/audit.service';
 import { BudgetService } from './platform/budget/budget.service';
@@ -69,7 +70,7 @@ const failClosedAlertSender = {
   },
 };
 
-/** Adapted audit port shared by the AI adapter and the alert engine. */
+/** Adapted audit port shared by the AI adapter, the alert engine and the remediation engine. */
 const APP_AUDIT_PORT = 'APP_AUDIT_PORT';
 
 /**
@@ -111,6 +112,7 @@ const aiProviders: Provider[] = [
       if (!audit) return null;
       let aiSequence = 0;
       let alertSequence = 0;
+      let remSequence = 0;
       return {
         record: (event: unknown) => {
           // Adapt the workers' closed events into the contracts AuditEvent:
@@ -119,15 +121,26 @@ const aiProviders: Provider[] = [
           const produced = event as
             | ({ eventType?: unknown } & Record<string, unknown>)
             | null;
-          if (
-            !produced ||
-            (produced.eventType !== 'ai_assessment' && produced.eventType !== 'alert_dispatch')
-          ) {
+          const known =
+            produced &&
+            (produced.eventType === 'ai_assessment' ||
+              produced.eventType === 'alert_dispatch' ||
+              produced.eventType === 'remediation_proposal');
+          if (!known) {
             return audit.record(event);
           }
           const sequence =
-            produced.eventType === 'ai_assessment' ? (aiSequence += 1) : (alertSequence += 1);
-          const prefix = produced.eventType === 'ai_assessment' ? 'evt-ai' : 'evt-alerts';
+            produced.eventType === 'ai_assessment'
+              ? (aiSequence += 1)
+              : produced.eventType === 'alert_dispatch'
+                ? (alertSequence += 1)
+                : (remSequence += 1);
+          const prefix =
+            produced.eventType === 'ai_assessment'
+              ? 'evt-ai'
+              : produced.eventType === 'alert_dispatch'
+                ? 'evt-alerts'
+                : 'evt-rem';
           return audit.record({
             eventId: `${prefix}-${AI_ENVIRONMENT_KEY_VALUE}-${sequence}`,
             environmentKey: AI_ENVIRONMENT_KEY_VALUE,
@@ -255,6 +268,16 @@ const aiProviders: Provider[] = [
       AgentConfigService,
     ],
   },
+  {
+    provide: RemediationEngine,
+    useFactory: (auditPort: { record(event: unknown): unknown } | null) =>
+      // Simulated remediation (Phase G): propose/approve/reject with replay
+      // dedup, lazy expiry and a circuit breaker; the engine executes nothing
+      // and is gated by nothing (a proposal is by definition execute-nothing).
+      // Defaults: maxFailures 3, cooldownMs 3_600_000.
+      new RemediationEngine({ audit: auditPort ?? undefined }),
+    inject: [{ token: APP_AUDIT_PORT, optional: true }],
+  },
 ];
 
 /**
@@ -286,6 +309,11 @@ const aiProviders: Provider[] = [
  * stand-in — nothing contacts Telegram. An enabled-but-unbound sender would
  * queue alerts to the durable outbox and audit them (the honest outage
  * path), never losing an alert.
+ *
+ * The remediation composition (Phase G) is execute-nothing by design: the
+ * engine proposes Tier-A runbooks, replays dedup while a proposal is live,
+ * and records one closed audit event per mutation into the shared store. It
+ * touches no external system and no data beyond its in-memory proposal set.
  */
 @Module({
   imports: [
@@ -297,6 +325,6 @@ const aiProviders: Provider[] = [
     TelegramWebhookModule.register({ imports: [TelegramCommandsModule] }),
   ],
   providers: aiProviders,
-  exports: [AiAdapterService, AiMaintenanceReadModel, AlertEngine],
+  exports: [AiAdapterService, AiMaintenanceReadModel, AlertEngine, RemediationEngine],
 })
 export class AppModule {}

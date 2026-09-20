@@ -2,14 +2,14 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Activity, Archive, BarChart3, Building2, CircleGauge, FileClock, Image, ListTree, Menu, ScrollText, Settings, Sparkles, TriangleAlert } from "lucide-react";
+import { Activity, Archive, BarChart3, Building2, CircleGauge, FileClock, Image, ListTree, Menu, ScrollText, Settings, Sparkles, TriangleAlert, Wrench } from "lucide-react";
 import { CloudItLogo } from "./logo";
 
 const navigation = [
   ["/overview", "Overview", CircleGauge], ["/clients", "Clients", Building2], ["/workflows", "Workflows", ListTree],
   ["/infrastructure", "Infrastructure", Activity], ["/vercel", "Vercel", BarChart3], ["/imagekit", "ImageKit", Image],
   ["/backups", "Backups", Archive], ["/reports", "Reports", ScrollText], ["/incidents", "Incidents", TriangleAlert],
-  ["/ai-maintenance", "AI Maintenance", Sparkles], ["/audit-log", "Audit log", FileClock], ["/settings", "Settings", Settings],
+  ["/ai-maintenance", "AI Maintenance", Sparkles], ["/remediation", "Remediation", Wrench], ["/audit-log", "Audit log", FileClock], ["/settings", "Settings", Settings],
 ] as const;
 
 const primaryMobile = navigation.slice(0, 3);

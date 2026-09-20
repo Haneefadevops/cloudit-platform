@@ -4,6 +4,7 @@ import { AiAdapterService, AiMaintenanceReadModel } from '../src/ai';
 import { AlertEngine } from '../src/alerts';
 import { AuditService } from '../src/platform/audit/audit.service';
 import { DURABLE_OUTBOX } from '../src/platform/outbox/durable-outbox';
+import { RemediationEngine } from '../src/remediation';
 import { SupervisorModule, AUDIT_SINK } from '../src/supervisor';
 import { SYNC_AUDIT_SINK, SyncService } from '../src/sync';
 import { TelegramCommandService } from '../src/telegram/commands';
@@ -135,6 +136,28 @@ describe('AppModule composition (coordinator wiring)', () => {
     expect(lastEvent.actor).toBe('agent:alerts');
     expect(lastEvent.reasonCode).toBe('BLOCKED_KILL_SWITCH');
     expect(outbox.pendingEntries()).toHaveLength(0);
+
+    await moduleRef.close();
+  });
+
+  it('composes the remediation engine (execute-nothing) and records remediation audit events into the shared store', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+
+    const remediation = moduleRef.get(RemediationEngine);
+    const platformAudit = moduleRef.get(AuditService);
+
+    // Proposing a runbook the default registry knows returns PROPOSED and
+    // lands exactly one closed remediation_proposal event in the shared
+    // store (evt-rem eventId prefix via the shared audit adapter).
+    const before = platformAudit.count();
+    const decision = remediation.propose('default', 'WF_STALE_SNAPSHOT');
+    expect(decision.action).toBe('PROPOSED');
+    expect(decision.proposal?.status).toBe('PROPOSED');
+    expect(platformAudit.count()).toBe(before + 1);
+    const lastEvent = platformAudit.getEvents()[platformAudit.count() - 1];
+    expect(lastEvent.eventType).toBe('remediation_proposal');
+    expect(lastEvent.eventId).toBe(`evt-rem-default-1`);
+    expect(lastEvent.actor).toBe('agent:remediation');
 
     await moduleRef.close();
   });
