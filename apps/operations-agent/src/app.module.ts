@@ -35,12 +35,14 @@ import {
   AI_NOW,
 } from './ai/tokens';
 import { RemediationEngine } from './remediation';
+import { createEvidenceSource, SoakDriver } from './observer';
 import { PlatformModule } from './platform/platform.module';
 import { AuditService } from './platform/audit/audit.service';
 import { BudgetService } from './platform/budget/budget.service';
 import { KillSwitchService } from './platform/kill-switch/kill-switch.service';
 import { DURABLE_OUTBOX, DurableOutbox } from './platform/outbox/durable-outbox';
 import { SupervisorModule } from './supervisor/supervisor.module';
+import { SupervisorService } from './supervisor';
 import { SyncModule } from './sync/sync.module';
 import { TelegramCommandsModule } from './telegram/commands/telegram-commands.module';
 import { TelegramWebhookModule } from './telegram/webhook/telegram-webhook.module';
@@ -114,6 +116,7 @@ const aiProviders: Provider[] = [
       let aiSequence = 0;
       let alertSequence = 0;
       let remSequence = 0;
+      let obsSequence = 0;
       return {
         record: (event: unknown) => {
           // Adapt the workers' closed events into the contracts AuditEvent:
@@ -126,7 +129,9 @@ const aiProviders: Provider[] = [
             produced &&
             (produced.eventType === 'ai_assessment' ||
               produced.eventType === 'alert_dispatch' ||
-              produced.eventType === 'remediation_proposal');
+              produced.eventType === 'remediation_proposal' ||
+              produced.eventType === 'observer_read' ||
+              produced.eventType === 'observer_internal');
           if (!known) {
             return audit.record(event);
           }
@@ -135,13 +140,17 @@ const aiProviders: Provider[] = [
               ? (aiSequence += 1)
               : produced.eventType === 'alert_dispatch'
                 ? (alertSequence += 1)
-                : (remSequence += 1);
+                : produced.eventType === 'remediation_proposal'
+                  ? (remSequence += 1)
+                  : (obsSequence += 1);
           const prefix =
             produced.eventType === 'ai_assessment'
               ? 'evt-ai'
               : produced.eventType === 'alert_dispatch'
                 ? 'evt-alerts'
-                : 'evt-rem';
+                : produced.eventType === 'remediation_proposal'
+                  ? 'evt-rem'
+                  : 'evt-obs';
           return audit.record({
             eventId: `${prefix}-${AI_ENVIRONMENT_KEY_VALUE}-${sequence}`,
             environmentKey: AI_ENVIRONMENT_KEY_VALUE,
@@ -280,6 +289,43 @@ const aiProviders: Provider[] = [
     ],
   },
   {
+    provide: SoakDriver,
+    useFactory: (
+      config: AgentConfigService,
+      supervisor: SupervisorService,
+      alerts: AlertEngine,
+      auditPort: { record(event: unknown): unknown } | null,
+    ) => {
+      // Read-only observation (soak driver): real instance only when the
+      // server is explicitly configured with the operations_reader password;
+      // without it the observer stays inert (fail closed) and nothing ever
+      // touches the operations DB. The SELECT-only role grants are applied by
+      // the operations migrations (0012/0013).
+      const observer = config.get().observer;
+      if (!observer?.dbPassword) return null;
+      return new SoakDriver({
+        evidence: createEvidenceSource({
+          host: observer.dbHost,
+          port: observer.dbPort,
+          database: observer.dbName,
+          user: observer.dbUser,
+          password: observer.dbPassword,
+        }),
+        supervisor,
+        alerts,
+        audit: auditPort ?? undefined,
+        intervalMs: observer.intervalMs,
+        digestHourUtc: observer.digestHourUtc,
+      });
+    },
+    inject: [
+      AgentConfigService,
+      SupervisorService,
+      AlertEngine,
+      { token: APP_AUDIT_PORT, optional: true },
+    ],
+  },
+  {
     provide: RemediationEngine,
     useFactory: (auditPort: { record(event: unknown): unknown } | null) =>
       // Simulated remediation (Phase G): propose/approve/reject with replay
@@ -326,6 +372,19 @@ const aiProviders: Provider[] = [
  * engine proposes Tier-A runbooks, replays dedup while a proposal is live,
  * and records one closed audit event per mutation into the shared store. It
  * touches no external system and no data beyond its in-memory proposal set.
+ *
+ * The observer composition (soak driver) is read-only and inert by default:
+ * without OPERATIONS_DB_PASSWORD the provider resolves to null and nothing
+ * touches the operations DB. When the password is placed on the server, the
+ * driver ticks on the configured interval, reading evidence through the
+ * SELECT-only operations_reader role (grants applied by migrations
+ * 0012/0013), feeding the deterministic supervisor and the alert engine
+ * (itself gated by the 'telegram' kill switch). A read failure degrades to
+ * the cached all-UNKNOWN blind projection so a sustained DB outage pages
+ * exactly once and recovers once — the honest watchdog path. The daily
+ * digest goes out at most once per UTC day. Observer audit events
+ * (observer_read / observer_internal) are adapted into the shared store
+ * with independent evt-obs sequencing.
  */
 @Module({
   imports: [
@@ -337,6 +396,6 @@ const aiProviders: Provider[] = [
     TelegramWebhookModule.register({ imports: [TelegramCommandsModule] }),
   ],
   providers: aiProviders,
-  exports: [AiAdapterService, AiMaintenanceReadModel, AlertEngine, RemediationEngine],
+  exports: [AiAdapterService, AiMaintenanceReadModel, AlertEngine, RemediationEngine, SoakDriver],
 })
 export class AppModule {}

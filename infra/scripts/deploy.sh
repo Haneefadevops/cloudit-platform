@@ -143,6 +143,35 @@ ensure_operations_agent_env() {
     log "WARNING: infra/operations-agent/.env not found; agent will use safe disabled defaults"
     return 0
   fi
+
+  # Soak-driver reader credential (migrations 0012/0013 create the SELECT-only
+  # operations_reader role and its grants). Generate once, keep it stable in
+  # the agent's protected env file, and mirror it into the role on every
+  # deploy so the two can never silently drift apart. Hex-only value, so it is
+  # safe to inline in the ALTER ROLE statement. Runs after the postgres
+  # health wait and the operations schema ensure (deploy order below).
+  local db_password
+  db_password=$(grep '^OPERATIONS_DB_PASSWORD=' "$env_file" | cut -d= -f2- || true)
+  if [ -z "${db_password:-}" ]; then
+    db_password=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    if grep -q '^OPERATIONS_DB_PASSWORD=' "$env_file"; then
+      sed -i "/^OPERATIONS_DB_PASSWORD=/c\\OPERATIONS_DB_PASSWORD=$db_password" "$env_file"
+    else
+      echo "OPERATIONS_DB_PASSWORD=$db_password" >> "$env_file"
+    fi
+    log "Generated OPERATIONS_DB_PASSWORD for the operations_reader role"
+  fi
+
+  local pg_user
+  if [ -f "$PROJECT_ROOT/infra/postgres/.env" ]; then
+    pg_user=$(grep '^POSTGRES_USER=' "$PROJECT_ROOT/infra/postgres/.env" | cut -d= -f2-)
+  fi
+  pg_user="${pg_user:-cloudit}"
+  if docker exec postgres psql -U "$pg_user" -d operations -c "ALTER ROLE operations_reader WITH LOGIN PASSWORD '${db_password}'" >/dev/null 2>&1; then
+    log "Synced operations_reader role password"
+  else
+    log "WARNING: could not set operations_reader password; observer stays inert until fixed"
+  fi
 }
 
 ensure_chatwoot_env() {

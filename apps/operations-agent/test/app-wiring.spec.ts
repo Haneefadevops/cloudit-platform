@@ -5,6 +5,7 @@ import { AlertEngine } from '../src/alerts';
 import { AuditService } from '../src/platform/audit/audit.service';
 import { DURABLE_OUTBOX } from '../src/platform/outbox/durable-outbox';
 import { RemediationEngine } from '../src/remediation';
+import { SoakDriver } from '../src/observer';
 import { SupervisorModule, AUDIT_SINK } from '../src/supervisor';
 import { SYNC_AUDIT_SINK, SyncService } from '../src/sync';
 import { TelegramCommandService } from '../src/telegram/commands';
@@ -178,6 +179,32 @@ describe('AppModule composition (coordinator wiring)', () => {
       else process.env.TELEGRAM_BOT_TOKEN = savedToken;
       if (savedChats === undefined) delete process.env.TELEGRAM_ALLOWED_CHAT_IDS;
       else process.env.TELEGRAM_ALLOWED_CHAT_IDS = savedChats;
+    }
+  });
+
+  it('composes the soak driver only when the operations_reader password is configured (fail closed otherwise)', async () => {
+    // AgentConfigService reads process.env at construction, so set/restore
+    // around each compile like the telegram-sender wiring test above.
+    const savedPassword = process.env.OPERATIONS_DB_PASSWORD;
+
+    // Without the password: the provider resolves to null and the observer
+    // never touches the operations DB.
+    delete process.env.OPERATIONS_DB_PASSWORD;
+    const inertRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    expect(inertRef.get(SoakDriver)).toBeNull();
+    await inertRef.close();
+
+    // With the password: a real read-only driver is composed (its first tick
+    // is 15 minutes out; the module closes long before any DB contact).
+    process.env.OPERATIONS_DB_PASSWORD = 'synthetic-reader-password-for-wiring-spec';
+    try {
+      const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+      const driver = moduleRef.get(SoakDriver);
+      expect(driver).toBeInstanceOf(SoakDriver);
+      await moduleRef.close();
+    } finally {
+      if (savedPassword === undefined) delete process.env.OPERATIONS_DB_PASSWORD;
+      else process.env.OPERATIONS_DB_PASSWORD = savedPassword;
     }
   });
 
