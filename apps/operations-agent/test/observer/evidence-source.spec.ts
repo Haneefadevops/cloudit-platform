@@ -385,6 +385,22 @@ describe('EvidenceSource.read family mapping', () => {
     );
   });
 
+  it('gives the monthly maintenance report a 45-day freshness window (cadence-aware)', async () => {
+    // Production finding: the report is a monthly artifact (generated ~a
+    // week into the month, manually approved, then sent), so the 24h default
+    // pinned the verdict at RED the day after every legitimate send.
+    const rows = {
+      reports: [{ status: 'AMBER', severity: 'warning', observed_at: OBSERVED_AT }],
+    };
+    const { source } = makeSource(rows);
+    const projection = await readProjection(source);
+
+    const fortyFiveDays = 45 * 24 * 60 * 60 * 1000;
+    expect(recordOf(projection, 'maintenance-report').freshUntil).toBe(
+      new Date(Date.parse(OBSERVED_AT) + fortyFiveDays).toISOString(),
+    );
+  });
+
   it('treats an endpoint with a bare host (null path, no api token) as the public API', async () => {
     const rows = {
       endpoint_observations: [

@@ -69,6 +69,12 @@ export interface EvidenceSource {
 const DEFAULT_QUERY_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_ROWS_PER_FAMILY = 5;
 const DEFAULT_FRESHNESS_MS = 24 * 60 * 60 * 1000;
+// The maintenance report is a MONTHLY artifact (generated ~a week into the
+// month, then manually approved and sent - see the portal docs), so a 24h
+// window made every legitimate report read stale the day after sending and
+// pinned the verdict at RED. 45 days tolerates the approval gap while still
+// flagging a genuinely missing cycle (>6 weeks without a report).
+const REPORTS_FRESHNESS_MS = 45 * 24 * 60 * 60 * 1000;
 const SAFE_SUMMARY_MAX_CHARS = 200;
 const OBSERVED_AT_MAX_MS = 8_640_000_000_000; // 2262 ceiling; anything above is garbage
 const CLIENT_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -427,7 +433,7 @@ class EvidenceSourceImpl implements EvidenceSource {
     ingest(familyRows[3], () => 'backups-daily', 'status', 'severity', () => DEFAULT_FRESHNESS_MS);
     ingest(familyRows[4], () => 'restore-test', 'status', 'severity', () => DEFAULT_FRESHNESS_MS);
     ingest(familyRows[5], () => 'n8n-workflows', 'status', 'severity', () => DEFAULT_FRESHNESS_MS);
-    ingest(familyRows[6], () => 'maintenance-report', 'status', 'severity', () => DEFAULT_FRESHNESS_MS);
+    ingest(familyRows[6], () => 'maintenance-report', 'status', 'severity', () => REPORTS_FRESHNESS_MS);
     ingest(familyRows[7], (row) => providerSourceKey(row.provider), 'status', 'severity', () => DEFAULT_FRESHNESS_MS);
 
     // Findings ride along on report rows and can worsen the family verdict.
@@ -436,7 +442,7 @@ class EvidenceSourceImpl implements EvidenceSource {
       const status = mapStatus(row.finding_status);
       const severity = mapSeverity(row.finding_severity, status);
       const observedAtMs = parseObservedAtMs(row.observed_at);
-      add('maintenance-report', status, severity, observedAtMs, observedAtMs + DEFAULT_FRESHNESS_MS);
+      add('maintenance-report', status, severity, observedAtMs, observedAtMs + REPORTS_FRESHNESS_MS);
     }
 
     const records: EvidenceSourceRecord[] = [];
