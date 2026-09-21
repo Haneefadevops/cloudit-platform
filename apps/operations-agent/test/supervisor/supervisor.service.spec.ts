@@ -158,6 +158,25 @@ describe('SupervisorService deterministic assessments', () => {
       expect(result.findings.every((f) => f.issueCode === 'EVIDENCE_MISSING')).toBe(true);
     });
 
+    it('the assessment subject is the most severe contribution, not the first: a stale AMBER source outranks missing sources (production recovery fix)', () => {
+      const { service } = makeService(clock);
+      clock.advance(20 * 60 * 1000); // 5 min past the freshness window
+      const projection = withRecord(
+        withoutSource(makeProjection(), 'restore-test'), // NO_DATA contribution listed first
+        makeRecord({
+          sourceKey: 'database',
+          observedAt: '2025-09-22T11:55:00.000Z',
+          freshUntil: '2025-09-22T12:15:00.000Z',
+        }),
+      );
+      const result = expectOk(service.assess(projection));
+      expect(result.assessment.assessment).toBe('AMBER');
+      // EVIDENCE_MISSING is listed first, but the AMBER stale source must own
+      // the subject so the alert engine can pair RED -> AMBER with the
+      // alerted subject and emit exactly one recovery message.
+      expect(result.assessment.issueCode).toBe('EVIDENCE_STALE');
+    });
+
     it('stale analytics/optional sources are UNKNOWN, not GREEN', () => {
       const { service } = makeService(clock);
       const projection = withFreshUntil(makeProjection(), LONG_FRESH_UNTIL);

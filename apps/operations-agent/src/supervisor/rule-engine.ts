@@ -61,6 +61,14 @@ function contributionSeverity(
 
 type ContributionLevel = 'RED' | 'AMBER' | 'UNKNOWN' | 'NO_DATA';
 
+/** Severity order for choosing the assessment subject (see evaluateEvidence). */
+const CONTRIBUTION_LEVEL_RANK: Record<ContributionLevel, number> = {
+  RED: 3,
+  AMBER: 2,
+  UNKNOWN: 1,
+  NO_DATA: 0,
+};
+
 interface Contribution {
   level: ContributionLevel;
   issueCode: IssueCode;
@@ -121,11 +129,16 @@ export function evaluateEvidence(input: RuleEngineInput): RuleEngineResult {
 
   const verdict = deriveVerdict(contributions);
   const evidenceKeys = [...new Set(contributions.map((c) => c.sourceKey))].slice(0, 50);
-  const firstRed = contributions.find((c) => c.level === 'RED');
-  const issueCode = firstRed
-    ? firstRed.issueCode
-    : contributions.length > 0
-      ? contributions[0].issueCode
+  // The assessment subject must be the issue code of the MOST SEVERE
+  // contribution (RED > AMBER > UNKNOWN > NO_DATA), not simply the first in
+  // array order: NO_DATA rows are pushed first, so position-ordering let
+  // EVIDENCE_MISSING shadow an alerted EVIDENCE_STALE subject and suppressed
+  // recovery messages in production. Ties keep array order (deterministic).
+  const issueCode =
+    contributions.length > 0
+      ? contributions.reduce((highest, c) =>
+          CONTRIBUTION_LEVEL_RANK[c.level] > CONTRIBUTION_LEVEL_RANK[highest.level] ? c : highest,
+        ).issueCode
       : 'NO_ISSUE';
   const summary =
     `verdict=${verdict} findings=${findings.length} recommendations=${recommendations.length} ` +
