@@ -434,6 +434,101 @@ defined by the portal plan. Keep the real report `DRAFT`. Preserve ticketing as
 disabled and do not notify a client. Follow the existing portal acceptance and
 handover documents as the source of truth.
 
+## 7a. As-built progress ledger (updated 23 September 2026)
+
+Completed and deployed to production (`master`, agent container
+`operations-agent` on `cp-8gb-hel1-1`):
+
+- contracts package, offline safety, canonicalization, security fixtures
+  (Phases B-C);
+- deterministic supervisor, evidence source (SELECT-only `operations_reader`),
+  sync module (unbound by design);
+- alert engine, Telegram sender, daily digest, observer soak driver
+  (Phases D-F; digest hour 09 UTC; three-day soak passed);
+- simulated remediation engine — proposals only, executes nothing (Phase G);
+- Telegram command layer + outbound getUpdates poller + Bot API client,
+  reconciled against blind adversarial evals, wired to the real observer
+  evidence ("chat phase", deployed 23 September, tip commit `b498774`).
+  Commands live: `/status`, `/incidents`, `/sync`, `/budget`, `/explain`,
+  `/help`. Bot answers from the soak driver's live tick state; sync answers
+  honestly `UNBOUND`.
+
+Hard switches still OFF server-side: `AI_ENABLED=false`,
+`AUTO_REMEDIATION_ENABLED=false`, `REPAIR_MASTER_ENABLED=false`.
+The LLM port in `app.module.ts` is a fail-closed stand-in
+(`LlmError('refused')`); the budget meter, AI gate and audit plumbing are real
+and tested.
+
+Owner backlog (not blocking): rotate the Telegram bot token; wire evidence
+feeds for the remaining UNKNOWN digest sources; per-incident projection for
+`/incidents`.
+
+## 7b. Next phase — "AI brain" (natural-language summaries and chat)
+
+Order per operator plan: AI brain BEFORE Programme Phase H (Tier A controlled
+production acceptance). Phase H and Phase I remain after this phase; Phase J
+is design-only.
+
+Coordinator prerequisites before assigning workers:
+
+- reverify model aliases and pricing against official provider documentation
+  (operator-plan 8.2) and record the verified values; until then no live call
+  is possible by construction;
+- add provider-key config to `AgentConfigService` as an optional secret
+  (env template only, never a real key) plus per-model cost tables derived
+  from the verified pricing;
+- keep `AI_ENABLED=false` everywhere except explicit opt-in test fixtures;
+- confirm the existing budget meter hard caps (day calls, monthly EUR ceiling)
+  are the ONLY spend path.
+
+Worker A owns:
+
+```text
+apps/operations-agent/src/ai/provider/**
+apps/operations-agent/test/ai-provider/**
+```
+
+Deliver the real provider HTTP client behind the existing `LlmClient`
+contract: bounded timeout, no retries beyond config, token counting, EUR
+cost estimation, and fixed token-free error mapping for timeout / 429 / 5xx /
+malformed schema. No key handling outside config injection; no logging of
+prompts or completions.
+
+Worker B owns:
+
+```text
+apps/operations-agent/src/ai/summaries/**
+apps/operations-agent/test/ai-summaries/**
+```
+
+Deliver the summary/answer service: fixed prompt templates fed ONLY with
+already-sanitized observer/digest views (untrusted text stays labeled data),
+structured-output validation against the contracts package, deterministic
+fallback on any refusal/invalid output, and a `getExplanation`-style entry
+point the coordinator can bind to Telegram. Deterministic checks remain
+authoritative on conflict.
+
+Worker C owns:
+
+```text
+apps/operations-agent/test/ai-evals/**
+```
+
+Deliver blind adversarial evals for the new paths: prompt injection in every
+permitted text field, secret/token/PII canary leakage, budget-exhaustion hard
+stop, malformed and over-confident output, deterministic-beats-AI conflicts,
+and kill-switch-off refusal. Suites must fail loudly on contract-shape drift.
+
+Exit gate:
+
+- `npx tsc --noEmit`, full jest suites and `npm run build` clean;
+- contracts jest clean;
+- no real provider call in any test (fetch is always faked);
+- AI stays disabled by default; enabling on the server is a separate owner
+  approval with a day-one spend cap observation; and
+- coordinator wires the provider + summaries into AppModule behind the
+  existing `AI_ENABLED`/`ai` kill switch and presents the gate report.
+
 ## 8. Integration and review protocol
 
 At the end of every worker task:
