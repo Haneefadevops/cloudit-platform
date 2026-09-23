@@ -311,9 +311,18 @@ function metricSourceKey(raw: unknown): string | undefined {
   return undefined;
 }
 
-/** Supabase is the platform's database and backup-storage provider. */
+/**
+ * Provider connection families: supabase is the platform database/backup
+ * provider; the vercel/imagekit provider_connection rows evidence the
+ * analytics/delivery sources alongside their metric samples (worst-of
+ * merge). Anything else (e.g. github) is not part of the contracted
+ * catalogue and is omitted.
+ */
 function providerSourceKey(raw: unknown): string | undefined {
-  return raw === 'supabase' ? 'database' : undefined;
+  if (raw === 'supabase') return 'database';
+  if (raw === 'vercel') return 'vercel-analytics';
+  if (raw === 'imagekit') return 'imagekit-delivery';
+  return undefined;
 }
 
 function buildSafeSummary(sourceKey: string, status: EvidenceSourceStatus, samples: number): string {

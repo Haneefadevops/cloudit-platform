@@ -256,18 +256,20 @@ describe('EvidenceSource.read family mapping', () => {
     expect(api.severity).toBe('critical');
 
     // postgresql.* metric and the supabase provider connection merge into one
-    // 'database' record; github/vercel connections are omitted entirely.
+    // 'database' record; github connections are omitted entirely.
     const database = recordOf(projection, 'database');
     expect(database.status).toBe('OK');
     expect(database.counts).toEqual({ samples: 2 });
     expectNoRecord(projection, 'github');
-    expectNoRecord(projection, 'vercel');
 
-    // vercel.* -> vercel-analytics; NO_DATA maps to UNKNOWN with fallback 'none'.
+    // vercel.* metric and the vercel provider_connection merge into
+    // 'vercel-analytics' (worst-of: the RED connection outranks the AMBER
+    // metric sample).
     const vercel = recordOf(projection, 'vercel-analytics');
-    expect(vercel.status).toBe('DEGRADED');
-    expect(vercel.severity).toBe('warning');
+    expect(vercel.status).toBe('FAILED');
+    expect(vercel.severity).toBe('critical');
     expect(vercel.criticality).toBe('analytics');
+    expect(vercel.counts).toEqual({ samples: 2 });
 
     // imagekit.* -> imagekit-delivery; NO_DATA row maps to UNKNOWN.
     const imagekit = recordOf(projection, 'imagekit-delivery');
@@ -310,6 +312,24 @@ describe('EvidenceSource.read family mapping', () => {
 
     expect(client.connected).toBe(true);
     expect(client.ended).toBe(true);
+  });
+
+  it('maps vercel/imagekit provider_connections into their digest sources', async () => {
+    const rows = {
+      provider_connections: [
+        { provider: 'vercel', status: 'GREEN', severity: 'none', observed_at: OBSERVED_AT },
+        { provider: 'imagekit', status: 'AMBER', severity: 'warning', observed_at: OBSERVED_AT },
+        { provider: 'github', status: 'RED', severity: 'critical', observed_at: OBSERVED_AT },
+      ],
+    };
+    const { source } = makeSource(rows);
+    const projection = await readProjection(source);
+
+    expect(recordOf(projection, 'vercel-analytics').status).toBe('OK');
+    const imagekit = recordOf(projection, 'imagekit-delivery');
+    expect(imagekit.status).toBe('DEGRADED');
+    expect(imagekit.severity).toBe('warning');
+    expectNoRecord(projection, 'github');
   });
 
   it('computes freshUntil from metric freshness_seconds when resolvable', async () => {

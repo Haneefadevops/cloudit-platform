@@ -48,7 +48,12 @@ export const DEFAULT_SOURCE_KEYS = [
   'ai-budget',
 ] as const;
 
-/** Sources that must be present and fresh for a trustworthy verdict. */
+/**
+ * Sources that must be present and fresh for a trustworthy verdict. The sync
+ * auditor is unbound by design, so 'sync-drift' stays in the known catalogue
+ * (digest shows its honest UNKNOWN line) but is not required — a source no
+ * evidence feed can ever populate must not drag the verdict to NO_DATA.
+ */
 export const DEFAULT_REQUIRED_SOURCE_KEYS = [
   'public-website',
   'public-api',
@@ -57,7 +62,6 @@ export const DEFAULT_REQUIRED_SOURCE_KEYS = [
   'backups-daily',
   'restore-test',
   'n8n-workflows',
-  'sync-drift',
 ] as const;
 
 export const DEFAULT_CRITICAL_OVERDUE_MS = 30 * 60 * 1000;

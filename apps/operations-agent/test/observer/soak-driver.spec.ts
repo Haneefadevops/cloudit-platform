@@ -144,6 +144,8 @@ interface HarnessOptions {
   evidence?: FakeEvidence;
   supervisor?: FakeSupervisor;
   alerts?: FakeAlerts;
+  /** Budget status port state; omitted means no port (entry stays UNKNOWN). */
+  budget?: { category: DigestEntry['category']; summary: string } | null;
 }
 
 function makeHarness(options: HarnessOptions = {}) {
@@ -175,6 +177,15 @@ function makeHarness(options: HarnessOptions = {}) {
     digestHourUtc: options.digestHourUtc,
     now: () => clockMs,
     timers,
+    budgetStatus:
+      options.budget !== undefined
+        ? {
+            read: () =>
+              options.budget === null
+                ? undefined
+                : (options.budget as { category: DigestEntry['category']; summary: string }),
+          }
+        : undefined,
   });
   return {
     driver,
@@ -486,6 +497,41 @@ describe('SoakDriver', () => {
     h.setClock(Date.UTC(2025, 0, 16, 7, 30, 0));
     expect(await h.driver.tick()).toEqual({ status: 'DIGEST_SENT' });
     expect(h.alerts.digests).toHaveLength(2);
+  });
+
+  it('synthesizes the ai-budget digest entry from the budget status port', async () => {
+    const h = makeHarness({
+      clockMs: Date.UTC(2025, 0, 15, 7, 0, 0),
+      digestHourUtc: 7,
+      budget: { category: 'GREEN', summary: 'ai budget: month EUR 0.00 of 7, 0 call(s) today' },
+    });
+    expect(await h.driver.tick()).toEqual({ status: 'DIGEST_SENT' });
+    const entry = h.alerts.digests[0].entries.find((e) => e.subjectKey === 'ai-budget');
+    expect(entry).toBeDefined();
+    expect(entry?.category).toBe('GREEN');
+    expect(entry?.summary).toBe('ai budget: month EUR 0.00 of 7, 0 call(s) today');
+    expect(entry?.lastOccurredAt).toBe(iso(Date.UTC(2025, 0, 15, 7, 0, 0)));
+  });
+
+  it('keeps ai-budget UNKNOWN when the budget port is absent or yields nothing', async () => {
+    const absent = makeHarness({
+      clockMs: Date.UTC(2025, 0, 15, 7, 0, 0),
+      digestHourUtc: 7,
+    });
+    expect(await absent.driver.tick()).toEqual({ status: 'DIGEST_SENT' });
+    expect(
+      absent.alerts.digests[0].entries.find((e) => e.subjectKey === 'ai-budget')?.category,
+    ).toBe('UNKNOWN');
+
+    const empty = makeHarness({
+      clockMs: Date.UTC(2025, 0, 15, 7, 0, 0),
+      digestHourUtc: 7,
+      budget: null,
+    });
+    expect(await empty.driver.tick()).toEqual({ status: 'DIGEST_SENT' });
+    expect(
+      empty.alerts.digests[0].entries.find((e) => e.subjectKey === 'ai-budget')?.category,
+    ).toBe('UNKNOWN');
   });
 
   it('bounds digest entries to 13 even when more sources were observed', async () => {

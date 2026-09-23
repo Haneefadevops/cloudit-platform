@@ -42,6 +42,14 @@ export interface SoakDriverOptions {
     ): Promise<unknown>;
   };
   audit?: { record(event: unknown): unknown };
+  /**
+   * In-process AI budget status port (UNKNOWN-gap fix). When provided, the
+   * driver synthesizes the 'ai-budget' digest entry from the live budget
+   * meter on every good tick; when omitted the entry stays UNKNOWN. Read-only.
+   */
+  budgetStatus?: {
+    read(): { category: DigestEntry['category']; summary: string } | undefined;
+  };
   /** Default 'cavetta'. */
   clientKey?: string;
   /** Default 'production'. */
@@ -209,6 +217,7 @@ export class SoakDriver implements OnModuleInit, OnModuleDestroy {
   private lastTickAtMs: number | null = null;
   private lastFindings: Finding[] = [];
   private incidentsEvidence: IncidentsEvidenceState | null = null;
+  private readonly budgetStatus: NonNullable<SoakDriverOptions['budgetStatus']> | undefined;
 
   constructor(options: SoakDriverOptions) {
     if (!options || typeof options !== 'object') {
@@ -247,6 +256,7 @@ export class SoakDriver implements OnModuleInit, OnModuleDestroy {
     this.supervisor = options.supervisor;
     this.alerts = options.alerts;
     this.auditSink = options.audit;
+    this.budgetStatus = options.budgetStatus;
     this.clientKey = clientKey;
     this.environmentKey = environmentKey;
     this.intervalMs = intervalMs;
@@ -398,6 +408,22 @@ export class SoakDriver implements OnModuleInit, OnModuleDestroy {
 
   private updateDigestState(projection: unknown, nowIso: string): void {
     this.incidentsEvidence = null;
+    // The AI budget meter is in-process (no DB evidence feed): synthesize
+    // its digest entry from the live meter so 'ai-budget' reflects reality
+    // instead of reading UNKNOWN. Without a port the entry stays UNKNOWN.
+    if (this.budgetStatus) {
+      const budget = this.budgetStatus.read();
+      if (budget) {
+        this.digestState.set('ai-budget', {
+          category: budget.category,
+          summary:
+            budget.summary.length <= DIGEST_ENTRY_SUMMARY_MAX_CHARS
+              ? budget.summary
+              : budget.summary.slice(0, DIGEST_ENTRY_SUMMARY_MAX_CHARS),
+          lastOccurredAt: nowIso,
+        });
+      }
+    }
     for (const record of projectionRecordsOf(projection)) {
       const sourceKey = record.sourceKey;
       if (typeof sourceKey !== 'string' || sourceKey.length === 0) continue;

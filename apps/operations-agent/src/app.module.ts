@@ -373,6 +373,7 @@ const aiProviders: Provider[] = [
       supervisor: SupervisorService,
       alerts: AlertEngine,
       auditPort: { record(event: unknown): unknown } | null,
+      budget: BudgetService | undefined,
     ) => {
       // Read-only observation (soak driver): real instance only when the
       // server is explicitly configured with the operations_reader password;
@@ -397,6 +398,39 @@ const aiProviders: Provider[] = [
         supervisor,
         alerts,
         audit: auditPort ?? undefined,
+        // UNKNOWN-gap fix: the in-process AI budget meter has no DB evidence
+        // feed, so the driver reads it directly (read-only) to synthesize the
+        // 'ai-budget' digest entry. Without BudgetService the entry stays
+        // UNKNOWN (standalone/test contexts).
+        budgetStatus: budget
+          ? {
+              read: (): { category: 'GREEN' | 'AMBER' | 'RED'; summary: string } | undefined => {
+                try {
+                  const check = budget.checkBudget();
+                  if (check.allowed) {
+                    return {
+                      category: check.warning ? 'AMBER' : 'GREEN',
+                      summary:
+                        `ai budget: month EUR ${check.month.estimatedEur.toFixed(2)} of ` +
+                        `${config.get().aiMonthlyEurCeiling}, ${check.day.calls} call(s) today`,
+                    };
+                  }
+                  if (check.reason === 'MONTHLY_EUR_CEILING_REACHED') {
+                    return {
+                      category: 'RED',
+                      summary: 'ai budget: monthly EUR ceiling reached, AI calls disabled',
+                    };
+                  }
+                  return {
+                    category: 'AMBER',
+                    summary: 'ai budget: daily call cap reached, AI calls paused until tomorrow',
+                  };
+                } catch {
+                  return undefined;
+                }
+              },
+            }
+          : undefined,
         intervalMs: observer.intervalMs,
         digestHourUtc: observer.digestHourUtc,
       });
@@ -408,6 +442,7 @@ const aiProviders: Provider[] = [
       SupervisorService,
       AlertEngine,
       { token: APP_AUDIT_PORT, optional: true },
+      { token: BudgetService, optional: true },
     ],
   },
   {
