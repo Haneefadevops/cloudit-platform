@@ -463,6 +463,44 @@ Owner backlog (not blocking): rotate the Telegram bot token; wire evidence
 feeds for the remaining UNKNOWN digest sources; per-incident projection for
 `/incidents`.
 
+## 7a-i. "AI brain" phase — BUILT, awaiting owner gate acceptance
+
+Built locally on `ai-maintenance/integration` (integration tip `1419eba`;
+not pushed, not deployed):
+
+- verified pricing snapshot `src/ai/pricing.ts` (luna USD 0.20/1.20,
+  terra USD 2.00/12.00 per 1M, Sept 2026 trackers citing OpenAI's official
+  pricing page; reasoning tokens bill at output rate) with configurable
+  `AI_FX_USD_TO_EUR` (pinned default 0.85); `cost.ts` and the budget meter
+  now derive EUR rates from it — the synthetic placeholder rates
+  (terra output underestimated 3x) are gone;
+- `AgentConfigService`: `OPENAI_API_KEY` (optional secret, fail-closed —
+  required only when `AI_ENABLED=true`), `AI_PROVIDER_BASE_URL` (https
+  enforced when enabled), `AI_FX_USD_TO_EUR`; `infra/operations-agent/
+  .env.example` documents all three with empty values;
+- Worker A: `OpenAiResponsesLlmClient` — real Responses API client behind
+  the frozen `LlmClient` port (`store:false`, strict json_schema,
+  usage-reported token counting, bounded timeout, retry cap default 0,
+  token-free error mapping, key never logged; fetch always faked in tests);
+- Worker B: `SummariesService.getExplanation` — fixed prompts, untrusted
+  excerpt labeling, closed-output validation, deterministic-wins
+  contradiction check, canary scan, budget record + one closed audit event
+  per call, deterministic fallback on every failure; never rejects;
+- Worker C: 6 new blind adversarial eval suites (injection, canary, budget
+  hard stop, malformed/over-confident output, kill-switch refusal, export
+  shape-drift tripwires);
+- coordinator integration: provider client + `SummariesService` wired into
+  `AppModule` behind the existing `AI_ENABLED`/'ai' kill switch and budget
+  gate; the fail-closed stand-in remains the default binding.
+
+Gate evidence: `tsc --noEmit` clean; operations-agent jest 952/952 (was
+851); contracts jest 145/145; `npm run build` clean; no real provider call
+in any test; no secret-shaped strings in the phase diff; AI stays disabled
+by default. NOT enabled on the server — enablement is a separate owner
+approval with a day-one spend-cap observation. Deferred to the enablement
+decision: binding `getExplanation` to Telegram `/explain` (touches live
+bot UX), provider-side retry backoff policy.
+
 ## 7b. Next phase — "AI brain" (natural-language summaries and chat)
 
 Order per operator plan: AI brain BEFORE Programme Phase H (Tier A controlled
