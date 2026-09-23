@@ -8,6 +8,8 @@ import {
   BudgetGate,
   LlmClient,
   LlmError,
+  OpenAiResponsesLlmClient,
+  SummariesService,
 } from './ai';
 import {
   AiMaintenanceReadModelOptions,
@@ -59,11 +61,11 @@ import { TelegramWebhookModule } from './telegram/webhook/telegram-webhook.modul
 const AI_ENVIRONMENT_KEY_VALUE = 'default';
 
 /**
- * Fail-closed LLM client (operator-plan section 8.2). The real HTTP provider
- * client is a later, separately gated piece: model aliases and pricing must
- * be reverified before any live call. Until it is bound, every attempt fails
- * closed to the deterministic fallback (outcome LLM_REFUSED). No network, no
- * keys, no provider contact.
+ * Fail-closed LLM client fallback (operator-plan section 8.2). Bound only
+ * while AI is disabled or no provider key is configured (the default: no
+ * network, no keys, no provider contact). When AI is enabled with a key,
+ * aiProviders below replaces this with the real Responses API client; the
+ * 'ai' kill switch remains the runtime gate on every call.
  */
 const failClosedLlmClient: LlmClient = {
   complete: () => Promise.reject(new LlmError('refused')),
@@ -117,7 +119,24 @@ const telegramCommandsIntegration = TelegramCommandsModule.register({
  * KillSwitchService; standalone compilations fail closed instead.
  */
 const aiProviders: Provider[] = [
-  { provide: AI_CLIENT, useValue: failClosedLlmClient },
+  {
+    provide: AI_CLIENT,
+    useFactory: (config: AgentConfigService): LlmClient => {
+      const ai = config.get().ai;
+      // Real provider client only when AI is enabled AND a key is injected;
+      // config already fails closed when AI_ENABLED=true without a key, so
+      // this branch is unreachable without explicit owner enablement.
+      if (config.get().aiEnabled && ai.providerApiKey) {
+        return new OpenAiResponsesLlmClient({
+          apiKey: ai.providerApiKey,
+          baseUrl: ai.providerBaseUrl,
+          requestTimeoutMs: ai.requestTimeoutMs,
+        });
+      }
+      return failClosedLlmClient;
+    },
+    inject: [AgentConfigService],
+  },
   {
     provide: AI_BUDGET_GATE,
     useFactory: (budget: BudgetService | undefined): BudgetGate =>
@@ -236,6 +255,31 @@ const aiProviders: Provider[] = [
       config: AgentConfigService,
     ) =>
       new AiAdapterService({
+        ai: config.get().ai,
+        client,
+        budget,
+        gate,
+        audit: audit ?? undefined,
+        now,
+      }),
+    inject: [AI_CLIENT, AI_BUDGET_GATE, AI_GATE, AI_AUDIT, AI_NOW, AgentConfigService],
+  },
+  {
+    // AI-brain phase: summaries/answers service behind the same kill switch,
+    // budget gate and audit sink as the shadow-mode adapter. The injected
+    // client is the fail-closed stand-in until AI is explicitly enabled with
+    // a provider key; getExplanation collapses to the deterministic fallback
+    // in every disabled/denied/failure case.
+    provide: SummariesService,
+    useFactory: (
+      client: LlmClient,
+      budget: BudgetGate,
+      gate: AiGate,
+      audit: { record(event: unknown): unknown } | null,
+      now: () => number,
+      config: AgentConfigService,
+    ) =>
+      new SummariesService({
         ai: config.get().ai,
         client,
         budget,
@@ -453,6 +497,13 @@ const aiProviders: Provider[] = [
     }),
   ],
   providers: aiProviders,
-  exports: [AiAdapterService, AiMaintenanceReadModel, AlertEngine, RemediationEngine, SoakDriver],
+  exports: [
+    AiAdapterService,
+    AiMaintenanceReadModel,
+    AlertEngine,
+    RemediationEngine,
+    SoakDriver,
+    SummariesService,
+  ],
 })
 export class AppModule {}
