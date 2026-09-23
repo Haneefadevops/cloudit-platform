@@ -362,3 +362,64 @@ export function collectStrings(value: unknown, into: string[] = []): string[] {
 
 /** Shape used by tenant-isolation evals: ids of other environments/tenants. */
 export const TENANT_SHAPED_PATTERN = /\b(?:ten|tenant|client|env)_[a-z0-9]/i;
+
+// --- summaries service option builders (AI-brain phase, Worker B surface) ---
+
+/**
+ * Mirrors the `SummariesService` constructor options exactly (AI-brain
+ * phase). Kept structural — like the adapter builders above — so this file
+ * stays importable without referencing `src/ai` directly.
+ */
+export interface SummariesServiceOptionsShape {
+  ai: AiAdapterOptionsShape['ai'] & { fxUsdToEur?: number };
+  client: AiAdapterOptionsShape['client'];
+  budget: AdapterBudgetShape;
+  gate: AdapterGateShape;
+  audit?: AdapterAuditShape;
+  now?: () => number;
+}
+
+export interface BuildSummariesOptionsOverrides {
+  client?: AiAdapterOptionsShape['client'];
+  budget?: AdapterBudgetShape;
+  gate?: AdapterGateShape;
+  audit?: AdapterAuditShape;
+  now?: () => number;
+  ai?: Partial<SummariesServiceOptionsShape['ai']>;
+}
+
+export function buildSummariesOptions(
+  overrides: BuildSummariesOptionsOverrides = {},
+): SummariesServiceOptionsShape {
+  const options: SummariesServiceOptionsShape = {
+    ai: { ...SYNTHETIC_AI_CONFIG, ...overrides.ai },
+    client: overrides.client ?? FakeLlmClient.fromAssessment(makeModelOutput()),
+    budget: overrides.budget ?? new RecordingBudget(),
+    gate: overrides.gate ?? new StubGate(),
+    ...(overrides.audit !== undefined ? { audit: overrides.audit } : {}),
+    ...(overrides.now !== undefined ? { now: overrides.now } : {}),
+  };
+  return options;
+}
+
+/** Mirrors the `SummariesService.getExplanation` input exactly. */
+export interface GetExplanationInputShape {
+  /** Deterministic verdict produced by the supervisor — ALWAYS authoritative. */
+  deterministic: HealthAssessment;
+  /** Already-sanitized, bounded finding text; treated as untrusted data. */
+  findingSummary: string;
+  /** Sanitized evidence hash for audit/correlation. Opaque, no PII. */
+  evidenceHash: string;
+  ownerRequestedDeepExplanation?: boolean;
+}
+
+export function makeExplanationInput(
+  overrides: Partial<GetExplanationInputShape> = {},
+): GetExplanationInputShape {
+  return {
+    deterministic: makeDeterministic('AMBER'),
+    findingSummary: 'synthetic finding excerpt from the observer digest',
+    evidenceHash: 'sha256:eval-explanation',
+    ...overrides,
+  };
+}
