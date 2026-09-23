@@ -55,6 +55,16 @@ export interface AgentConfig {
     maxInputTokens: number;
     maxOutputTokens: number;
     maxEscalationsPerDay: number;
+    /**
+     * Provider API key (AI-brain phase). Runtime secret: read from the
+     * environment, never logged, never required unless AI is enabled
+     * (fail-closed). Only injected into the provider client.
+     */
+    providerApiKey: string | undefined;
+    /** Fixed provider base URL; never user/model-supplied. */
+    providerBaseUrl: string;
+    /** USD→EUR FX rate converting the verified pricing snapshot to EUR. */
+    fxUsdToEur: number;
   };
   /**
    * Alert/digest settings (Phase F). Optional so existing full-config test
@@ -113,6 +123,9 @@ const DEFAULTS: AgentConfig = {
     maxInputTokens: 8_000,
     maxOutputTokens: 1_000,
     maxEscalationsPerDay: 3,
+    providerApiKey: undefined,
+    providerBaseUrl: 'https://api.openai.com',
+    fxUsdToEur: 0.85,
   },
   alerts: {
     maxAlertsPerHour: 6,
@@ -246,6 +259,15 @@ export class AgentConfigService {
           'AI_MAX_ESCALATIONS_PER_DAY',
           DEFAULTS.ai.maxEscalationsPerDay,
         ),
+        providerApiKey: readOptionalSecret(env, 'OPENAI_API_KEY'),
+        providerBaseUrl: readUrl(env, 'AI_PROVIDER_BASE_URL', DEFAULTS.ai.providerBaseUrl),
+        fxUsdToEur: (() => {
+          const fx = Number(env.AI_FX_USD_TO_EUR ?? DEFAULTS.ai.fxUsdToEur);
+          if (!Number.isFinite(fx) || fx <= 0 || fx > 10) {
+            throw new Error('AI_FX_USD_TO_EUR must be a positive number no greater than 10');
+          }
+          return fx;
+        })(),
       },
       alerts: {
         maxAlertsPerHour: readPositiveNumber(
@@ -299,6 +321,14 @@ export class AgentConfigService {
     }
     if (this.config.ai.maxOutputTokens > 2_000) {
       throw new Error('AI_MAX_OUTPUT_TOKENS must not exceed 2000 (plan 8.3 target is <= 1000)');
+    }
+    if (this.config.aiEnabled) {
+      if (!this.config.ai.providerApiKey) {
+        throw new Error('AI_ENABLED requires OPENAI_API_KEY (fail closed)');
+      }
+      if (!this.config.ai.providerBaseUrl.startsWith('https://')) {
+        throw new Error('AI_PROVIDER_BASE_URL must use https:// when AI is enabled');
+      }
     }
     if (this.config.alerts!.maxAlertsPerHour > 60) {
       throw new Error('ALERTS_MAX_ALERTS_PER_HOUR must not exceed 60');

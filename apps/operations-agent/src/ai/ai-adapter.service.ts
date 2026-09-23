@@ -14,9 +14,9 @@
  * (LlmError or unexpected throw -> deterministic fallback) -> parse JSON ->
  * validateHealthAssessment -> contradiction check (deterministic always wins)
  * -> secret-canary scan (schema-valid replies echoing secret-shaped content
- * are discarded) -> budget.record + one audit event. Cost estimate uses a synthetic
- * placeholder rate table (see cost.ts; plan 8.2 requires reverification);
- * costEur is 0 on fallback.
+ * are discarded) -> budget.record + one audit event. Cost estimate uses the
+ * verified-derived rate table (see pricing.ts/cost.ts; pinned snapshot,
+ * configurable FX); costEur is 0 on fallback.
  */
 
 import {
@@ -48,6 +48,8 @@ export interface AiAdapterOptions {
     maxInputTokens: number;
     maxOutputTokens: number;
     maxEscalationsPerDay: number;
+    /** Runtime USD→EUR FX for the verified pricing snapshot (optional). */
+    fxUsdToEur?: number;
   };
   client: LlmClient;
   budget: BudgetGate;
@@ -240,8 +242,14 @@ export class AiAdapterService {
       throw new AssessmentAborted('LLM_SECRET_CANARY');
     }
 
-    // 9. Cost estimate (synthetic rate table) + budget record + audit.
-    const costEur = estimateCostEur(model, response.inputTokens, response.outputTokens);
+    // 9. Cost estimate (verified-derived rate table) + budget record + audit.
+    const costEur = estimateCostEur(
+      model,
+      response.inputTokens,
+      response.outputTokens,
+      undefined,
+      this.options.ai.fxUsdToEur,
+    );
     this.options.budget.record(model, response.inputTokens, response.outputTokens, costEur);
     const result: AiAdapterResult = {
       assessment: validated.value,

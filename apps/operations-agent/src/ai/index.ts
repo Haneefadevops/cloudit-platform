@@ -31,3 +31,13 @@ export {
   AiMaintenanceReadModel,
 } from './read-model';
 export { AiModule, AiModuleOptions } from './ai.module';
+export {
+  OpenAiResponsesClientOptions,
+  OpenAiResponsesLlmClient,
+} from './provider';
+export {
+  GetExplanationInput,
+  GetExplanationResult,
+  SummariesServiceOptions,
+  SummariesService,
+} from './summaries';

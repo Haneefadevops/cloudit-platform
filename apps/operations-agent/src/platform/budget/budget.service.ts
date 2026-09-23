@@ -18,13 +18,14 @@
  */
 
 import { Injectable, Optional } from '@nestjs/common';
+import { buildVerifiedEurRateTable } from '../../ai/pricing';
 import { AgentConfigService } from '../../config/agent-config.service';
 import { Clock, SystemClock, utcDayKey, utcMonthKey } from '../clock';
 
 export interface ModelRate {
-  /** Synthetic EUR price per 1M input tokens. */
+  /** EUR price per 1M input tokens. */
   readonly inputEurPerMillionTokens: number;
-  /** Synthetic EUR price per 1M output tokens. */
+  /** EUR price per 1M output tokens. */
   readonly outputEurPerMillionTokens: number;
 }
 
@@ -33,18 +34,19 @@ export type ModelRateTable = Readonly<Record<string, ModelRate>>;
 /**
  * Default rate table.
  *
- * SYNTHETIC PLACEHOLDER VALUES for offline enforcement only - they are not
- * verified provider pricing. Per operator-plan section 8.2, real model
- * aliases/pricing must be reverified against official documentation before
- * any live use and pinned to an evaluated snapshot via constructor injection.
+ * Derived from the verified provider pricing snapshot (ai/pricing.ts):
+ * official USD prices per 1M tokens converted at the configured USD→EUR FX
+ * rate. Per operator-plan 8.2 the snapshot is pinned at phase preparation
+ * (September 2026) and must be reverified before any live enablement; the FX
+ * rate is configurable (AI_FX_USD_TO_EUR), not hard-coded history.
  */
-export const DEFAULT_MODEL_RATES: ModelRateTable = Object.freeze({
-  'gpt-5.6-luna': Object.freeze({ inputEurPerMillionTokens: 0.25, outputEurPerMillionTokens: 1 }),
-  'gpt-5.6-terra': Object.freeze({ inputEurPerMillionTokens: 1, outputEurPerMillionTokens: 4 }),
-});
+export const DEFAULT_MODEL_RATES: ModelRateTable = buildVerifiedEurRateTable();
 
 export interface BudgetServiceOptions {
-  /** Constructor-injected rate table; defaults to DEFAULT_MODEL_RATES. */
+  /**
+   * Constructor-injected rate table; defaults to the verified-derived table
+   * at the runtime-configured FX rate (config.ai.fxUsdToEur).
+   */
   readonly rates?: ModelRateTable;
   /** Injectable clock; defaults to SystemClock. */
   readonly clock?: Clock;
@@ -126,7 +128,7 @@ export class BudgetService {
     private readonly config: AgentConfigService,
     @Optional() options?: BudgetServiceOptions,
   ) {
-    this.rates = options?.rates ?? DEFAULT_MODEL_RATES;
+    this.rates = options?.rates ?? buildVerifiedEurRateTable(config.get().ai.fxUsdToEur);
     this.clock = options?.clock ?? new SystemClock();
     this.warnAtEur = options?.warnAtEur ?? 5;
   }

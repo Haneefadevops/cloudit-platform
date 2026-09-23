@@ -481,6 +481,22 @@ Coordinator prerequisites before assigning workers:
 - confirm the existing budget meter hard caps (day calls, monthly EUR ceiling)
   are the ONLY spend path.
 
+Prerequisite evidence (coordinator, AI-brain phase start): pricing verified
+against September 2026 trackers citing OpenAI's official pricing page
+(AIModelCalc `https://aimodelcalc.com/guides/ai-api-pricing-2026`, BenchLM,
+CloudZero): `gpt-5.6-luna` USD 0.20 in / 1.20 out per 1M tokens;
+`gpt-5.6-terra` USD 2.00 / 12.00 per 1M (reasoning tokens bill at the output
+rate). Recorded as a pinned snapshot in
+`apps/operations-agent/src/ai/pricing.ts`, converted to EUR via configurable
+`AI_FX_USD_TO_EUR` (default 0.85 snapshot — owner may correct).
+`AgentConfigService` gained `OPENAI_API_KEY` (optional secret, fail-closed:
+required only when `AI_ENABLED=true`), `AI_PROVIDER_BASE_URL` (https
+enforced when enabled) and the FX rate; `infra/operations-agent/.env.example`
+documents all three with empty values. The budget meter
+(`platform/budget`) remains the only spend path — confirmed:
+`AiAdapterService` reaches a model only through
+`BudgetGate.canCall()/record()`.
+
 Worker A owns:
 
 ```text

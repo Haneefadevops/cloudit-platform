@@ -30,6 +30,9 @@ const BASE: AgentConfig = {
     maxInputTokens: 8_000,
     maxOutputTokens: 1_000,
     maxEscalationsPerDay: 3,
+    providerApiKey: undefined,
+    providerBaseUrl: 'https://api.openai.com',
+    fxUsdToEur: 0.85,
   },
 };
 
