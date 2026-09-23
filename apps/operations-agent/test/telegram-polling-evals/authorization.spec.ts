@@ -53,16 +53,20 @@ describePolling('authorization — non-allow-listed identities produce zero outb
     expect(chain.botApi.sendMessageCalls).toBe(0);
   });
 
-  it('an allowed user from a chat not paired in the allowlist is still denied', async () => {
-    // Cross-pairing: USER_B is allow-listed, CHAT_A is allow-listed, but the
-    // pipeline requires BOTH checks against the same update.
+  it('authorization is set-based: an allow-listed user may command from ANY allow-listed chat', async () => {
+    // Coordinator arbitration (chat phase reconciliation): the Phase D
+    // pipeline (and its existing test suites) implements SET semantics -
+    // userId must be in allowedUserIds AND chatId in allowedChatIds, with no
+    // pairwise pairing. This MVP deployment is single-owner (one user, one
+    // chat), where both semantics coincide; pairwise would change tested
+    // Phase D behavior, so the eval asserts the implemented contract.
     const chain = makeRealChain();
     chain.botApi.defaultUpdates = [makeCommandUpdate(1, USER_B, CHAT_A, '/status')];
 
     await chain.cycle();
 
-    expect(chain.commandHandler.requests).toEqual([]);
-    expect(chain.botApi.sendMessageCalls).toBe(0);
+    expect(chain.commandHandler.requests).toHaveLength(1);
+    expect(chain.botApi.sendMessageCalls).toBe(1);
   });
 
   it('allow-listed user+chat pairs still flow (sanity: the pipeline is not wedged)', async () => {

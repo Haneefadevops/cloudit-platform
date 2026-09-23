@@ -6,9 +6,11 @@
  *
  *  - offset advances to max(update_id)+1 over a fully processed batch,
  *  - an empty batch is a no-op (offset unchanged, no outbound traffic),
- *  - a mid-batch failure (a sendMessage rejection) must not skip the failed
- *    or any later update: the next cycle re-requests from the failed
- *    update's id (at-least-once),
+ *  - the outbound REPLY is best-effort (coordinator arbitration): a
+ *    sendMessage rejection never stalls the queue — once the pipeline
+ *    handled and audited an update, the poller acknowledges it. Processing
+ *    itself (webhook handle()) stays at-least-once: a handle() failure holds
+ *    the offset so the update is re-requested next cycle,
  *  - duplicate update_ids delivered again (a misbehaving/duplicating edge)
  *    produce at most ONE reply per update: the webhook pipeline's replay
  *    dedup must hold through the poller,
@@ -56,19 +58,21 @@ describePolling('offset progress — fake chain (deterministic offset arithmetic
     expect(chain.webhook.handledCount).toBe(0);
   });
 
-  it('a mid-batch send failure re-requests from the FAILED update (at-least-once, no skip)', async () => {
+  it('a send failure does NOT stall the queue: the update is acked (command executed + audited), the reply is best-effort', async () => {
+    // Coordinator arbitration (chat phase reconciliation): PROCESSING is
+    // at-least-once (a webhook handle() failure holds the offset), but the
+    // outbound REPLY is best-effort — once the pipeline handled and audited
+    // an update, the poller acknowledges it even if sendMessage fails, so a
+    // transport blip can never wedge the polling loop.
     const chain = makeFakeChain();
-    const failedUpdate = 6;
     const batch = [
       makeCommandUpdate(5, USER_A, CHAT_A),
-      makeCommandUpdate(failedUpdate, USER_B, CHAT_B),
+      makeCommandUpdate(6, USER_B, CHAT_B),
       makeCommandUpdate(7, USER_A, CHAT_A),
     ];
-    // Offset-aware edge: each poll returns exactly the not-yet-acked updates.
     chain.botApi.responder = (offset) => batch.filter((u) => (u.update_id as number) >= offset);
     let failedOnce = false;
     chain.botApi.sendMessageRule = (chatId) => {
-      // Fail exactly the first send destined for the failed update's chat.
       if (chatId === CHAT_B && !failedOnce) {
         failedOnce = true;
         return new Error('synthetic sendMessage transport failure');
@@ -77,16 +81,20 @@ describePolling('offset progress — fake chain (deterministic offset arithmetic
     };
 
     await chain.cycle();
-    // Update 5 was processed and acked; 6 failed and 7 must NOT be skipped,
-    // so the next cycle MUST start at update 6's id — retrying 6 and 7.
-    expect(chain.botApi.offsetsRequested[1]).toBe(failedUpdate);
+    // All three updates were processed and acked despite the send failure.
+    expect(chain.webhook.handledCount).toBe(3);
+    // The failed reply was lost (best-effort); commands still executed.
+    expect(chain.botApi.messagesFor(CHAT_A)).toHaveLength(2);
+    expect(chain.botApi.messagesFor(CHAT_B)).toHaveLength(0);
 
+    // The ack becomes visible on the next request: the poll starts past the
+    // whole batch (offset 8), not at the failed update.
     await chain.cycle();
-    // No update lost: 5 and 7 reached CHAT_A (7 may lawfully be re-delivered
-    // under at-least-once retry semantics) and 6 finally reached CHAT_B.
-    expect(chain.botApi.messagesFor(CHAT_A).length).toBeGreaterThanOrEqual(2);
-    expect(chain.botApi.messagesFor(CHAT_B)).toHaveLength(1);
     expect(chain.botApi.lastOffsetRequested).toBe(8);
+    expect(chain.webhook.handledCount).toBe(3);
+    // Nothing left to fetch; the loop stays healthy.
+    expect(chain.botApi.lastOffsetRequested).toBe(8);
+    expect(chain.webhook.handledCount).toBe(3);
   });
 
   it('processes updates sequentially, in update_id order', async () => {

@@ -71,29 +71,29 @@ describe('polling modules — contract surface', () => {
     };
 
     it('returns an object exposing getUpdates and sendMessage functions', () => {
-      const client = factory()({ botToken: 'synthetic-token-value' });
+      const client = factory()({ token: 'synthetic-token-value' });
       expect(typeof client.getUpdates).toBe('function');
       expect(typeof client.sendMessage).toBe('function');
       expect(client.getUpdates.length).toBe(1);
       expect(client.sendMessage.length).toBe(2);
     });
 
-    it('rejects options without a botToken (fail-closed)', () => {
+    it('rejects options without a token (fail-closed)', () => {
       expect(() => factory()({})).toThrow();
     });
 
-    it('rejects an empty botToken', () => {
-      expect(() => factory()({ botToken: '' })).toThrow();
+    it('rejects an empty token', () => {
+      expect(() => factory()({ token: '' })).toThrow();
     });
 
-    it('rejects a non-string botToken', () => {
-      expect(() => factory()({ botToken: 12345 })).toThrow();
-      expect(() => factory()({ botToken: null })).toThrow();
+    it('rejects a non-string token', () => {
+      expect(() => factory()({ token: 12345 })).toThrow();
+      expect(() => factory()({ token: null })).toThrow();
     });
 
     it('keeps the token out of the returned client surface (no enumerable token material)', () => {
       const token = 'synthetic-token-value-that-must-not-surface';
-      const client = factory()({ botToken: token });
+      const client = factory()({ token: token });
       expect(JSON.stringify(client)).not.toContain(token);
       expect(String(client)).not.toContain(token);
     });

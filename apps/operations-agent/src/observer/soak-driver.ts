@@ -24,7 +24,7 @@
  */
 
 import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import type { HealthAssessment } from '@cloudit/operations-agent-contracts';
+import type { Finding, HealthAssessment, HealthStatus } from '@cloudit/operations-agent-contracts';
 import type { DigestEntry } from '../alerts';
 import { DEFAULT_SOURCE_KEYS } from '../supervisor';
 import type { SupervisorRunResult } from '../supervisor';
@@ -146,6 +146,35 @@ interface ProjectionRecordLike {
   sourceKey?: unknown;
   status?: unknown;
   safeSummary?: unknown;
+  observedAt?: unknown;
+  counts?: unknown;
+}
+
+/**
+ * Read-only status view for the Telegram command evidence adapter (chat
+ * phase). Derived entirely from the driver's own tick state — no extra
+ * reads, no network. `overall` is 'NO_DATA' until the first accepted
+ * assessment; incident fields reflect the latest projection's incidents
+ * evidence row (the operations DB incidents table is a current-state table,
+ * so its sample count is the open-incident count; no row means unevidenced,
+ * never "zero incidents").
+ */
+export interface ObserverStatusSnapshot {
+  overall: string;
+  sourcesTotal: number;
+  sourcesRed: number;
+  sourcesAmber: number;
+  openIncidents: number;
+  incidentsEvident: boolean;
+  incidentsSeverity: string;
+  incidentsObservedAt: string;
+  generatedAt: string;
+}
+
+interface IncidentsEvidenceState {
+  samples: number;
+  severity: string;
+  observedAt: string;
 }
 
 /** Extracts record-like entries from an (already validated) projection. */
@@ -176,6 +205,10 @@ export class SoakDriver implements OnModuleInit, OnModuleDestroy {
   private lastDigestUtcDay: string | null = null;
   private blindProjection: unknown = null;
   private readonly digestState = new Map<string, DigestStateEntry>();
+  private lastVerdict: HealthStatus | null = null;
+  private lastTickAtMs: number | null = null;
+  private lastFindings: Finding[] = [];
+  private incidentsEvidence: IncidentsEvidenceState | null = null;
 
   constructor(options: SoakDriverOptions) {
     if (!options || typeof options !== 'object') {
@@ -258,6 +291,32 @@ export class SoakDriver implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Read-only view of the last tick's state for the Telegram evidence
+   * adapter. Purely in-memory; safe to call anytime, including before the
+   * first tick (everything degrades to NO_DATA / unevidenced).
+   */
+  getSnapshot(): ObserverStatusSnapshot {
+    const red = [...this.digestState.values()].filter((e) => e.category === 'RED').length;
+    const amber = [...this.digestState.values()].filter((e) => e.category === 'AMBER').length;
+    return {
+      overall: this.lastVerdict ?? 'NO_DATA',
+      sourcesTotal: DEFAULT_SOURCE_KEYS.length,
+      sourcesRed: red,
+      sourcesAmber: amber,
+      openIncidents: this.incidentsEvidence?.samples ?? 0,
+      incidentsEvident: (this.incidentsEvidence?.samples ?? 0) > 0,
+      incidentsSeverity: this.incidentsEvidence?.severity ?? 'UNKNOWN',
+      incidentsObservedAt: this.incidentsEvidence?.observedAt ?? '',
+      generatedAt: this.lastTickAtMs !== null ? new Date(this.lastTickAtMs).toISOString() : '',
+    };
+  }
+
+  /** Findings from the last accepted assessment (identifiers/summaries only). */
+  getFindings(): readonly Finding[] {
+    return this.lastFindings;
+  }
+
   private async runTick(): Promise<TickOutcome> {
     try {
       return await this.observe();
@@ -309,6 +368,9 @@ export class SoakDriver implements OnModuleInit, OnModuleDestroy {
     }
 
     this.updateDigestState(projection, nowIso);
+    this.lastVerdict = result.assessment.assessment;
+    this.lastTickAtMs = nowMs;
+    this.lastFindings = result.findings;
     await this.alerts.handle(this.environmentKey, result.assessment);
     const red = result.assessment.assessment === 'RED';
 
@@ -335,11 +397,26 @@ export class SoakDriver implements OnModuleInit, OnModuleDestroy {
   }
 
   private updateDigestState(projection: unknown, nowIso: string): void {
+    this.incidentsEvidence = null;
     for (const record of projectionRecordsOf(projection)) {
       const sourceKey = record.sourceKey;
       if (typeof sourceKey !== 'string' || sourceKey.length === 0) continue;
       const category = RECORD_STATUS_TO_CATEGORY[record.status as string];
       if (!category) continue;
+      if (sourceKey === 'incidents') {
+        const counts =
+          typeof record.counts === 'object' && record.counts !== null
+            ? (record.counts as { samples?: unknown }).samples
+            : undefined;
+        this.incidentsEvidence = {
+          samples: typeof counts === 'number' && Number.isFinite(counts) ? counts : 0,
+          severity: category,
+          observedAt:
+            typeof record.observedAt === 'string' && record.observedAt.length > 0
+              ? record.observedAt
+              : nowIso,
+        };
+      }
       const rawSummary = typeof record.safeSummary === 'string' ? record.safeSummary : '';
       const summary =
         rawSummary.length <= DIGEST_ENTRY_SUMMARY_MAX_CHARS

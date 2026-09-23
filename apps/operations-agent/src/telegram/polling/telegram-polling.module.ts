@@ -32,9 +32,10 @@ export interface TelegramPollingModuleOptions {
   /**
    * Modules whose exports are visible inside this module, e.g. the webhook
    * module (exports TelegramWebhookService) and the bot-api module
-   * (provides TELEGRAM_BOT_API_CLIENT).
+   * (provides TELEGRAM_BOT_API_CLIENT). Accepts dynamic modules so a
+   * registered webhook/commands composition can be shared by reference.
    */
-  imports?: Type<unknown>[];
+  imports?: Array<Type<unknown> | DynamicModule>;
   /** Optional observability port; receives safe reason codes only. */
   onError?: TelegramPollingOptions['onError'];
 }

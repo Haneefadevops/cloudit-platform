@@ -1,4 +1,4 @@
-import { Module, Provider } from '@nestjs/common';
+import { DynamicModule, Module, Provider, Type } from '@nestjs/common';
 import { InMemoryReadOnlyEvidence } from './in-memory-evidence';
 import { TELEGRAM_COMMAND_HANDLER, TELEGRAM_EVIDENCE_PORT } from './tokens';
 import type { ReadOnlyEvidencePort } from './evidence-views';
@@ -20,6 +20,19 @@ const commandHandler: Provider = {
   inject: [TELEGRAM_EVIDENCE_PORT],
 };
 
+export interface TelegramCommandsModuleOptions {
+  /**
+   * Evidence-port override (coordinator integration: the real observer-backed
+   * adapter). When omitted the synthetic in-memory fixture is used.
+   */
+  evidence?: Provider;
+  /**
+   * Modules whose exports must be visible to the evidence provider's
+   * injections (e.g. AgentConfigModule for AgentConfigService).
+   */
+  imports?: Array<Type<unknown> | DynamicModule>;
+}
+
 /**
  * Read-only Telegram command module. Exports TELEGRAM_COMMAND_HANDLER bound
  * to {@link TelegramCommandService}; the evidence port is injectable via
@@ -29,4 +42,13 @@ const commandHandler: Provider = {
   providers: [defaultEvidencePort, commandHandler],
   exports: [TELEGRAM_COMMAND_HANDLER],
 })
-export class TelegramCommandsModule {}
+export class TelegramCommandsModule {
+  static register(options: TelegramCommandsModuleOptions = {}): DynamicModule {
+    return {
+      module: TelegramCommandsModule,
+      imports: options.imports ?? [],
+      providers: [options.evidence ?? defaultEvidencePort, commandHandler],
+      exports: [TELEGRAM_COMMAND_HANDLER],
+    };
+  }
+}

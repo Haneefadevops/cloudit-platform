@@ -12,5 +12,6 @@ export {
   SoakDriverOptions,
   TickOutcome,
   ObserverAuditEvent,
+  ObserverStatusSnapshot,
   SoakDriver,
 } from './soak-driver';

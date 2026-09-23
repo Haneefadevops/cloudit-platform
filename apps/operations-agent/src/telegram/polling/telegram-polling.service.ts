@@ -40,6 +40,9 @@ const DEFAULT_INTERVAL_MS = 10_000;
 /** Upper bound on updates processed per cycle. */
 const DEFAULT_MAX_UPDATES_PER_CYCLE = 100;
 
+/** Telegram sendMessage hard limit; replies are sliced defensively. */
+const REPLY_TEXT_MAX_CHARS = 4096;
+
 /** Safe, bounded observability codes; never carry raw errors or tokens. */
 export type TelegramPollingErrorCode =
   | 'GET_UPDATES_FAILED'
@@ -257,7 +260,10 @@ export class TelegramPollingService implements OnModuleInit, OnModuleDestroy {
         const chatId = extractChatId(update);
         if (chatId !== undefined) {
           try {
-            await this.botApi.sendMessage(chatId, outcome.reply.text);
+            // Defense in depth under the CommandResponse 4000-char contract:
+            // never hand an unbounded reply downstream (the bot-api client
+            // truncates too, but the poller must be safe with any client).
+            await this.botApi.sendMessage(chatId, outcome.reply.text.slice(0, REPLY_TEXT_MAX_CHARS));
             repliesSent += 1;
           } catch {
             // The command was handled (audited); the outbound reply is

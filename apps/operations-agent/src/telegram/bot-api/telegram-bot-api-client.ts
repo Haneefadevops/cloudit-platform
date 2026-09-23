@@ -118,7 +118,21 @@ function boundSendText(text: string): string {
 }
 
 class TelegramBotApiClientImpl implements TelegramBotApiClient {
-  constructor(private readonly config: ResolvedTelegramBotApiClientOptions) {}
+  /**
+   * Resolved options (including the token) are held non-enumerably: the
+   * client object must be safe to log or JSON-serialize without leaking
+   * secret material (coordinator contract-surface eval).
+   */
+  private declare readonly config: ResolvedTelegramBotApiClientOptions;
+
+  constructor(config: ResolvedTelegramBotApiClientOptions) {
+    Object.defineProperty(this, 'config', {
+      value: config,
+      enumerable: false,
+      writable: false,
+      configurable: true,
+    });
+  }
 
   async getUpdates(offset: number): Promise<unknown[]> {
     if (!Number.isInteger(offset) || offset < 0) {

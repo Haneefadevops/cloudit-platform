@@ -44,7 +44,16 @@ import { DURABLE_OUTBOX, DurableOutbox } from './platform/outbox/durable-outbox'
 import { SupervisorModule } from './supervisor/supervisor.module';
 import { SupervisorService } from './supervisor';
 import { SyncModule } from './sync/sync.module';
-import { TelegramCommandsModule } from './telegram/commands/telegram-commands.module';
+import { TelegramBotApiModule } from './telegram/bot-api/telegram-bot-api.module';
+import {
+  TELEGRAM_EVIDENCE_PORT,
+  TelegramCommandsModule,
+} from './telegram/commands';
+import { ObserverTelegramEvidence, observerStatusRegistry } from './telegram/evidence';
+import {
+  TELEGRAM_BOT_API_CLIENT,
+  TelegramPollingModule,
+} from './telegram/polling/telegram-polling.module';
 import { TelegramWebhookModule } from './telegram/webhook/telegram-webhook.module';
 
 const AI_ENVIRONMENT_KEY_VALUE = 'default';
@@ -75,6 +84,31 @@ const failClosedAlertSender = {
 
 /** Adapted audit port shared by the AI adapter, the alert engine and the remediation engine. */
 const APP_AUDIT_PORT = 'APP_AUDIT_PORT';
+
+/**
+ * Chat-phase evidence binding (coordinator integration): overrides the
+ * commands module's synthetic in-memory fixture with the real observer-backed
+ * adapter. The soak driver itself is published through the observer status
+ * registry by the SoakDriver provider factory below (root scope), because
+ * the driver depends on the whole supervisor/alert graph and cannot be
+ * imported into the commands module's DI scope.
+ */
+const telegramEvidenceProvider: Provider = {
+  provide: TELEGRAM_EVIDENCE_PORT,
+  useFactory: (budget: BudgetService | undefined, config: AgentConfigService) =>
+    new ObserverTelegramEvidence({ soak: () => observerStatusRegistry.get(), budget, config }),
+  inject: [{ token: BudgetService, optional: true }, AgentConfigService],
+};
+
+/**
+ * One shared commands-module registration so the webhook pipeline (nested in
+ * the polling module's imports) and nothing else consume the SAME handler
+ * instance, built on the real evidence binding.
+ */
+const telegramCommandsIntegration = TelegramCommandsModule.register({
+  evidence: telegramEvidenceProvider,
+  imports: [AgentConfigModule],
+});
 
 /**
  * AI runtime bindings (Phase E). Optional-injection pattern matches the
@@ -300,10 +334,15 @@ const aiProviders: Provider[] = [
       // server is explicitly configured with the operations_reader password;
       // without it the observer stays inert (fail closed) and nothing ever
       // touches the operations DB. The SELECT-only role grants are applied by
-      // the operations migrations (0012/0013).
+      // the operations migrations (0012/0013). Either way the constructed
+      // driver (or null) is published to the observer status registry so the
+      // Telegram evidence adapter binds to it without DI scope gymnastics.
       const observer = config.get().observer;
-      if (!observer?.dbPassword) return null;
-      return new SoakDriver({
+      if (!observer?.dbPassword) {
+        observerStatusRegistry.bind(null);
+        return null;
+      }
+      const driver = new SoakDriver({
         evidence: createEvidenceSource({
           host: observer.dbHost,
           port: observer.dbPort,
@@ -317,6 +356,8 @@ const aiProviders: Provider[] = [
         intervalMs: observer.intervalMs,
         digestHourUtc: observer.digestHourUtc,
       });
+      observerStatusRegistry.bind(driver);
+      return driver;
     },
     inject: [
       AgentConfigService,
@@ -348,11 +389,23 @@ const aiProviders: Provider[] = [
  * catalogue) are intentionally unbound in Phase C: scans fail closed until
  * read-only adapters are added in a later gated phase.
  *
- * The Telegram composition (Phase D) is inert by default: the webhook service
- * is constructed but rejects every request while the kill switch is off, and
- * nothing opens a network listener or contacts Telegram. The evidence port
- * defaults to the synthetic in-memory implementation until a real read-only
- * adapter is bound under a later gate.
+ * The Telegram composition (Phase D) is inert by default: the webhook
+ * pipeline rejects every request while the kill switch is off, and nothing
+ * opens a network listener or contacts Telegram. The command handler is
+ * built on the REAL observer-backed evidence adapter: status, incidents and
+ * findings render the soak driver's live tick state (NO_DATA / UNEVIDENCED
+ * when the observer is unconfigured — never synthetic GREEN), budget renders
+ * the platform meter with the enforced limits, and sync renders honestly
+ * UNBOUND until the sync sources are bound under a later gate.
+ *
+ * The chat composition (chat phase) polls Telegram's Bot API over outbound
+ * HTTPS only: TELEGRAM_BOT_API_CLIENT is a real client when the server env
+ * carries a bot token, otherwise a fail-closed stand-in whose every call
+ * rejects; the poller itself is inert while the commands kill switch is off
+ * or no token is configured (cycles make no network calls), reuses the
+ * webhook pipeline unchanged for validation/dedup/authorization, and never
+ * opens an inbound port. Processing is at-least-once; the outbound reply is
+ * best-effort so a transport blip can never wedge the loop.
  *
  * The AI composition (Phase E) is likewise inert by default: the adapter is
  * constructed with the platform budget meter and the 'ai' kill switch, but
@@ -392,8 +445,12 @@ const aiProviders: Provider[] = [
     PlatformModule,
     SupervisorModule.register(),
     SyncModule,
-    TelegramCommandsModule,
-    TelegramWebhookModule.register({ imports: [TelegramCommandsModule] }),
+    TelegramPollingModule.register({
+      imports: [
+        TelegramWebhookModule.register({ imports: [telegramCommandsIntegration] }),
+        TelegramBotApiModule.register(),
+      ],
+    }),
   ],
   providers: aiProviders,
   exports: [AiAdapterService, AiMaintenanceReadModel, AlertEngine, RemediationEngine, SoakDriver],

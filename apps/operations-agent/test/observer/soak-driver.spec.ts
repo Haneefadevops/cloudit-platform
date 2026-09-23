@@ -598,4 +598,81 @@ describe('SoakDriver', () => {
     expect(h.evidence.readCalls).toEqual([['cavetta', 'production']]);
     expect(h.alerts.digests[0].period).toBe('daily');
   });
+
+  it('exposes a read-only status snapshot for the Telegram evidence adapter', async () => {
+    const h = makeHarness();
+    // Before the first tick everything degrades to NO_DATA / unevidenced.
+    expect(h.driver.getSnapshot()).toEqual({
+      overall: 'NO_DATA',
+      sourcesTotal: DEFAULT_SOURCE_KEYS.length,
+      sourcesRed: 0,
+      sourcesAmber: 0,
+      openIncidents: 0,
+      incidentsEvident: false,
+      incidentsSeverity: 'UNKNOWN',
+      incidentsObservedAt: '',
+      generatedAt: '',
+    });
+    expect(h.driver.getFindings()).toEqual([]);
+
+    h.supervisor.result = okRun('RED');
+    h.evidence.projection = projectionWith([
+      record('public-website', 'FAILED'),
+      record('database', 'DEGRADED'),
+      record('incidents', 'FAILED', { counts: { samples: 3 } }),
+    ]);
+
+    expect(await h.driver.tick()).toEqual({ status: 'ASSESSED', red: true });
+
+    const snapshot = h.driver.getSnapshot();
+    expect(snapshot.overall).toBe('RED');
+    expect(snapshot.sourcesTotal).toBe(DEFAULT_SOURCE_KEYS.length);
+    expect(snapshot.sourcesRed).toBe(2);
+    expect(snapshot.sourcesAmber).toBe(1);
+    expect(snapshot.openIncidents).toBe(3);
+    expect(snapshot.incidentsEvident).toBe(true);
+    expect(snapshot.incidentsSeverity).toBe('RED');
+    expect(snapshot.incidentsObservedAt).toBe('2025-01-15T00:00:00.000Z');
+    expect(snapshot.generatedAt).toBe(iso(T0));
+
+    // A tick whose projection carries no incidents row resets the evidence
+    // to unevidenced (never a stale "zero incidents").
+    h.evidence.projection = projectionWith([record('public-website', 'OK')]);
+    await h.driver.tick();
+    const after = h.driver.getSnapshot();
+    expect(after.overall).toBe('RED'); // FakeSupervisor still returns RED
+    expect(after.openIncidents).toBe(0);
+    expect(after.incidentsEvident).toBe(false);
+  });
+
+  it('keeps findings from the last accepted assessment only', async () => {
+    const h = makeHarness();
+    const withFinding: SupervisorRunResult = {
+      ok: true,
+      assessment: verdict('AMBER'),
+      findings: [
+        {
+          findingId: 'FND-1',
+          environmentKey: 'production',
+          issueCode: 'SOURCE_STALE',
+          severity: 'warning',
+          state: 'open',
+          summary: 'synthetic bounded summary',
+          evidenceKeys: [],
+          firstSeenAt: iso(T0),
+          lastSeenAt: iso(T0),
+        },
+      ],
+      recommendations: [],
+      auditEvent: SUPERVISOR_AUDIT_EVENT,
+    };
+    h.supervisor.result = withFinding;
+    await h.driver.tick();
+    expect(h.driver.getFindings().map((finding) => finding.findingId)).toEqual(['FND-1']);
+
+    // A rejected assessment never replaces the published state.
+    h.supervisor.result = rejectedRun(['bad projection']);
+    await h.driver.tick();
+    expect(h.driver.getFindings().map((finding) => finding.findingId)).toEqual(['FND-1']);
+  });
 });

@@ -10,6 +10,9 @@ import { SupervisorModule, AUDIT_SINK } from '../src/supervisor';
 import { SYNC_AUDIT_SINK, SyncService } from '../src/sync';
 import { TelegramCommandService } from '../src/telegram/commands';
 import { TELEGRAM_COMMAND_HANDLER, TelegramWebhookService } from '../src/telegram/webhook';
+import type { TelegramBotApiClient } from '../src/telegram/telegram.types';
+import { TelegramPollingService } from '../src/telegram/polling';
+import { TELEGRAM_BOT_API_CLIENT } from '../src/telegram/polling/telegram-polling.module';
 
 /**
  * Coordinator wiring spec: proves the application composes and that every
@@ -57,6 +60,43 @@ describe('AppModule composition (coordinator wiring)', () => {
     expect(outcome.statusCode).toBe(401);
 
     await moduleRef.close();
+  });
+
+  it('composes the chat phase: poller wired, bot api fail-closed, evidence is the real observer-backed adapter', async () => {
+    const savedPassword = process.env.OPERATIONS_DB_PASSWORD;
+    delete process.env.OPERATIONS_DB_PASSWORD;
+    try {
+      const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+
+      // The outbound poller is composed and inert by default: no token, no
+      // interval network traffic (its cycle gates on the kill switch/token).
+      const polling = moduleRef.get(TelegramPollingService);
+      expect(polling).toBeInstanceOf(TelegramPollingService);
+
+      // Without a configured token the Bot API port is the fail-closed
+      // stand-in: every call rejects, so nothing can ever reach Telegram.
+      const botApi = moduleRef.get<TelegramBotApiClient>(TELEGRAM_BOT_API_CLIENT);
+      await expect(botApi.getUpdates(0)).rejects.toThrow(/fail closed/);
+      await expect(botApi.sendMessage(1, 'synthetic')).rejects.toThrow(/fail closed/);
+
+      // The command handler renders the REAL evidence binding: with the
+      // observer unconfigured the status is honestly NO_DATA, not the
+      // synthetic fixture's GREEN.
+      const handler = moduleRef.get<TelegramCommandService>(TELEGRAM_COMMAND_HANDLER);
+      const reply = await handler.execute({
+        command: 'status',
+        args: [],
+        userId: 1,
+        chatId: 1,
+        correlationId: 'wiring-spec-chat',
+      });
+      expect(reply.text).toBe('Status: NO_DATA | sources 0 | open incidents 0');
+
+      await moduleRef.close();
+    } finally {
+      if (savedPassword === undefined) delete process.env.OPERATIONS_DB_PASSWORD;
+      else process.env.OPERATIONS_DB_PASSWORD = savedPassword;
+    }
   });
 
   it('composes the AI adapter and read model (inert by default) and records AI audit events into the shared store', async () => {

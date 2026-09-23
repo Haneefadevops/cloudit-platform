@@ -35,9 +35,11 @@ export interface TelegramWebhookModuleOptions {
   commandHandler?: TelegramCommandHandler;
   /**
    * Modules whose exports are visible inside this module, e.g. the commands
-   * module that provides TELEGRAM_COMMAND_HANDLER.
+   * module that provides TELEGRAM_COMMAND_HANDLER. Accepts dynamic modules
+   * so the coordinator can share one registered commands composition between
+   * the webhook pipeline and the polling composition.
    */
-  imports?: Type<unknown>[];
+  imports?: Array<Type<unknown> | DynamicModule>;
   /** Explicit audit-port binding; overrides the optional AuditService lookup. */
   audit?: TelegramWebhookOptions['audit'];
 }
