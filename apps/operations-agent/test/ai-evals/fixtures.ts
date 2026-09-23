@@ -321,6 +321,7 @@ export function makeAgentConfigStub() {
       maxBodyBytes: 65_536,
       maxCommandArgs: 8,
       rateLimitPerMinute: 20,
+      pollIntervalMs: 10_000,
     },
     ai: { ...SYNTHETIC_AI_CONFIG },
   };

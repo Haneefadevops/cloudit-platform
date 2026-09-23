@@ -35,6 +35,12 @@ export interface AgentConfig {
     maxBodyBytes: number;
     maxCommandArgs: number;
     rateLimitPerMinute: number;
+    /**
+     * Chat phase: outbound getUpdates poll interval (ms). The agent polls
+     * Telegram - no inbound port is ever opened. Default 10s, floor 1s.
+     * Polling only runs while TELEGRAM_COMMANDS_ENABLED is true.
+     */
+    pollIntervalMs: number;
   };
   /**
    * AI adapter settings (Phase E). Model aliases are configuration, not
@@ -98,6 +104,7 @@ const DEFAULTS: AgentConfig = {
     maxBodyBytes: 65_536,
     maxCommandArgs: 8,
     rateLimitPerMinute: 20,
+    pollIntervalMs: 10_000,
   },
   ai: {
     routineModel: 'gpt-5.6-luna',
@@ -222,6 +229,11 @@ export class AgentConfigService {
           'TELEGRAM_RATE_LIMIT_PER_MINUTE',
           DEFAULTS.telegram.rateLimitPerMinute,
         ),
+        pollIntervalMs: readPositiveNumber(
+          env,
+          'TELEGRAM_POLL_INTERVAL_MS',
+          DEFAULTS.telegram.pollIntervalMs,
+        ),
       },
       ai: {
         routineModel: env.AI_ROUTINE_MODEL?.trim() || DEFAULTS.ai.routineModel,
@@ -278,6 +290,9 @@ export class AgentConfigService {
           'TELEGRAM_COMMANDS_ENABLED requires non-empty TELEGRAM_ALLOWED_USER_IDS and TELEGRAM_ALLOWED_CHAT_IDS',
         );
       }
+    }
+    if (this.config.telegram!.pollIntervalMs < 1_000) {
+      throw new Error('TELEGRAM_POLL_INTERVAL_MS must be at least 1_000 (one second)');
     }
     if (this.config.ai.maxEscalationsPerDay > 10) {
       throw new Error('AI_MAX_ESCALATIONS_PER_DAY must not exceed 10');

@@ -46,3 +46,30 @@ export interface WebhookOutcome {
   /** Reply to send via sendMessage, when a reply is safe and warranted. */
   reply?: CommandResponse;
 }
+
+/**
+ * Chat phase (outbound polling): minimal Telegram Bot API port. The agent
+ * polls getUpdates over outbound HTTPS - no inbound port or reverse-proxy
+ * route is ever opened, keeping the watchdog headless.
+ *
+ * Coordinator-owned contract: Worker B (bot-api owner) implements it;
+ * Worker A (polling owner) consumes it; Worker C's blind evals probe both
+ * through this seam. Implementations MUST:
+ *  - never place the bot token in thrown errors, logs or return values
+ *    (it appears only inside the request URL);
+ *  - bound every response (updates array length, message text length);
+ *  - return raw update JSON as `unknown` - all validation happens in the
+ *    webhook pipeline (TelegramWebhookService.handle), which the poller
+ *    reuses unchanged.
+ */
+export interface TelegramBotApiClient {
+  /**
+   * Fetch pending updates at/after `offset` (Telegram getUpdates,
+   * timeout=0 short poll). Returns raw update objects; empty array when
+   * there is nothing new. Rejects on transport/HTTP errors - the caller
+   * (poller) treats a rejection as "try again next cycle", never fatal.
+   */
+  getUpdates(offset: number): Promise<unknown[]>;
+  /** Send one sanitized, bounded reply text to a chat. Rejects on failure. */
+  sendMessage(chatId: number, text: string): Promise<void>;
+}

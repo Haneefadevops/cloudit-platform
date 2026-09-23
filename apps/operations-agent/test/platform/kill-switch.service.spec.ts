@@ -24,6 +24,7 @@ const BASE: AgentConfig = {
     maxBodyBytes: 65_536,
     maxCommandArgs: 8,
     rateLimitPerMinute: 20,
+    pollIntervalMs: 10_000,
   },
   ai: {
     routineModel: 'gpt-5.6-luna',
