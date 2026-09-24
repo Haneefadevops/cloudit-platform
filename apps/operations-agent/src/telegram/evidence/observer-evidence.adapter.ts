@@ -29,6 +29,7 @@ import type {
   ReadOnlyEvidencePort,
   SafeFindingView,
   SafeIncidentView,
+  SourceStatusView,
   StatusSnapshotView,
   SyncSummaryView,
 } from '../commands/evidence-views';
@@ -94,6 +95,15 @@ export class ObserverTelegramEvidence implements ReadOnlyEvidencePort {
           ? snapshot.generatedAt
           : new Date(this.now()).toISOString(),
     };
+  }
+
+  listSources(): SourceStatusView[] {
+    const soak = this.soak();
+    if (!soak) return [];
+    return soak.getSnapshot().sources.map((entry) => ({
+      sourceKey: entry.sourceKey,
+      category: entry.category,
+    }));
   }
 
   listIncidents(): SafeIncidentView[] {

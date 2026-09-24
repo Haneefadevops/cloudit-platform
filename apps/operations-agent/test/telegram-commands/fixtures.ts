@@ -57,6 +57,7 @@ export function createFixtureEvidencePort(): ReadOnlyEvidencePort {
       openIncidents: 12,
       generatedAt: '2025-09-25T12:00:00.000Z',
     }),
+    listSources: () => [{ sourceKey: 'synthetic-source', category: 'AMBER' }],
     listIncidents: () => incidents.map((incident) => ({ ...incident })),
     getSyncSummary: () => ({
       state: 'SYNCED',

@@ -23,6 +23,10 @@ function stubEvidence(overrides: Partial<ReadOnlyEvidencePort> = {}): ReadOnlyEv
       },
     ],
     getSyncSummary: () => ({ state: 'UNBOUND', driftCount: 0, staleCount: 0, scannedAt: 'never' }),
+    listSources: () => [
+      { sourceKey: 'database', category: 'GREEN' },
+      { sourceKey: 'maintenance-report', category: 'AMBER' },
+    ],
     getBudgetSummary: () => ({
       dayCallsUsed: 2,
       dayCallsMax: 10,
@@ -66,6 +70,8 @@ describe('chatResponderBinding (coordinator integration)', () => {
     expect(input.context.incidentLines).toEqual([
       '[UNKNOWN] incidents INCIDENTS-UNEVIDENCED (UNEVIDENCED)',
     ]);
+    expect(input.context.sourceLines).toEqual(['database: GREEN', 'maintenance-report: AMBER']);
+    expect(input.context.evidenceAsOf).toBe('2026-09-23T12:00:00.000Z');
     expect(String(input.context.budgetLine)).toContain('calls 2/10 today');
   });
 

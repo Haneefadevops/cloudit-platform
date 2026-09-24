@@ -67,6 +67,7 @@ describe('TelegramCommandService', () => {
           openIncidents: 0,
           generatedAt: '2025-09-25T12:00:00.000Z',
         }),
+        listSources: () => [],
         listIncidents: () => [],
         getSyncSummary: () => ({
           state: 'SYNCED',

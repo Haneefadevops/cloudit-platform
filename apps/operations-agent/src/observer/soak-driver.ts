@@ -177,6 +177,12 @@ export interface ObserverStatusSnapshot {
   incidentsSeverity: string;
   incidentsObservedAt: string;
   generatedAt: string;
+  /**
+   * Full source board (every known source key with its category, UNKNOWN for
+   * sources without an observation yet). Categories only — never summaries —
+   * so the chat grounding can answer per-source questions honestly.
+   */
+  sources: { sourceKey: string; category: string }[];
 }
 
 interface IncidentsEvidenceState {
@@ -319,6 +325,10 @@ export class SoakDriver implements OnModuleInit, OnModuleDestroy {
       incidentsSeverity: this.incidentsEvidence?.severity ?? 'UNKNOWN',
       incidentsObservedAt: this.incidentsEvidence?.observedAt ?? '',
       generatedAt: this.lastTickAtMs !== null ? new Date(this.lastTickAtMs).toISOString() : '',
+      sources: this.digestEntries().map((entry) => ({
+        sourceKey: entry.subjectKey,
+        category: entry.category,
+      })),
     };
   }
 

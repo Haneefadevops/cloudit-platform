@@ -178,6 +178,7 @@ export function buildWebhookOptions(overrides: WebhookOptionOverrides = {}) {
  */
 export interface StubEvidencePort {
   getStatus(): any;
+  listSources(): any[];
   listIncidents(): any[];
   getSyncSummary(): any;
   getBudgetSummary(): any;
@@ -205,6 +206,7 @@ export function buildStubEvidencePort(overrides: EvidencePortOverrides = {}): St
       openIncidents: 2,
       generatedAt: '2026-09-25T10:00:00.000Z',
     }),
+    listSources: () => [{ sourceKey: 'synthetic-source', category: 'AMBER' }],
     listIncidents: () => [
       {
         incidentKey: `incident-synthetic-1-${tag}`,

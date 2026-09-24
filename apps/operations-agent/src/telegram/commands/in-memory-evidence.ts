@@ -3,6 +3,7 @@ import type {
   ReadOnlyEvidencePort,
   SafeFindingView,
   SafeIncidentView,
+  SourceStatusView,
   StatusSnapshotView,
   SyncSummaryView,
 } from './evidence-views';
@@ -69,8 +70,18 @@ export class InMemoryReadOnlyEvidence implements ReadOnlyEvidencePort {
     ],
   ]);
 
+  private readonly sources: SourceStatusView[] = [
+    { sourceKey: 'synthetic-n8n-workflows', category: 'AMBER' },
+    { sourceKey: 'synthetic-public-website', category: 'GREEN' },
+    { sourceKey: 'synthetic-database', category: 'GREEN' },
+  ];
+
   getStatus(): StatusSnapshotView {
     return { ...this.status };
+  }
+
+  listSources(): SourceStatusView[] {
+    return this.sources.map((source) => ({ ...source }));
   }
 
   listIncidents(): SafeIncidentView[] {

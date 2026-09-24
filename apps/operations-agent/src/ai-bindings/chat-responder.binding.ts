@@ -62,6 +62,10 @@ export function chatResponderBinding(
             `[${incident.severity}] ${incident.serviceKey} ${incident.incidentKey} (${incident.state})`,
         ),
         findingLines: [OPEN_FINDINGS_HINT],
+        sourceLines: evidence.listSources().map(
+          (source) => `${source.sourceKey}: ${source.category}`,
+        ),
+        evidenceAsOf: status.generatedAt,
         budgetLine: `calls ${budget.dayCallsUsed}/${budget.dayCallsMax} today; month EUR ${budget.monthEurUsed} of ${budget.monthEurCeiling.toFixed(2)}`,
       };
       const result = await chat.ask({

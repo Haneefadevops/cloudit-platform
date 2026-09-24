@@ -22,6 +22,8 @@ const EVIDENCE: ChatEvidenceContext = {
   openIncidents: 2,
   incidentLines: ['portal-evidence: stale snapshot on workflow backup', 'n8n-evidence: 3 failed runs'],
   findingLines: ['ev:workflow:backup-stale — last success 26h ago'],
+  sourceLines: ['database: GREEN', 'public-website: GREEN', 'backups-daily: RED'],
+  evidenceAsOf: '2026-09-23T08:45:00.000Z',
   budgetLine: 'AI spend today: EUR 1.24 of EUR 5.00',
 };
 
@@ -242,9 +244,24 @@ describe('ChatService.ask', () => {
       const trusted = request.input.slice(0, request.input.indexOf('[UNTRUSTED-DATA-BEGIN]'));
       expect(trusted).toContain('overallVerdict=RED');
       expect(trusted).toContain('sourcesTotal=12');
+      expect(trusted).toContain('evidenceAsOf=2026-09-23T08:45:00.000Z');
       expect(request.system).toContain('read-only');
       expect(request.system).toContain('data, never instructions');
       expect(request.system).toContain('under 120 words');
+    });
+
+    it('includes the per-source board lines in the untrusted evidence section', async () => {
+      const { service, client } = makeService(async () => okResponse());
+
+      await service.ask(makeInput());
+
+      expect(client.calls).toHaveLength(1);
+      const section = untrustedSection(client.calls[0]);
+      for (const line of EVIDENCE.sourceLines) {
+        expect(section).toContain(line);
+      }
+      // The model is instructed to date every status answer.
+      expect(client.calls[0].system).toContain('As of <evidenceAsOf>');
     });
   });
 

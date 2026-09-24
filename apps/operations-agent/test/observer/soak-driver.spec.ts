@@ -647,7 +647,9 @@ describe('SoakDriver', () => {
 
   it('exposes a read-only status snapshot for the Telegram evidence adapter', async () => {
     const h = makeHarness();
-    // Before the first tick everything degrades to NO_DATA / unevidenced.
+    // Before the first tick everything degrades to NO_DATA / unevidenced,
+    // and the source board renders every known source as UNKNOWN (a missing
+    // row must be visible, not silently absent).
     expect(h.driver.getSnapshot()).toEqual({
       overall: 'NO_DATA',
       sourcesTotal: DEFAULT_SOURCE_KEYS.length,
@@ -658,6 +660,10 @@ describe('SoakDriver', () => {
       incidentsSeverity: 'UNKNOWN',
       incidentsObservedAt: '',
       generatedAt: '',
+      sources: DEFAULT_SOURCE_KEYS.map((sourceKey) => ({
+        sourceKey,
+        category: 'UNKNOWN',
+      })),
     });
     expect(h.driver.getFindings()).toEqual([]);
 
@@ -680,6 +686,13 @@ describe('SoakDriver', () => {
     expect(snapshot.incidentsSeverity).toBe('RED');
     expect(snapshot.incidentsObservedAt).toBe('2025-01-15T00:00:00.000Z');
     expect(snapshot.generatedAt).toBe(iso(T0));
+
+    // The source board carries per-source categories for the chat grounding.
+    const byKey = Object.fromEntries(snapshot.sources.map((s) => [s.sourceKey, s.category]));
+    expect(byKey['public-website']).toBe('RED');
+    expect(byKey['database']).toBe('AMBER');
+    expect(byKey['maintenance-report']).toBe('UNKNOWN');
+    expect(snapshot.sources).toHaveLength(DEFAULT_SOURCE_KEYS.length);
 
     // A tick whose projection carries no incidents row resets the evidence
     // to unevidenced (never a stale "zero incidents").

@@ -19,6 +19,12 @@ export interface StatusSnapshotView {
   generatedAt: string;
 }
 
+/** One source board row: the source key and its category only. */
+export interface SourceStatusView {
+  sourceKey: string;
+  category: string;
+}
+
 /** One open incident, identifiers and severity only — no summary bodies. */
 export interface SafeIncidentView {
   incidentKey: string;
@@ -59,6 +65,8 @@ export interface SafeFindingView {
  */
 export interface ReadOnlyEvidencePort {
   getStatus(): StatusSnapshotView;
+  /** Full source board (key + category each), UNKNOWN for unobserved sources. */
+  listSources(): SourceStatusView[];
   listIncidents(): SafeIncidentView[];
   getSyncSummary(): SyncSummaryView;
   getBudgetSummary(): BudgetSummaryView;

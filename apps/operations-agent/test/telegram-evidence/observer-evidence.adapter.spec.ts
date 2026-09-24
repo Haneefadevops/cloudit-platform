@@ -24,6 +24,7 @@ function snapshot(overrides: Partial<ObserverStatusSnapshot> = {}): ObserverStat
     incidentsSeverity: 'UNKNOWN',
     incidentsObservedAt: '',
     generatedAt: '2026-09-22T09:00:00.000Z',
+    sources: [],
     ...overrides,
   };
 }
