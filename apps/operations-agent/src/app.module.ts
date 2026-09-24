@@ -40,6 +40,14 @@ import {
   AI_NOW,
 } from './ai/tokens';
 import { RemediationEngine } from './remediation';
+import { ATTEMPT_STORE, AttemptStore, createPgAttemptStore } from './remediation/attempts';
+import {
+  READONLY_RECHECK_RUNBOOK_KEY,
+  REMEDIATION_EXECUTOR,
+  RemediationExecutor,
+  TierARemediationExecutor,
+} from './remediation/executor';
+import { RemediationTrigger } from './remediation/remediation-trigger';
 import { createEvidenceSource, SoakDriver } from './observer';
 import { PlatformModule } from './platform/platform.module';
 import { AuditService } from './platform/audit/audit.service';
@@ -192,6 +200,7 @@ const aiProviders: Provider[] = [
       let aiSequence = 0;
       let alertSequence = 0;
       let remSequence = 0;
+      let remAttSequence = 0;
       let obsSequence = 0;
       return {
         record: (event: unknown) => {
@@ -206,6 +215,7 @@ const aiProviders: Provider[] = [
             (produced.eventType === 'ai_assessment' ||
               produced.eventType === 'alert_dispatch' ||
               produced.eventType === 'remediation_proposal' ||
+              produced.eventType === 'remediation_attempt' ||
               produced.eventType === 'observer_read' ||
               produced.eventType === 'observer_internal');
           if (!known) {
@@ -218,7 +228,9 @@ const aiProviders: Provider[] = [
                 ? (alertSequence += 1)
                 : produced.eventType === 'remediation_proposal'
                   ? (remSequence += 1)
-                  : (obsSequence += 1);
+                  : produced.eventType === 'remediation_attempt'
+                    ? (remAttSequence += 1)
+                    : (obsSequence += 1);
           const prefix =
             produced.eventType === 'ai_assessment'
               ? 'evt-ai'
@@ -226,7 +238,9 @@ const aiProviders: Provider[] = [
                 ? 'evt-alerts'
                 : produced.eventType === 'remediation_proposal'
                   ? 'evt-rem'
-                  : 'evt-obs';
+                  : produced.eventType === 'remediation_attempt'
+                    ? 'evt-rem-att'
+                    : 'evt-obs';
           return audit.record({
             eventId: `${prefix}-${AI_ENVIRONMENT_KEY_VALUE}-${sequence}`,
             environmentKey: AI_ENVIRONMENT_KEY_VALUE,
@@ -507,6 +521,101 @@ const aiProviders: Provider[] = [
       new RemediationEngine({ audit: auditPort ?? undefined }),
     inject: [{ token: APP_AUDIT_PORT, optional: true }],
   },
+  {
+    provide: ATTEMPT_STORE,
+    useFactory: (config: AgentConfigService): AttemptStore | null => {
+      // Durable exactly-once attempt ledger (Phase H). Live only when the
+      // server carries the operations-reader credential; without it the
+      // repair composition stays inert (fail closed) and nothing touches
+      // the operations DB. The 0015 migration grants this role INSERT and
+      // UPDATE on the ledger only (never DELETE).
+      const observer = config.get().observer;
+      if (!observer?.dbPassword) return null;
+      return createPgAttemptStore({
+        host: observer.dbHost,
+        port: observer.dbPort,
+        database: observer.dbName,
+        user: observer.dbUser,
+        password: observer.dbPassword,
+      });
+    },
+    inject: [AgentConfigService],
+  },
+  {
+    provide: REMEDIATION_EXECUTOR,
+    useFactory: (
+      store: AttemptStore | null,
+      config: AgentConfigService,
+      killSwitches: KillSwitchService | undefined,
+      auditPort: { record(event: unknown): unknown } | null,
+    ) => {
+      // Tier A executor (Phase H): executes ONLY RB-READONLY-RECHECK-001 —
+      // one bounded read-only freshness recheck plus an independent
+      // verification read through the SELECT-only evidence port. Gated by
+      // the per-runbook flag (default false) and the 'auto-remediation'
+      // kill switch (default off); REPAIR_MASTER_ENABLED stays untouched.
+      const observer = config.get().observer;
+      if (!store || !observer?.dbPassword) return null;
+      return new TierARemediationExecutor({
+        attemptStore: store,
+        evidence: createEvidenceSource({
+          host: observer.dbHost,
+          port: observer.dbPort,
+          database: observer.dbName,
+          user: observer.dbUser,
+          password: observer.dbPassword,
+        }),
+        killSwitch: killSwitches ?? {
+          check: () => ({
+            allowed: false as const,
+            capability: 'auto-remediation' as const,
+            reason: 'AUTO_REMEDIATION_DISABLED' as const,
+            message: 'auto remediation disabled (kill switch service unavailable; fail closed)',
+          }),
+        },
+        runbookEnabled: (runbookKey: string) =>
+          runbookKey === READONLY_RECHECK_RUNBOOK_KEY &&
+          config.get().remediationRbReadonlyRecheckEnabled === true,
+        audit: auditPort ?? undefined,
+      });
+    },
+    inject: [
+      { token: ATTEMPT_STORE, optional: true },
+      AgentConfigService,
+      { token: KillSwitchService, optional: true },
+      { token: APP_AUDIT_PORT, optional: true },
+    ],
+  },
+  {
+    provide: RemediationTrigger,
+    useFactory: (
+      driver: SoakDriver | null,
+      executor: RemediationExecutor | null,
+      store: AttemptStore | null,
+      config: AgentConfigService,
+    ) =>
+      // Trigger glue: scans the soak driver's accepted findings on the
+      // observer cadence and requests executor runs for analytics sources
+      // reported UNKNOWN/stale. Pure read-and-request loop — the executor
+      // re-checks the whole policy contract on every call. Inert unless all
+      // three parts are live; boot recovery finalizes stale RUNNING attempts.
+      driver && executor && store
+        ? new RemediationTrigger({
+            driver,
+            executor,
+            attemptStore: store,
+            intervalMs: config.get().observer?.intervalMs ?? 900_000,
+            clientKey: 'cavetta',
+            environmentKey: 'production',
+          })
+        : null,
+    inject: [
+      SoakDriver,
+      { token: REMEDIATION_EXECUTOR, optional: true },
+      { token: ATTEMPT_STORE, optional: true },
+      AgentConfigService,
+    ],
+  },
 ];
 
 /**
@@ -556,6 +665,20 @@ const aiProviders: Provider[] = [
  * engine proposes Tier-A runbooks, replays dedup while a proposal is live,
  * and records one closed audit event per mutation into the shared store. It
  * touches no external system and no data beyond its in-memory proposal set.
+ *
+ * The Tier A execution composition (Phase H) is inert by default: without
+ * the operations DB credential no attempt store, executor or trigger exists.
+ * When configured, RB-READONLY-RECHECK-001 performs exactly one read-only
+ * freshness recheck plus an independent verification read per (target, UTC
+ * day) through the SELECT-only evidence port, durably recorded in the
+ * remediation_attempts ledger (0015 migration; unique idempotency key,
+ * append-only, no DELETE). Execution additionally requires the per-runbook
+ * flag REMEDIATION_RB_READONLY_RECHECK_ENABLED (default false) and the
+ * 'auto-remediation' kill switch (default off); REPAIR_MASTER_ENABLED stays
+ * untouched, and a crash mid-attempt is finalized as TIMED_OUT at boot,
+ * never resumed. Only the two analytics sources (vercel-analytics,
+ * imagekit-delivery) are eligible targets; critical sources are rejected by
+ * the runbook contract.
  *
  * The observer composition (soak driver) is read-only and inert by default:
  * without OPERATIONS_DB_PASSWORD the provider resolves to null and nothing

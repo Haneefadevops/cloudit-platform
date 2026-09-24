@@ -11,6 +11,14 @@ export interface AgentConfig {
   telegramCommandsEnabled: boolean;
   /** Automatic remediation switch (later phases; never true in Phase C). */
   autoRemediationEnabled: boolean;
+  /**
+   * Per-runbook enable flag for RB-READONLY-RECHECK-001 (Phase H Tier A
+   * read-only freshness re-check). True only on exact env 'true'; false by
+   * default. Independent of autoRemediationEnabled: both gates must pass.
+   * Optional so existing full-config test fixtures keep compiling; the
+   * service always fills it when built from the environment.
+   */
+  remediationRbReadonlyRecheckEnabled?: boolean;
   /** Emergency global repair-disable switch; independent of AI/Telegram. */
   repairMasterEnabled: boolean;
   /** Application AI circuit-breaker ceiling in EUR (owner ceiling is 15). */
@@ -100,6 +108,7 @@ const DEFAULTS: AgentConfig = {
   aiEnabled: false,
   telegramCommandsEnabled: false,
   autoRemediationEnabled: false,
+  remediationRbReadonlyRecheckEnabled: false,
   repairMasterEnabled: false,
   aiMonthlyEurCeiling: 7,
   aiDailyCallMax: 10,
@@ -148,6 +157,18 @@ function readBoolean(env: NodeJS.ProcessEnv, key: string, fallback: boolean): bo
   if (raw === 'true') return true;
   if (raw === 'false') return false;
   throw new Error(`Invalid boolean for ${key}: expected "true" or "false"`);
+}
+
+/**
+ * Per-runbook enable flags are fail-closed in the strictest sense: the value
+ * becomes true ONLY on the exact string 'true'. Every other non-empty value
+ * ('1', 'yes', 'false', ...) resolves to false instead of throwing, so a
+ * mistyped ops value can never silently enable a runbook either.
+ */
+function readTrueOnlyBoolean(env: NodeJS.ProcessEnv, key: string, fallback: boolean): boolean {
+  const raw = env[key];
+  if (raw === undefined || raw === '') return fallback;
+  return raw === 'true';
 }
 
 function readPositiveNumber(env: NodeJS.ProcessEnv, key: string, fallback: number): number {
@@ -211,6 +232,11 @@ export class AgentConfigService {
         env,
         'AUTO_REMEDIATION_ENABLED',
         DEFAULTS.autoRemediationEnabled,
+      ),
+      remediationRbReadonlyRecheckEnabled: readTrueOnlyBoolean(
+        env,
+        'REMEDIATION_RB_READONLY_RECHECK_ENABLED',
+        DEFAULTS.remediationRbReadonlyRecheckEnabled ?? false,
       ),
       repairMasterEnabled: readBoolean(env, 'REPAIR_MASTER_ENABLED', DEFAULTS.repairMasterEnabled),
       aiMonthlyEurCeiling: readPositiveNumber(
