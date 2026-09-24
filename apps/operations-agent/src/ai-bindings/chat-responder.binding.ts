@@ -25,6 +25,36 @@ import type { ChatResponder } from '../telegram/commands/chat-responder';
 const OPEN_FINDINGS_HINT = 'Open findings are not listed here; ask with /explain <findingKey> for sanitized detail.';
 const CHAT_UNAVAILABLE = 'AI chat is not available right now. Use /status, /incidents or /help for deterministic answers.';
 
+const UTC_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
+/**
+ * Human-friendly, locale-independent rendering of a snapshot timestamp:
+ * "24 Sep 2026, 08:53 UTC". The model quotes this verbatim in its "As of …"
+ * opener; unparseable input passes through unchanged (never breaks).
+ */
+function formatEvidenceAsOf(iso: string): string {
+  const parsed = new Date(iso);
+  if (iso.length === 0 || Number.isNaN(parsed.getTime())) return iso;
+  const two = (value: number) => String(value).padStart(2, '0');
+  return (
+    `${two(parsed.getUTCDate())} ${UTC_MONTHS[parsed.getUTCMonth()]} ` +
+    `${parsed.getUTCFullYear()}, ${two(parsed.getUTCHours())}:${two(parsed.getUTCMinutes())} UTC`
+  );
+}
+
 function toChatVerdict(overall: string): ChatVerdict {
   switch (overall.toUpperCase()) {
     case 'GREEN':
@@ -51,21 +81,24 @@ export function chatResponderBinding(
       const status = evidence.getStatus();
       const budget = evidence.getBudgetSummary();
       const incidents = evidence.listIncidents();
+      const sources = evidence.listSources();
+      const countCategory = (category: string) =>
+        sources.filter((source) => source.category === category).length;
       const context = {
         overallVerdict: toChatVerdict(status.overall),
         sourcesTotal: status.sourcesTotal,
         sourcesRed: status.sourcesRed,
         sourcesAmber: status.sourcesAmber,
+        sourcesUnknown: countCategory('UNKNOWN'),
+        sourcesNoData: countCategory('NO_DATA'),
         openIncidents: status.openIncidents,
         incidentLines: incidents.map(
           (incident) =>
             `[${incident.severity}] ${incident.serviceKey} ${incident.incidentKey} (${incident.state})`,
         ),
         findingLines: [OPEN_FINDINGS_HINT],
-        sourceLines: evidence.listSources().map(
-          (source) => `${source.sourceKey}: ${source.category}`,
-        ),
-        evidenceAsOf: status.generatedAt,
+        sourceLines: sources.map((source) => `${source.sourceKey}: ${source.category}`),
+        evidenceAsOf: formatEvidenceAsOf(status.generatedAt),
         budgetLine: `calls ${budget.dayCallsUsed}/${budget.dayCallsMax} today; month EUR ${budget.monthEurUsed} of ${budget.monthEurCeiling.toFixed(2)}`,
       };
       const result = await chat.ask({

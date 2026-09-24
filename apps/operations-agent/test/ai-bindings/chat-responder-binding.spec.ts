@@ -26,6 +26,7 @@ function stubEvidence(overrides: Partial<ReadOnlyEvidencePort> = {}): ReadOnlyEv
     listSources: () => [
       { sourceKey: 'database', category: 'GREEN' },
       { sourceKey: 'maintenance-report', category: 'AMBER' },
+      { sourceKey: 'restore-test', category: 'UNKNOWN' },
     ],
     getBudgetSummary: () => ({
       dayCallsUsed: 2,
@@ -70,8 +71,15 @@ describe('chatResponderBinding (coordinator integration)', () => {
     expect(input.context.incidentLines).toEqual([
       '[UNKNOWN] incidents INCIDENTS-UNEVIDENCED (UNEVIDENCED)',
     ]);
-    expect(input.context.sourceLines).toEqual(['database: GREEN', 'maintenance-report: AMBER']);
-    expect(input.context.evidenceAsOf).toBe('2026-09-23T12:00:00.000Z');
+    expect(input.context.sourceLines).toEqual([
+      'database: GREEN',
+      'maintenance-report: AMBER',
+      'restore-test: UNKNOWN',
+    ]);
+    expect(input.context.sourcesUnknown).toBe(1);
+    expect(input.context.sourcesNoData).toBe(0);
+    // Timestamp renders human-friendly ("23 Sep 2026, 12:00 UTC").
+    expect(input.context.evidenceAsOf).toBe('23 Sep 2026, 12:00 UTC');
     expect(String(input.context.budgetLine)).toContain('calls 2/10 today');
   });
 

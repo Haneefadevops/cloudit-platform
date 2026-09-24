@@ -43,6 +43,10 @@ export interface ChatEvidenceContext {
   sourcesTotal: number;
   sourcesRed: number;
   sourcesAmber: number;
+  /** Unevaluated sources (UNKNOWN) and sources without data (NO_DATA). The
+   * model tallies from these instead of counting board rows itself. */
+  sourcesUnknown: number;
+  sourcesNoData: number;
   openIncidents: number;
   /** Bounded, already-sanitized incident lines (untrusted data). */
   incidentLines: string[];
@@ -127,6 +131,8 @@ export function buildChatPrompt(input: ChatPromptInput): BuiltChatPrompt {
     `sourcesTotal=${c.sourcesTotal}`,
     `sourcesRed=${c.sourcesRed}`,
     `sourcesAmber=${c.sourcesAmber}`,
+    `sourcesUnknown=${c.sourcesUnknown}`,
+    `sourcesNoData=${c.sourcesNoData}`,
     `openIncidents=${c.openIncidents}`,
     `evidenceAsOf=${c.evidenceAsOf}`,
     '',
@@ -173,7 +179,7 @@ export function buildDeterministicChatBrief(context: ChatEvidenceContext): strin
   const lines = [
     `As of ${context.evidenceAsOf}.`,
     `Status: ${context.overallVerdict}.`,
-    `Sources: ${context.sourcesTotal} total (${context.sourcesRed} red, ${context.sourcesAmber} amber); open incidents: ${context.openIncidents}.`,
+    `Sources: ${context.sourcesTotal} total (${context.sourcesRed} red, ${context.sourcesAmber} amber, ${context.sourcesUnknown} unevaluated, ${context.sourcesNoData} without data); open incidents: ${context.openIncidents}.`,
     ...context.sourceLines.slice(0, MAX_SOURCE_LINES).map((line) => `- ${line}`),
     ...context.incidentLines.slice(0, MAX_EVIDENCE_LINES).map((line) => `- ${line}`),
     ...context.findingLines.slice(0, MAX_EVIDENCE_LINES).map((line) => `- ${line}`),

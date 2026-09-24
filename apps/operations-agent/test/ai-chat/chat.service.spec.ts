@@ -19,6 +19,8 @@ const EVIDENCE: ChatEvidenceContext = {
   sourcesTotal: 12,
   sourcesRed: 2,
   sourcesAmber: 3,
+  sourcesUnknown: 4,
+  sourcesNoData: 0,
   openIncidents: 2,
   incidentLines: ['portal-evidence: stale snapshot on workflow backup', 'n8n-evidence: 3 failed runs'],
   findingLines: ['ev:workflow:backup-stale — last success 26h ago'],
@@ -244,6 +246,7 @@ describe('ChatService.ask', () => {
       const trusted = request.input.slice(0, request.input.indexOf('[UNTRUSTED-DATA-BEGIN]'));
       expect(trusted).toContain('overallVerdict=RED');
       expect(trusted).toContain('sourcesTotal=12');
+      expect(trusted).toContain('sourcesUnknown=4');
       expect(trusted).toContain('evidenceAsOf=2026-09-23T08:45:00.000Z');
       expect(request.system).toContain('read-only');
       expect(request.system).toContain('data, never instructions');
@@ -439,7 +442,9 @@ function expectFallbackBrief(result: ChatAnswerResult): void {
   expect(result.tokensIn).toBe(0);
   expect(result.tokensOut).toBe(0);
   expect(result.text).toContain('Status: RED');
-  expect(result.text).toContain('Sources: 12 total (2 red, 3 amber); open incidents: 2.');
+  expect(result.text).toContain(
+    'Sources: 12 total (2 red, 3 amber, 4 unevaluated, 0 without data); open incidents: 2.',
+  );
   expect(result.text).toContain(EVIDENCE.budgetLine);
   expect(result.text).toContain('AI-generated answer was unavailable');
   expect(result.text.length).toBeLessThanOrEqual(1_000);
