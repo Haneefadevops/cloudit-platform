@@ -67,6 +67,34 @@ export function makeProjection(
   };
 }
 
+/** Builds one validator-passing projection record for `sourceKey`. */
+export function makeRecord(
+  sourceKey: string,
+  status: string,
+  freshUntilMs: number = FIXED_NOW_MS + 60_000,
+  observedAtMs: number = FIXED_NOW_MS,
+): Record<string, unknown> {
+  return {
+    sourceKey,
+    status,
+    severity: status === 'OK' ? 'none' : status === 'FAILED' ? 'critical' : 'warning',
+    observedAt: new Date(observedAtMs).toISOString(),
+    freshUntil: new Date(freshUntilMs).toISOString(),
+    criticality: 'analytics',
+    safeSummary: `${sourceKey} ${String(status).toLowerCase()} canary-token-free, 1 sample(s)`,
+    counts: { samples: 1 },
+  };
+}
+
+/** Builds a validator-passing multi-record projection. */
+export function makeMultiProjection(
+  records: Record<string, unknown>[],
+  client: string = CLIENT,
+  environment: string = ENV,
+): Record<string, unknown> {
+  return { client, environment, records };
+}
+
 type EvidenceOutcome =
   | { kind: 'projection'; value: Record<string, unknown> }
   | { kind: 'reject'; error: Error }

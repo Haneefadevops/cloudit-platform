@@ -43,6 +43,8 @@ import { RemediationEngine } from './remediation';
 import { ATTEMPT_STORE, AttemptStore, createPgAttemptStore } from './remediation/attempts';
 import {
   READONLY_RECHECK_RUNBOOK_KEY,
+  RECOVERY_VERIFY_RUNBOOK_KEY,
+  RECOVERY_VERIFY_RUNBOOK_VERSION,
   REMEDIATION_EXECUTOR,
   RemediationExecutor,
   TierARemediationExecutor,
@@ -389,6 +391,7 @@ const aiProviders: Provider[] = [
       outbox: DurableOutbox | undefined,
       auditPort: { record(event: unknown): unknown } | null,
       config: AgentConfigService,
+      executor: RemediationExecutor | null,
     ) =>
       new AlertEngine({
         gate: killSwitches
@@ -398,6 +401,33 @@ const aiProviders: Provider[] = [
                 throw new Error('Telegram kill switch service unavailable (fail closed)');
               },
             },
+        // Recovery observation for RB-INCIDENT-RECOVERY-VERIFY-001: when a
+        // recovery actually dispatches, request one independent verification
+        // from the Tier A executor. Pure request glue — the executor
+        // re-checks the whole policy contract (flag, kill switch, claim)
+        // on every call, so this hook cannot bypass anything, and alerting
+        // itself is untouched when the executor is absent.
+        onDispatch: executor
+          ? ({ environmentKey, verdict, decision }) => {
+              if (decision.action !== 'SENT' || decision.message?.kind !== 'recovery') {
+                return;
+              }
+              const subjectKey = decision.message.subjectKey;
+              const nowMs = Date.now();
+              void executor.execute({
+                proposalId: `recovery-${environmentKey}-${subjectKey}-${decision.message.occurredAt}`,
+                runbookKey: RECOVERY_VERIFY_RUNBOOK_KEY,
+                runbookVersion: RECOVERY_VERIFY_RUNBOOK_VERSION,
+                issueCode: subjectKey,
+                targetKey: subjectKey,
+                clientKey: 'cavetta',
+                environmentKey,
+                idempotencyDayUtc: new Date(nowMs).toISOString().slice(0, 10),
+                evidenceKeys: verdict.evidenceKeys,
+                nowMs,
+              });
+            }
+          : undefined,
         sender: (() => {
           // Real sender only when the server is explicitly configured with a
           // token and at least one allow-listed chat; otherwise the
@@ -430,6 +460,7 @@ const aiProviders: Provider[] = [
       { token: DURABLE_OUTBOX, optional: true },
       { token: APP_AUDIT_PORT, optional: true },
       AgentConfigService,
+      { token: REMEDIATION_EXECUTOR, optional: true },
     ],
   },
   {
@@ -576,6 +607,9 @@ const aiProviders: Provider[] = [
         runbookEnabled: (runbookKey: string) =>
           runbookKey === READONLY_RECHECK_RUNBOOK_KEY &&
           config.get().remediationRbReadonlyRecheckEnabled === true,
+        recoveryVerifyEnabled: (runbookKey: string) =>
+          runbookKey === RECOVERY_VERIFY_RUNBOOK_KEY &&
+          config.get().remediationRbIncidentRecoveryVerifyEnabled === true,
         audit: auditPort ?? undefined,
       });
     },
@@ -679,6 +713,18 @@ const aiProviders: Provider[] = [
  * never resumed. Only the two analytics sources (vercel-analytics,
  * imagekit-delivery) are eligible targets; critical sources are rejected by
  * the runbook contract.
+ *
+ * The second Tier A runbook (RB-INCIDENT-RECOVERY-VERIFY-001, Phase H
+ * runbook 2) independently verifies recoveries: when the alert engine
+ * dispatches a recovery message, a request is made for one bounded,
+ * read-only verification of the recovered subject's evidence sources
+ * (healthy = OK and fresh, confirmed by two independent reads). It is
+ * gated by its own per-runbook flag
+ * REMEDIATION_RB_INCIDENT_RECOVERY_VERIFY_ENABLED (default false) on top of
+ * the same kill switch and ledger; owner-facing alerting is unchanged — the
+ * hook only observes dispatches and can never alter them. Subjects whose
+ * alert carried no issue code ('unknown') are not verifiable and are
+ * refused by the runbook contract (fail closed).
  *
  * The observer composition (soak driver) is read-only and inert by default:
  * without OPERATIONS_DB_PASSWORD the provider resolves to null and nothing

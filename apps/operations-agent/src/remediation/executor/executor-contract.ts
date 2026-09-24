@@ -34,6 +34,13 @@ export interface RemediationExecutionRequest {
   readonly environmentKey: string;
   /** UTC calendar day in YYYY-MM-DD form; part of the idempotency key. */
   readonly idempotencyDayUtc: string;
+  /**
+   * Evidence sources the runbook must verify (used by the recovery-verify
+   * runbook, RB-INCIDENT-RECOVERY-VERIFY-001). When absent or empty, the
+   * runbook verifies every record in the projection. Coordinator seam
+   * addition, Phase H runbook 2; additive and optional.
+   */
+  readonly evidenceKeys?: readonly string[];
   readonly nowMs: number;
 }
 

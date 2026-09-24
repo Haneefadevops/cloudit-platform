@@ -19,6 +19,13 @@ export interface AgentConfig {
    * service always fills it when built from the environment.
    */
   remediationRbReadonlyRecheckEnabled?: boolean;
+  /**
+   * Per-runbook enable flag for RB-INCIDENT-RECOVERY-VERIFY-001 (Phase H
+   * runbook 2 — independent recovery verification). True only on exact env
+   * 'true'; false by default; when unset the runbook is disabled (fail
+   * closed). Independent of autoRemediationEnabled: both gates must pass.
+   */
+  remediationRbIncidentRecoveryVerifyEnabled?: boolean;
   /** Emergency global repair-disable switch; independent of AI/Telegram. */
   repairMasterEnabled: boolean;
   /** Application AI circuit-breaker ceiling in EUR (owner ceiling is 15). */
@@ -109,6 +116,7 @@ const DEFAULTS: AgentConfig = {
   telegramCommandsEnabled: false,
   autoRemediationEnabled: false,
   remediationRbReadonlyRecheckEnabled: false,
+  remediationRbIncidentRecoveryVerifyEnabled: false,
   repairMasterEnabled: false,
   aiMonthlyEurCeiling: 7,
   aiDailyCallMax: 10,
@@ -237,6 +245,11 @@ export class AgentConfigService {
         env,
         'REMEDIATION_RB_READONLY_RECHECK_ENABLED',
         DEFAULTS.remediationRbReadonlyRecheckEnabled ?? false,
+      ),
+      remediationRbIncidentRecoveryVerifyEnabled: readTrueOnlyBoolean(
+        env,
+        'REMEDIATION_RB_INCIDENT_RECOVERY_VERIFY_ENABLED',
+        DEFAULTS.remediationRbIncidentRecoveryVerifyEnabled ?? false,
       ),
       repairMasterEnabled: readBoolean(env, 'REPAIR_MASTER_ENABLED', DEFAULTS.repairMasterEnabled),
       aiMonthlyEurCeiling: readPositiveNumber(

@@ -33,14 +33,28 @@ export interface RemediationAttemptAuditEvent {
   evidenceKeys: string[];
 }
 
+/**
+ * Additive options for runbooks whose audit event carries the checked
+ * evidence source keys instead of only the closed target key
+ * (RB-INCIDENT-RECOVERY-VERIFY-001). Omitting the option keeps the original
+ * single-target-key event shape byte-identical.
+ */
+export interface RemediationAttemptAuditOptions {
+  /** Checked evidence source keys; falls back to [targetKey] when empty. */
+  evidenceKeys?: readonly string[];
+}
+
 export function buildAttemptAuditEvent(
   outcome: RemediationExecutionOutcome,
   resultCode: AttemptResultCode,
   targetKey: string,
   occurredAtIso: string,
   summary: string,
+  options?: RemediationAttemptAuditOptions,
 ): RemediationAttemptAuditEvent {
-  const target = safeTarget(targetKey);
+  const requestedKeys = options?.evidenceKeys;
+  const keys: readonly string[] =
+    requestedKeys !== undefined && requestedKeys.length > 0 ? requestedKeys : [targetKey];
   let bounded = summary;
   if (bounded.length > REMEDIATION_ATTEMPT_AUDIT_SUMMARY_MAX_CHARS) {
     bounded = bounded.slice(0, REMEDIATION_ATTEMPT_AUDIT_SUMMARY_MAX_CHARS);
@@ -63,6 +77,6 @@ export function buildAttemptAuditEvent(
     reasonCode: outcome,
     resultCode,
     summary: bounded,
-    evidenceKeys: Object.freeze([target]) as unknown as string[],
+    evidenceKeys: Object.freeze(keys.map((key) => safeTarget(key))) as unknown as string[],
   });
 }

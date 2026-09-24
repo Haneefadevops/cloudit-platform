@@ -69,6 +69,16 @@ export interface AlertEngineOptions {
   maxAlertsPerHour: number;
   outageRetryMaxAttempts: number;
   now?: () => number; // ms epoch; default Date.now
+  /**
+   * Optional observation hook invoked once per completed handle() call with
+   * the final decision. Never affects the decision: a throwing callback is
+   * swallowed. Undefined means zero behavioral change.
+   */
+  readonly onDispatch?: (info: {
+    readonly environmentKey: string;
+    readonly verdict: HealthAssessment;
+    readonly decision: AlertDecision;
+  }) => void;
 }
 
 const RATE_WINDOW_MS = 3_600_000; // rolling hour
@@ -103,20 +113,41 @@ export class AlertEngine {
    * under a fixed clock, or the durable outbox rejects the append. */
   private outboxSequence = 0;
 
+  private readonly onDispatch: AlertEngineOptions['onDispatch'];
+
   constructor(private readonly options: AlertEngineOptions) {
     this.now = options.now ?? (() => Date.now());
+    this.onDispatch = options.onDispatch;
   }
 
   async handle(environmentKey: string, verdict: HealthAssessment): Promise<AlertDecision> {
     const subjectKey = subjectKeyOf(verdict);
+    let decision: AlertDecision;
     try {
-      return await this.dispatchAlert(environmentKey, subjectKey, verdict);
+      decision = await this.dispatchAlert(environmentKey, subjectKey, verdict);
     } catch (error) {
       if (error instanceof GateDeniedError) {
-        return this.finish('BLOCKED_KILL_SWITCH', subjectKey, undefined);
+        decision = this.finish('BLOCKED_KILL_SWITCH', subjectKey, undefined);
+      } else {
+        // Never-throws safety net: degrade to a bounded suppression.
+        decision = this.finish('SUPPRESSED_OUTAGE_BOUND', subjectKey, undefined);
       }
-      // Never-throws safety net: degrade to a bounded suppression.
-      return this.finish('SUPPRESSED_OUTAGE_BOUND', subjectKey, undefined);
+    }
+    this.emitDispatch(environmentKey, verdict, decision);
+    return decision;
+  }
+
+  /** Observation hook: frozen info, same decision reference, never throws. */
+  private emitDispatch(
+    environmentKey: string,
+    verdict: HealthAssessment,
+    decision: AlertDecision,
+  ): void {
+    if (!this.onDispatch) return;
+    try {
+      this.onDispatch(Object.freeze({ environmentKey, verdict, decision }));
+    } catch {
+      // The hook is observational only; callback failures must not alter dispatch.
     }
   }
 

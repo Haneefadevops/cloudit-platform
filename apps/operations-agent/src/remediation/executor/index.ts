@@ -33,12 +33,34 @@ export {
   buildReadonlyRecheckGateSummary,
 } from './readonly-recheck-runbook';
 export {
+  RECOVERY_VERIFY_RUNBOOK_KEY,
+  RECOVERY_VERIFY_RUNBOOK_VERSION,
+  RECOVERY_VERIFY_RUNBOOK_TIER,
+  RECOVERY_VERIFY_ACCEPTED_ISSUE_CODES,
+  RecoveryVerifyIssueCode,
+  RECOVERY_VERIFY_TARGET_PATTERN,
+  isRecoveryVerifyTargetKey,
+  RECOVERY_VERIFY_EXPECTED_RESULT_CODES,
+  RecoveryVerifyResultCode,
+  RECOVERY_VERIFY_MAX_AUTOMATIC_ATTEMPTS,
+  RECOVERY_VERIFY_TIMEOUT_MS,
+  RECOVERY_VERIFY_PRECONDITIONS,
+  RECOVERY_VERIFY_EXPECTED_IMPACT,
+  RECOVERY_VERIFY_VERIFICATION,
+  RECOVERY_VERIFY_ROLLBACK,
+  RECOVERY_VERIFY_SUMMARY_MAX_CHARS,
+  RECOVERY_VERIFY_RUNBOOK,
+  buildRecoveryVerifySummary,
+  buildRecoveryVerifyGateSummary,
+} from './recovery-verify-runbook';
+export {
   TierARemediationExecutor,
   TierARemediationExecutorOptions,
   RemediationCircuit,
 } from './tier-a-executor';
 export {
   RemediationAttemptAuditEvent,
+  RemediationAttemptAuditOptions,
   REMEDIATION_ATTEMPT_AUDIT_SUMMARY_MAX_CHARS,
   buildAttemptAuditEvent,
 } from './attempt-audit';
