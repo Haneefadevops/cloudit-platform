@@ -503,45 +503,237 @@ the owner on 23 Sep 2026, with the day-one spend watch agreed. Deferred to
 the enablement decision: binding `getExplanation` to Telegram `/explain`
 (touches live bot UX), provider-side retry backoff policy.
 
-## 7a-ii. "Chat-bind" phase — natural-language Telegram chat — BUILT, awaiting owner gate acceptance
+## 7a-ii. "Chat-bind" phase — natural-language Telegram chat — BUILT, gated, DEPLOYED, owner-accepted
 
-Built on `ai-maintenance/integration` on top of `ab2682d` (not committed,
-not pushed, not deployed at acceptance time):
+Built on `ai-maintenance/integration` on top of `ab2682d`; deployed to master
+as a four-commit chain, all GitHub Actions green:
 
-- Worker A: `src/ai/chat` — `ChatService.ask()` natural-language engine
-  mirroring the SummariesService pipeline (gate -> budget -> ModelRouter ->
-  closed prompt -> bounded-timeout call -> empty/oversize/canary validation
-  -> cost estimate -> budget record -> one closed `ai_chat` audit event);
-  never rejects; disabled/budget-denied produce fixed refusals, every model
-  failure collapses to a deterministic evidence brief, all at costEur 0;
-  `ChatMemoryStore` — per-conversation memory, 6-turn cap, 30-min idle TTL,
-  remembered only for accepted answers;
-- Worker B: Telegram free-text routing — non-slash messages reach the
-  command layer as `command: 'chat'` with verbatim `rawText`
-  (`CommandRequest.rawText`, coordinator-owned contract extension); the
-  commands module gained an optional `TELEGRAM_CHAT_RESPONDER` token
-  (unbound = degrade to help, fail-closed); slash-command behavior and all
-  webhook security gates unchanged;
-- coordinator integration: `chatResponderBinding` grounds every question in
-  the SAME sanitized evidence port the deterministic commands render from
-  (status counts, incident identifier lines, enforced budget line); the
-  engine reaches the nested commands module through `chatServiceRegistry`,
-  the same bind-once seam as the observer status registry; wired behind the
-  existing `AI_ENABLED` kill switch and budget meter, fail-closed
-  stand-in client still the default.
+- `75716ff` chat-bind phase (engine + routing + integration; gate 1003/1003);
+- `365a71e` plain-text fix — the provider client had hardcoded the
+  HealthAssessment json_schema on EVERY call, so chat answers came back as
+  raw assessment JSON (owner-reported on first live chat); response format
+  is now per-request (`LlmRequest.responseFormat`, chat = plain_text,
+  explanations keep the schema as the default);
+- `6911eb1` source-board grounding — the chat context initially carried only
+  the overall verdict + counts, so "how is the database?" got "not covered"
+  (owner-reported); the observer snapshot now carries the full per-source
+  board (categories only), exposed via `listSources()` on the evidence port
+  and fed into the chat context (bounded, untrusted-wrapped), plus
+  `evidenceAsOf` so every answer self-dates ("As of …");
+- `7a79a19` polish — human-friendly timestamp ("24 Sep 2026, 10:16 UTC",
+  locale-independent) and grounded `sourcesUnknown`/`sourcesNoData` tallies
+  after the model miscounted the board on first live answer.
 
-Gate evidence: `tsc --noEmit` clean; operations-agent jest 1003/1003 across
-122 suites (was 955); contracts jest 145/145; `npm run build` clean; no real
-provider call in any test (fetch always faked); no secret-shaped strings in
-the phase diff; deterministic checks authoritative over model text.
+Final gate: tsc clean; operations-agent jest 1005/1005 across 122 suites;
+contracts 145/145; build clean. Owner live-verified on 24 Sep 2026: plain
+language, correct tallies (8 GREEN / 1 AMBER / 4 UNKNOWN), honest unevaluated
+feed handling, budget meter ticking (1/10 on first call, sub-cent cost).
+Server state: `AI_ENABLED=true` with `OPENAI_API_KEY` set by the owner,
+remediation/repair switches still false. Live-verified design facts for
+later phases: `chatServiceRegistry` bind-once seam works across container
+restarts; `responseFormat` must stay per-request if new structured surfaces
+are added.
 
 ## 7b. Next phase — "AI brain" (natural-language summaries and chat)
 
-Order per operator plan: AI brain BEFORE Programme Phase H (Tier A controlled
-production acceptance). Phase H and Phase I remain after this phase; Phase J
-is design-only.
+DONE — see 7a-i and 7a-ii above. The next programme phase is Phase H.
 
-Coordinator prerequisites before assigning workers:
+## 7c. Next phase — Programme Phase H (Tier A controlled production acceptance)
+
+Operator plan (section 13): activate ONE Tier A runbook at a time, under
+controlled non-real/non-destructive evidence; prove exactly one attempt,
+verification, audit and cleanup; observe at least 14 days before expanding.
+Gate: owner approves each runbook individually for normal automatic
+operation. `AUTO_REMEDIATION_ENABLED=false` stays the hard switch until
+the owner approves the first runbook activation; Tier B (Telegram
+confirmations) is Phase I and stays untouched.
+
+Kickoff prompt for a fresh session is maintained below (owner copies it
+verbatim into the new session):
+
+---
+You are the Kimi coordinator for the CloudIT Operations Portal AI
+Maintenance programme.
+
+Repository worktree: C:\Project\cloudit-platform\.worktrees\master-portal
+
+First read these files completely:
+1. cloudit-operations-portal-transfer/AGENTS.md
+2. cloudit-operations-portal-transfer/README.md
+3. cloudit-operations-portal-transfer/docs/cloudit-operations-portal-phase-0-specification.md
+4. cloudit-operations-portal-transfer/docs/cloudit-operations-portal-plan.md
+5. cloudit-operations-portal-transfer/docs/portal-repository-handover.md
+6. cloudit-operations-portal-transfer/docs/reference/maintenance-automation-handover.md
+7. cloudit-operations-portal-transfer/docs/reference/n8n-maintenance-automation-plan.md
+8. cloudit-operations-portal-transfer/docs/cloudit-operations-portal-ai-maintenance-operator-plan.md
+9. cloudit-operations-portal-transfer/docs/KIMI-AI-MAINTENANCE-EXECUTION-PLAN.md
+   — sections 7a-i, 7a-ii (as-built ledger) and 7c (this phase) are
+   current; they supersede older calendar dates where they conflict.
+
+CURRENT STATE (verified, do not redo):
+- Branch ai-maintenance/integration in the master-portal worktree, tip
+  7a79a19 == origin/master == deployed LIVE on cp-8gb-hel1-1.
+- Agent container "operations-agent": observer (15-min ticks, digest
+  09:00 UTC), Telegram commands, and natural-language AI chat (bounded
+  memory) all live and owner-accepted. AI_ENABLED=true with owner-set
+  OPENAI_API_KEY; budget meter live (10 calls/day, EUR 7/month).
+- Server hard switches: AUTO_REMEDIATION_ENABLED=false,
+  REPAIR_MASTER_ENABLED=false. The remediation engine from Phase G
+  (simulated remediation, proposals only) is built and tested but never
+  activated; no runbook has ever executed against production.
+- Full gate green: tsc clean, 1005/1005 operations-agent tests (122
+  suites), 145/145 contracts, build clean.
+- Phase H prep already done by earlier phases: fixed issue/runbook
+  mapping, proposal generation, failure/expiry/replay/concurrency/
+  circuit-breaker offline proofs (Phase G gate).
+
+YOUR TASK: begin Programme Phase H — Tier A controlled production acceptance
+(operator plan section 13).
+
+WAY OF WORKING (same as all previous phases — the coordinator is you, the
+Kimi in that session; the "workers" are subagents you launch):
+1. Preparation report FIRST: propose the work split, the exact file
+   ownership per worker, risks and token budget. Then STOP and wait for my
+   approval — never create anything before it.
+2. After approval: create fresh git worktrees per worker (e.g.
+   .worktrees/ai-worker-{a,b,c}-<phase>) on their own branches off
+   ai-maintenance/integration, and launch the workers in parallel, each
+   with a full self-contained brief (they have zero context — state the
+   goal, the exact files they own, the APIs they build against, the test
+   commands, and every non-negotiable rule).
+3. Workers write code and tests in their own worktree only, never commit,
+   and verify (tsc + their jest specs green) before reporting back.
+4. You (coordinator) merge the working trees into the master-portal
+   worktree, write the integration glue for cross-worker seams
+   (app.module wiring, DI tokens, registries), and run the FULL gate:
+   tsc -> complete operations-agent jest -> contracts jest -> build.
+5. Present the gate report and STOP. Commit, push and deploy are three
+   separate, explicit owner approvals. Deploy flow (when approved): temp
+   worktree on master, git --ff-only, push origin master, watch the
+   GitHub Action (gh run watch <id>), remove the temp worktree. Known
+   restart artifacts: digest state resets (one re-send at next 09:00 UTC
+   tick, possible single-page if RED).
+6. One phase/runbook at a time; a gate and a stop after each.
+
+For Phase H specifically, the preparation report must propose: the FIRST
+Tier A runbook candidate, the controlled non-destructive evidence plan,
+the exactly-one-attempt/verification/audit/cleanup proof design, the
+14-day observation plan, worker file ownership, and risks — and then WAIT
+for my approval before creating anything.
+
+Non-negotiable: never use unattended/automatic approval mode; never
+commit, push or deploy without my explicit per-action approval; no real
+provider calls in tests (fetch always faked); no secrets in prompts,
+fixtures, logs or commits; deterministic checks beat AI output on
+conflict; AUTO_REMEDIATION_ENABLED stays false until I explicitly
+approve the first runbook activation — enabling it on the server is a
+separate approval after the gate.
+
+Server deployment flow when I approve a deploy: temp worktree on master,
+git --ff-only, git push origin master, watch the GitHub Action with
+gh run watch <id>, remove the temp worktree after. Known restart
+artifacts: digest state resets (one re-send at next 09:00 UTC tick,
+possible single-page if RED).
+---
+
+## 7d. Follow-up phase — chat usage analytics (Vercel / ImageKit / database)
+
+Owner-requested enhancement (raised 24 Sep 2026), to start AFTER the
+Phase H session completes its first runbook gate — never in parallel
+with it (same branch; merge/gate collisions). Read-only by
+construction: nothing on Vercel, ImageKit or the databases is modified;
+the AI only quotes numbers the evidence pipeline already carries.
+
+Goal: the chat can answer usage questions with real figures — "how much
+bandwidth did ImageKit serve this month?", "how many page views did we
+get?", "how big is the database?" — instead of only GREEN/AMBER/UNKNOWN.
+
+Data path (same pattern as the source-board grounding):
+
+n8n collector -> operations DB (metric_samples) -> observer/evidence
+port -> chat context (bounded usage-metric lines) -> AI answer.
+
+1. n8n-side (owner-implemented, coordinator ships reviewed JSON under
+   infra/n8n/workflows/ — Phase 11 precedent): scheduled collectors
+   using existing credentials publish metric_sample rows —
+   `vercel-pageviews-24h` / `vercel-bandwidth-24h` (Vercel API),
+   `imagekit-bandwidth-month` / `imagekit-requests-month` (ImageKit
+   usage API), `database-size-mb` / `database-connections` (SQL against
+   the operations Postgres: pg_database_size, pg_stat_activity).
+   Plain API/SQL reads only.
+2. Agent-side (coordinator + up to 2 workers): the observer already
+   reads metric_samples; the chat context gains a bounded "usage metric
+   lines" block (key: value, capped ~10 lines, untrusted-wrapped),
+   present only for whitelisted usage keys; system prompt gains one
+   instruction (quote usage figures from the metric lines; if absent,
+   say the metric is not collected). Deterministic fallback brief
+   unchanged (board only) unless trivially extended.
+3. Sequencing: prep report -> owner approval -> workers in fresh
+   worktrees with exact non-overlapping ownership (Worker A:
+   observer/evidence-source mapping + chat context/prompt + specs;
+   Worker B: n8n collector JSON specs + docs) -> full gate -> stop.
+
+Kickoff prompt for the session that runs this phase (owner pastes after
+Phase H's first gate):
+
+---
+You are the Kimi coordinator for the CloudIT Operations Portal AI
+Maintenance programme.
+
+Repository worktree: C:\Project\cloudit-platform\.worktrees\master-portal
+
+First read these files completely:
+1. cloudit-operations-portal-transfer/AGENTS.md
+2. cloudit-operations-portal-transfer/README.md
+3. cloudit-operations-portal-transfer/docs/cloudit-operations-portal-phase-0-specification.md
+4. cloudit-operations-portal-transfer/docs/cloudit-operations-portal-plan.md
+5. cloudit-operations-portal-transfer/docs/portal-repository-handover.md
+6. cloudit-operations-portal-transfer/docs/reference/maintenance-automation-handover.md
+7. cloudit-operations-portal-transfer/docs/reference/n8n-maintenance-automation-plan.md
+8. cloudit-operations-portal-transfer/docs/cloudit-operations-portal-ai-maintenance-operator-plan.md
+9. cloudit-operations-portal-transfer/docs/KIMI-AI-MAINTENANCE-EXECUTION-PLAN.md
+   — sections 7a-i, 7a-ii, 7c and 7d (this phase) are current; they
+   supersede older calendar dates where they conflict.
+
+CURRENT STATE (verify, do not assume): branch ai-maintenance/integration
+in the master-portal worktree at whatever tip the Phase H session left
+(Phase H runbook work may be merged — read git log first). Observer,
+Telegram commands, AI chat and budget meter live; AI_ENABLED=true.
+AUTO_REMEDIATION_ENABLED may have changed under Phase H — read
+infra/operations-agent/.env.example and the ledger before touching any
+switch. Gate should be green at your starting tip; if not, stop and
+report.
+
+YOUR TASK: execute phase 7d — chat usage analytics (Vercel / ImageKit /
+database). Follow the standard process: preparation report first
+(evidence-readiness check of the metric_samples path, exact worker file
+ownership, risks, token budget), WAIT for my approval, then one
+coordinator + up to two workers in fresh git worktrees with exact,
+non-overlapping file ownership (Worker A: observer metric mapping +
+chat context/prompt + specs; Worker B: n8n collector JSON under
+infra/n8n/workflows/ + docs — I import and activate collectors myself).
+Full gate after integration; stop and report.
+
+Hard boundaries: READ-ONLY — no writes to Vercel, ImageKit or any
+database; collectors are plain API/SQL reads. Only whitelisted usage
+metric keys reach the chat context, bounded and untrusted-wrapped; a
+missing metric is answered as "not collected", never invented.
+Non-negotiables unchanged: no unattended approval mode; no commit/push/
+deploy without my explicit per-action approval; fetch always faked in
+tests; no secrets in prompts/fixtures/logs/commits; deterministic beats
+AI; remediation switches untouched by this phase.
+
+Deploy flow when I approve: temp worktree on master, git --ff-only, push
+origin master, gh run watch <id>, remove temp worktree. Known restart
+artifacts: digest state resets (one re-send at next 09:00 UTC tick).
+---
+
+### Historical — original 7b (AI-brain) prerequisites and worker split, DONE
+
+The AI-brain phase these prerequisites served is complete (7a-i, 7a-ii).
+Kept for the record:
+
+Coordinator prerequisites before assigning workers (all satisfied):
 
 - reverify model aliases and pricing against official provider documentation
   (operator-plan 8.2) and record the verified values; until then no live call
