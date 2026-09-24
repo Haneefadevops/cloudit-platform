@@ -5,10 +5,11 @@
  * Pipeline (fail-closed, in order): body-size limit, constant-time webhook
  * secret verification, commands kill switch, strict JSON/update validation,
  * update-type gate, replay deduplication, per-user sliding-window rate limit,
- * user/chat allowlist authorization, command parsing, then a sanitized and
- * bounded reply. Every invocation records exactly one contract-validated
- * AuditEvent through the injected audit port; summaries are static safe
- * strings and never contain inbound text, tokens or secrets.
+ * user/chat allowlist authorization, routing (slash commands are parsed;
+ * any other non-empty text becomes a verbatim 'chat' request), then a
+ * sanitized and bounded reply. Every invocation records exactly one
+ * contract-validated AuditEvent through the injected audit port; summaries
+ * are static safe strings and never contain inbound text, tokens or secrets.
  *
  * No network, no Telegram client and no wall-clock dependency: all time
  * comes from the injectable `now()` epoch-ms clock.
@@ -224,13 +225,17 @@ export class TelegramWebhookService {
       );
     }
     const message = this.readMessage(body.message as Record<string, unknown>);
-    if (message.text === undefined || !message.text.startsWith('/')) {
+    // Messages with no text (service messages, attachments) and
+    // whitespace-only text are ignored; any other non-empty text is routed
+    // below — slash commands to the parser, free text verbatim to the chat
+    // command — through the same dedup, rate-limit and allowlist gates.
+    if (message.text === undefined || message.text.trim().length === 0) {
       return this.finish(
         { status: 'ignored', statusCode: 200 },
         {
           reasonCode: 'NON_COMMAND_MESSAGE',
           resultCode: 'WEBHOOK_IGNORED',
-          summary: 'non-command message was ignored',
+          summary: 'message without usable text was ignored',
         },
         nowMs,
         correlationId,
@@ -287,28 +292,43 @@ export class TelegramWebhookService {
       );
     }
 
-    // 9. Command parsing: lowercase name, whitespace-split args capped at
-    // maxCommandArgs (extras dropped), strict command-name charset.
-    const parsed = this.parseCommand(message.text);
-    if (parsed === undefined) {
-      return this.finish(
-        { status: 'rejected', statusCode: 400 },
-        {
-          reasonCode: 'COMMAND_INVALID',
-          resultCode: 'WEBHOOK_REJECTED',
-          summary: 'inbound command name was not a valid identifier',
-        },
-        nowMs,
+    // 9. Routing: slash commands are parsed (lowercase name, whitespace-split
+    // args capped at maxCommandArgs, strict command-name charset); any other
+    // non-empty text is handed to the command layer verbatim as a 'chat'
+    // request (rawText is the full message, never split or capped like args).
+    const text = message.text as string;
+    let request: CommandRequest;
+    if (text.startsWith('/')) {
+      const parsed = this.parseCommand(text);
+      if (parsed === undefined) {
+        return this.finish(
+          { status: 'rejected', statusCode: 400 },
+          {
+            reasonCode: 'COMMAND_INVALID',
+            resultCode: 'WEBHOOK_REJECTED',
+            summary: 'inbound command name was not a valid identifier',
+          },
+          nowMs,
+          correlationId,
+        );
+      }
+      request = {
+        command: parsed.command,
+        args: parsed.args,
+        userId: message.userId as number,
+        chatId: message.chatId as number,
         correlationId,
-      );
+      };
+    } else {
+      request = {
+        command: 'chat',
+        args: [],
+        rawText: text,
+        userId: message.userId as number,
+        chatId: message.chatId as number,
+        correlationId,
+      };
     }
-    const request: CommandRequest = {
-      command: parsed.command,
-      args: parsed.args,
-      userId: message.userId as number,
-      chatId: message.chatId as number,
-      correlationId,
-    };
 
     // 10. Execute and sanitize the reply (no URL allowlist, 4000-char cap).
     let response: CommandResponse;

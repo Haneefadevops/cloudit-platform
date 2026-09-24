@@ -65,20 +65,24 @@ describe('TelegramPollingService - update processing through the webhook pipelin
     handleSpy.mockRestore();
   });
 
-  it('ignores a malformed (non-command) update without crashing and still advances', async () => {
+  it('routes a free-text update to the chat command and still advances', async () => {
     const { service, botApi, commandHandler } = makeHarness();
     const base = commandUpdate(1020);
-    const nonCommand = {
+    const freeText = {
       ...base,
       message: { ...(base.message as Record<string, unknown>), text: 'hello there' },
     };
-    botApi.queueUpdates([nonCommand]);
+    botApi.queueUpdates([freeText]);
 
     const outcome = await service.cycle();
 
-    expect(outcome).toEqual({ status: 'COMPLETED', fetched: 1, processed: 1, repliesSent: 0 });
-    expect(commandHandler.execute).not.toHaveBeenCalled();
-    expect(botApi.sendMessageMock).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ status: 'COMPLETED', fetched: 1, processed: 1, repliesSent: 1 });
+    expect(commandHandler.execute).toHaveBeenCalledTimes(1);
+    const request = commandHandler.execute.mock.calls[0][0];
+    expect(request.command).toBe('chat');
+    expect(request.args).toEqual([]);
+    expect(request.rawText).toBe('hello there');
+    expect(botApi.sendMessageMock).toHaveBeenCalledWith(CHAT_ID, REPLY_TEXT);
     expect(service.getOffset()).toBe(1021);
   });
 

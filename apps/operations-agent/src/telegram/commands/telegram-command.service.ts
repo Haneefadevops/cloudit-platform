@@ -1,5 +1,6 @@
 import { sanitizeSafeText } from '@cloudit/operations-agent-contracts';
 import type { CommandRequest, CommandResponse } from '../telegram.types';
+import type { ChatResponder } from './chat-responder';
 import type { ReadOnlyEvidencePort } from './evidence-views';
 
 /** Telegram sendMessage text limit; every reply is capped defensively. */
@@ -19,6 +20,7 @@ const HELP_TEXT = [
   '/explain [findingKey] - sanitized finding detail',
   '/help - this command list',
   '',
+  'Any other message - AI chat (when enabled)',
   'Evidence is sanitized; never send secrets or personal data.',
 ].join('\n');
 
@@ -39,12 +41,17 @@ function finalize(text: string): CommandResponse {
 
 /**
  * Deterministic, read-only Telegram command handler. Renders fixed templates
- * from a {@link ReadOnlyEvidencePort}: no AI calls, no network, no mutation.
- * Unknown commands and /start behave like /help; arguments beyond what a
- * command uses are ignored and are never interpreted as instructions.
+ * from a {@link ReadOnlyEvidencePort}: no network, no mutation. Free-text
+ * messages (command 'chat') are delegated verbatim to the optional
+ * {@link ChatResponder} (the AI chat engine); without a responder bound they
+ * degrade to the help text, like unknown commands today. Arguments beyond
+ * what a command uses are ignored and are never interpreted as instructions.
  */
 export class TelegramCommandService {
-  constructor(private readonly evidence: ReadOnlyEvidencePort) {}
+  constructor(
+    private readonly evidence: ReadOnlyEvidencePort,
+    private readonly chat?: ChatResponder,
+  ) {}
 
   async execute(request: CommandRequest): Promise<CommandResponse> {
     switch (request.command.toLowerCase()) {
@@ -59,6 +66,8 @@ export class TelegramCommandService {
         return this.renderBudget();
       case 'explain':
         return this.renderExplain(request);
+      case 'chat':
+        return this.renderChat(request);
       case 'help':
       case 'start':
       default:
@@ -101,6 +110,18 @@ export class TelegramCommandService {
     return finalize(
       `Budget: calls ${budget.dayCallsUsed}/${budget.dayCallsMax} today | month EUR ${budget.monthEurUsed} of ${budget.monthEurCeiling.toFixed(2)}`,
     );
+  }
+
+  private renderChat(request: CommandRequest): Promise<CommandResponse> {
+    // The question handed to the AI is the verbatim rawText, never the args
+    // array. Without text or a bound responder, degrade to help (fail-closed,
+    // same as unknown commands).
+    if (!request.rawText || !this.chat) {
+      return Promise.resolve(finalize(HELP_TEXT));
+    }
+    return this.chat
+      .answer({ userId: request.userId, chatId: request.chatId, question: request.rawText })
+      .then((answer) => finalize(answer.text));
   }
 
   private renderExplain(request: CommandRequest): CommandResponse {

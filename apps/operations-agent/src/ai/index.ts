@@ -41,3 +41,19 @@ export {
   SummariesServiceOptions,
   SummariesService,
 } from './summaries';
+export {
+  ChatAnswerInput,
+  ChatAnswerResult,
+  ChatServiceOptions,
+  ChatService,
+  ChatMemoryStore,
+  ChatMemoryStoreOptions,
+  ChatTurn,
+  CHAT_MEMORY_MAX_TURNS_DEFAULT,
+  CHAT_MEMORY_TTL_MS_DEFAULT,
+  ChatEvidenceContext,
+  ChatVerdict,
+  buildChatPrompt,
+  buildDeterministicChatBrief,
+  CHAT_ANSWER_MAX_CHARS,
+} from './chat';

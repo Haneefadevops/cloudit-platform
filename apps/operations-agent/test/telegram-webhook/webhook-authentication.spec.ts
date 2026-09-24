@@ -3,6 +3,7 @@
  * authorization allowlists and inbound validation (all offline, synthetic).
  */
 import { TelegramWebhookService } from '../../src/telegram/webhook';
+import type { CommandRequest } from '../../src/telegram/telegram.types';
 import {
   baseTelegramSettings,
   callbackQueryUpdate,
@@ -282,16 +283,24 @@ describe('TelegramWebhookService - authentication and validation', () => {
       expect(outcome).toEqual({ status: 'ignored', statusCode: 200 });
     });
 
-    it('ignores plain chat text that is not a command', async () => {
-      const { options } = makeHarness();
-      const service = new TelegramWebhookService(options);
+    it('routes plain chat text to the command handler as a chat request', async () => {
+      const harness = makeHarness();
+      const service = new TelegramWebhookService(harness.options);
 
       const outcome = await service.handle(
         messageUpdate(1052, { text: 'hello bot' }),
         secretHeaders(TEST_SECRET),
       );
 
-      expect(outcome).toEqual({ status: 'ignored', statusCode: 200 });
+      expect(outcome).toEqual({
+        status: 'handled',
+        statusCode: 200,
+        reply: { text: 'synthetic status: ok' },
+      });
+      const request = harness.commandHandler.execute.mock.calls[0][0] as CommandRequest;
+      expect(request.command).toBe('chat');
+      expect(request.args).toEqual([]);
+      expect(request.rawText).toBe('hello bot');
     });
   });
 });

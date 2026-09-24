@@ -118,20 +118,27 @@ describePolling('malformed updates — never crash a cycle', () => {
     { update_id: 'not-a-number' },
     { update_id: -1 },
     { update_id: 1.5 },
+    // Whitespace-only text has no usable content and is ignored; other free
+    // text is routed to the chat command like any handled message.
+    makeTextUpdate(898, USER_A, CHAT_A, '   '),
     makeTextUpdate(900, USER_A, CHAT_A, 'plain chatter, no command'),
     makeCallbackUpdate(901, USER_A),
   ];
 
-  it('a batch laced with malformed updates still yields the one valid command reply', async () => {
+  it('a batch laced with malformed updates still yields the valid replies', async () => {
     const chain = makeRealChain();
     const valid = makeCommandUpdate(777, USER_A, CHAT_A);
     chain.botApi.defaultUpdates = [...malformedBatch(), valid];
 
     await expect(runCycle(chain.service)).resolves.toBeDefined();
 
-    expect(chain.commandHandler.requests).toHaveLength(1);
-    expect(chain.commandHandler.requests[0].command).toBe('status');
-    expect(chain.botApi.messagesFor(CHAT_A)).toHaveLength(1);
+    // The free-text update routes to the chat command alongside the valid
+    // /status command; the malformed entries are never executed.
+    expect(chain.commandHandler.requests).toHaveLength(2);
+    expect(chain.commandHandler.requests[0].command).toBe('chat');
+    expect(chain.commandHandler.requests[0].rawText).toBe('plain chatter, no command');
+    expect(chain.commandHandler.requests[1].command).toBe('status');
+    expect(chain.botApi.messagesFor(CHAT_A)).toHaveLength(2);
   });
 
   it('the malformed entries are individually decided (rejected or ignored), not executed', async () => {
@@ -141,8 +148,9 @@ describePolling('malformed updates — never crash a cycle', () => {
     await runCycle(chain.service);
 
     const reasons = chain.audit.events.map((event) => reasonOf(event));
-    // Strict validation rejects the shapeless entries; the non-command
-    // message and the callback are ignored; exactly one command executes.
+    // Strict validation rejects the shapeless entries; the whitespace-only
+    // message and the callback are ignored; the free-text message and the
+    // valid command are executed.
     expect(reasons).toContain('UPDATE_INVALID');
     expect(reasons).toContain('NON_COMMAND_MESSAGE');
     expect(reasons).toContain('UNSUPPORTED_UPDATE');
@@ -158,7 +166,7 @@ describePolling('malformed updates — never crash a cycle', () => {
     await runCycle(chain.service);
     await runCycle(chain.service);
 
-    // The numeric-id entries (777 handled, 900 ignored, 901 ignored) were
+    // The numeric-id entries (777 and 900 handled, 898 and 901 ignored) were
     // all acked via the offset; the poller never stalls below them.
     expect(chain.botApi.offsetsRequested[1]).toBeGreaterThan(777);
   });

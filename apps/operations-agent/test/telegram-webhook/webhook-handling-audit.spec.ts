@@ -140,7 +140,7 @@ describe('TelegramWebhookService - audit contract', () => {
     await service.handle(messageUpdate(3101), secretHeaders('wrong-secret-value')); // 401
     await service.handle(messageUpdate(3102), secretHeaders(TEST_SECRET)); // handled
     await service.handle(messageUpdate(3102), secretHeaders(TEST_SECRET)); // 409 replay
-    await service.handle(messageUpdate(3103, { text: 'plain chat' }), secretHeaders(TEST_SECRET)); // ignored
+    await service.handle(messageUpdate(3103, { text: 'plain chat' }), secretHeaders(TEST_SECRET)); // handled as chat
     await service.handle('{broken', secretHeaders(TEST_SECRET)); // 400
     await service.handle('x'.repeat(5000), secretHeaders(TEST_SECRET)); // 413
     await service.handle(messageUpdate(3104, { userId: 999999999 }), secretHeaders(TEST_SECRET)); // 403
@@ -154,7 +154,7 @@ describe('TelegramWebhookService - audit contract', () => {
 
     await service.handle(messageUpdate(3110), {}); // unauthorized
     await service.handle(messageUpdate(3111), secretHeaders(TEST_SECRET)); // handled
-    await service.handle(messageUpdate(3112, { text: 'no command' }), secretHeaders(TEST_SECRET)); // ignored
+    await service.handle(messageUpdate(3112, { text: 'no command' }), secretHeaders(TEST_SECRET)); // handled as chat
     harness.commandHandler.execute.mockRejectedValueOnce(new Error('boom'));
     await service.handle(messageUpdate(3113), secretHeaders(TEST_SECRET)); // command failed
 

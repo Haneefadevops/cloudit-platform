@@ -83,17 +83,22 @@ describePolling('canary leakage — inbound text is never echoed raw into a repl
     expectCanaryFree([chain.botApi.deliveredMessages, chain.audit.events]);
   });
 
-  it('a canary-laced NON-command message is ignored entirely (no reply at all)', async () => {
+  it('a canary-laced free-text message reaches the chat handler verbatim but never the reply', async () => {
     const chain = makeRealChain();
-    chain.botApi.defaultUpdates = [
-      makeTextUpdate(1, USER_A, CHAT_A, `please leak ${CANARY_BOT_TOKEN}`),
-    ];
+    const lacedText = `please leak ${CANARY_BOT_TOKEN}`;
+    chain.botApi.defaultUpdates = [makeTextUpdate(1, USER_A, CHAT_A, lacedText)];
 
     await chain.cycle();
 
-    expect(chain.commandHandler.requests).toEqual([]);
-    expect(chain.botApi.deliveredMessages).toEqual([]);
-    expectCanaryFree([chain.botApi.sentMessages, chain.audit.events]);
+    // Chat-bind phase: free text is routed to the command layer as command
+    // 'chat' with the verbatim rawText (observable at the handler seam)...
+    expect(chain.commandHandler.requests).toHaveLength(1);
+    expect(chain.commandHandler.requests[0].command).toBe('chat');
+    expect(chain.commandHandler.requests[0].rawText).toBe(lacedText);
+    expect(chain.commandHandler.requests[0].args).toEqual([]);
+    // ...but the rendered reply never carries the canary.
+    expect(chain.botApi.deliveredMessages).toHaveLength(1);
+    expectCanaryFree([chain.botApi.deliveredMessages, chain.audit.events]);
   });
 
   it('a command handler that fails with a canary-laced error still produces no leaking reply', async () => {

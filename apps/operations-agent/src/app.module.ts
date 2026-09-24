@@ -6,6 +6,7 @@ import {
   AiGate,
   AiMaintenanceReadModel,
   BudgetGate,
+  ChatService,
   LlmClient,
   LlmError,
   OpenAiResponsesLlmClient,
@@ -23,6 +24,8 @@ import {
   findingsBinding,
   killSwitchStatesBinding,
 } from './ai-bindings';
+import { chatResponderBinding } from './ai-bindings/chat-responder.binding';
+import { chatServiceRegistry } from './ai-bindings/chat-service-registry';
 import { AlertEngine, AlertMessage, createTelegramSender } from './alerts';
 import {
   AI_AUDIT,
@@ -48,6 +51,7 @@ import { SupervisorService } from './supervisor';
 import { SyncModule } from './sync/sync.module';
 import { TelegramBotApiModule } from './telegram/bot-api/telegram-bot-api.module';
 import {
+  TELEGRAM_CHAT_RESPONDER,
   TELEGRAM_EVIDENCE_PORT,
   TelegramCommandsModule,
 } from './telegram/commands';
@@ -103,12 +107,31 @@ const telegramEvidenceProvider: Provider = {
 };
 
 /**
+ * Chat-bind integration: binds the real AI chat engine to the commands
+ * module's optional chat-responder token, grounded in the same read-only
+ * evidence port the deterministic commands render from. ChatService itself
+ * lives in the AppModule root scope and publishes through chatServiceRegistry
+ * (same seam as the observer status registry) because the nested commands
+ * module cannot import root providers; when nothing is bound the responder
+ * degrades to a fixed fail-closed notice. When AI is disabled or
+ * unconfigured the engine fails closed with refusal/fallback text anyway, so
+ * this binding is always safe.
+ */
+const telegramChatResponderProvider: Provider = {
+  provide: TELEGRAM_CHAT_RESPONDER,
+  useFactory: (evidence: import('./telegram/commands/evidence-views').ReadOnlyEvidencePort) =>
+    chatResponderBinding(evidence),
+  inject: [TELEGRAM_EVIDENCE_PORT],
+};
+
+/**
  * One shared commands-module registration so the webhook pipeline (nested in
  * the polling module's imports) and nothing else consume the SAME handler
  * instance, built on the real evidence binding.
  */
 const telegramCommandsIntegration = TelegramCommandsModule.register({
   evidence: telegramEvidenceProvider,
+  chat: telegramChatResponderProvider,
   imports: [AgentConfigModule],
 });
 
@@ -287,6 +310,35 @@ const aiProviders: Provider[] = [
         audit: audit ?? undefined,
         now,
       }),
+    inject: [AI_CLIENT, AI_BUDGET_GATE, AI_GATE, AI_AUDIT, AI_NOW, AgentConfigService],
+  },
+  {
+    // Chat-bind phase: natural-language chat engine behind the same kill
+    // switch, budget gate and audit sink as SummariesService, with its own
+    // bounded in-memory conversation store. The injected client is the
+    // fail-closed stand-in until AI is enabled with a provider key; ask()
+    // never rejects and collapses to refusal/fallback text in every
+    // disabled/denied/failure case.
+    provide: ChatService,
+    useFactory: (
+      client: LlmClient,
+      budget: BudgetGate,
+      gate: AiGate,
+      audit: { record(event: unknown): unknown } | null,
+      now: () => number,
+      config: AgentConfigService,
+    ) => {
+      const service = new ChatService({
+        ai: config.get().ai,
+        client,
+        budget,
+        gate,
+        audit: audit ?? undefined,
+        now,
+      });
+      chatServiceRegistry.bind(service);
+      return service;
+    },
     inject: [AI_CLIENT, AI_BUDGET_GATE, AI_GATE, AI_AUDIT, AI_NOW, AgentConfigService],
   },
   {

@@ -30,6 +30,13 @@ export interface CommandRequest {
   chatId: number;
   /** Safe correlation id (no secrets, no PII) for audit and support. */
   correlationId: string;
+  /**
+   * Chat-bind phase: the full original message text for free-text (non-slash)
+   * messages routed to the AI chat handler as command 'chat'. Undefined for
+   * slash commands; set verbatim by the webhook layer (never split or
+   * capped like args).
+   */
+  rawText?: string;
 }
 
 /** Bounded, safe reply payload suitable for Telegram sendMessage. */

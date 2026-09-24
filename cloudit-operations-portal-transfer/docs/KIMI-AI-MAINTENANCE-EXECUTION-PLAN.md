@@ -463,10 +463,11 @@ Owner backlog (not blocking): rotate the Telegram bot token; wire evidence
 feeds for the remaining UNKNOWN digest sources; per-incident projection for
 `/incidents`.
 
-## 7a-i. "AI brain" phase — BUILT, awaiting owner gate acceptance
+## 7a-i. "AI brain" phase — BUILT, gated, DEPLOYED
 
 Built locally on `ai-maintenance/integration` (integration tip `1419eba`;
-not pushed, not deployed):
+deployed to master as `67b039e`, GitHub Action green; later UNKNOWN-gap fixes
+shipped as `ab2682d`):
 
 - verified pricing snapshot `src/ai/pricing.ts` (luna USD 0.20/1.20,
   terra USD 2.00/12.00 per 1M, Sept 2026 trackers citing OpenAI's official
@@ -496,10 +497,43 @@ not pushed, not deployed):
 Gate evidence: `tsc --noEmit` clean; operations-agent jest 952/952 (was
 851); contracts jest 145/145; `npm run build` clean; no real provider call
 in any test; no secret-shaped strings in the phase diff; AI stays disabled
-by default. NOT enabled on the server — enablement is a separate owner
-approval with a day-one spend-cap observation. Deferred to the enablement
-decision: binding `getExplanation` to Telegram `/explain` (touches live
-bot UX), provider-side retry backoff policy.
+by default. DEPLOYED and LIVE since 23 Sep 2026 (server cp-8gb-hel1-1);
+enablement (`AI_ENABLED=true` + `OPENAI_API_KEY`) approved and activated by
+the owner on 23 Sep 2026, with the day-one spend watch agreed. Deferred to
+the enablement decision: binding `getExplanation` to Telegram `/explain`
+(touches live bot UX), provider-side retry backoff policy.
+
+## 7a-ii. "Chat-bind" phase — natural-language Telegram chat — BUILT, awaiting owner gate acceptance
+
+Built on `ai-maintenance/integration` on top of `ab2682d` (not committed,
+not pushed, not deployed at acceptance time):
+
+- Worker A: `src/ai/chat` — `ChatService.ask()` natural-language engine
+  mirroring the SummariesService pipeline (gate -> budget -> ModelRouter ->
+  closed prompt -> bounded-timeout call -> empty/oversize/canary validation
+  -> cost estimate -> budget record -> one closed `ai_chat` audit event);
+  never rejects; disabled/budget-denied produce fixed refusals, every model
+  failure collapses to a deterministic evidence brief, all at costEur 0;
+  `ChatMemoryStore` — per-conversation memory, 6-turn cap, 30-min idle TTL,
+  remembered only for accepted answers;
+- Worker B: Telegram free-text routing — non-slash messages reach the
+  command layer as `command: 'chat'` with verbatim `rawText`
+  (`CommandRequest.rawText`, coordinator-owned contract extension); the
+  commands module gained an optional `TELEGRAM_CHAT_RESPONDER` token
+  (unbound = degrade to help, fail-closed); slash-command behavior and all
+  webhook security gates unchanged;
+- coordinator integration: `chatResponderBinding` grounds every question in
+  the SAME sanitized evidence port the deterministic commands render from
+  (status counts, incident identifier lines, enforced budget line); the
+  engine reaches the nested commands module through `chatServiceRegistry`,
+  the same bind-once seam as the observer status registry; wired behind the
+  existing `AI_ENABLED` kill switch and budget meter, fail-closed
+  stand-in client still the default.
+
+Gate evidence: `tsc --noEmit` clean; operations-agent jest 1003/1003 across
+122 suites (was 955); contracts jest 145/145; `npm run build` clean; no real
+provider call in any test (fetch always faked); no secret-shaped strings in
+the phase diff; deterministic checks authoritative over model text.
 
 ## 7b. Next phase — "AI brain" (natural-language summaries and chat)
 
