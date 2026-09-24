@@ -153,6 +153,9 @@ describe('ChatService.ask', () => {
       expect(result.tokensOut).toBe(40);
       expect(result.costEur).toBeGreaterThan(0);
       expect(client.calls).toHaveLength(1);
+      // Regression: chat must ask the provider for plain text — a global
+      // structured-output schema once forced assessment JSON on operators.
+      expect(client.calls[0].responseFormat).toBe('plain_text');
 
       expect(budget.records).toHaveLength(1);
       expect(budget.records[0]).toMatchObject({ model: ROUTINE, tokensIn: 120, tokensOut: 40 });

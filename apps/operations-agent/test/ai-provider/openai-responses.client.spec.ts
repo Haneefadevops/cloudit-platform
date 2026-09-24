@@ -177,6 +177,14 @@ describe('OpenAiResponsesLlmClient request shape', () => {
       'automationEligibility',
     ]);
   });
+
+  it('sends plain text format when the request asks for plain_text (chat)', async () => {
+    const { fetchImpl, requests } = stubFetch(() => jsonResponse(200, responsesPayload()));
+    await makeClient(fetchImpl).complete({ ...REQUEST, responseFormat: 'plain_text' });
+
+    const format = (capturedBody(requests).text as { format: Record<string, unknown> }).format;
+    expect(format).toEqual({ type: 'text' });
+  });
 });
 
 describe('OpenAiResponsesLlmClient key hygiene', () => {

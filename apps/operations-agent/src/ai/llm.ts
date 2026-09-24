@@ -6,11 +6,20 @@
  * later, separately gated piece and tests bind fakes. No network, no keys.
  */
 
+export type LlmResponseFormat = 'plain_text' | 'health_assessment';
+
 export interface LlmRequest {
   model: string;
   system: string;
   input: string;
   maxOutputTokens: number;
+  /**
+   * Response-shape steering for structured-output clients. 'health_assessment'
+   * (the default) lets the provider apply the closed assessment JSON schema;
+   * 'plain_text' forbids it so free-text surfaces (chat) get natural language.
+   * Validation of the returned text stays with the caller either way.
+   */
+  responseFormat?: LlmResponseFormat;
 }
 
 export interface LlmResponse {

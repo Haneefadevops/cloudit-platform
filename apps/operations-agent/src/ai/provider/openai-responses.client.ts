@@ -234,13 +234,27 @@ export class OpenAiResponsesLlmClient implements LlmClient {
         { role: 'user', content: [{ type: 'input_text', text: request.input }] },
       ],
       max_output_tokens: request.maxOutputTokens,
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'health_assessment',
-          strict: true,
-          schema: HEALTH_ASSESSMENT_JSON_SCHEMA,
-        },
+      text: this.buildTextFormat(request),
+    };
+  }
+
+  /**
+   * Structured output is per-request, not global: the explanation flow asks
+   * for the closed health-assessment schema, free-text chat explicitly asks
+   * for plain text (a global schema once forced chat answers into raw
+   * assessment JSON — chat-bind bugfix). The default preserves the
+   * explanation behavior for every existing caller.
+   */
+  private buildTextFormat(request: LlmRequest): Record<string, unknown> {
+    if (request.responseFormat === 'plain_text') {
+      return { format: { type: 'text' } };
+    }
+    return {
+      format: {
+        type: 'json_schema',
+        name: 'health_assessment',
+        strict: true,
+        schema: HEALTH_ASSESSMENT_JSON_SCHEMA,
       },
     };
   }

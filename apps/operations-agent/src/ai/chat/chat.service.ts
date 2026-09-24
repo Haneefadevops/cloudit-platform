@@ -148,6 +148,9 @@ export class ChatService {
       system: prompt.system,
       input: prompt.user,
       maxOutputTokens: this.options.ai.maxOutputTokens,
+      // Chat answers must be natural language; a global structured-output
+      // schema would force assessment-shaped JSON on the operator instead.
+      responseFormat: 'plain_text',
     };
 
     // 5. Model call with timeout guard; LlmError/unexpected throw -> fallback.
