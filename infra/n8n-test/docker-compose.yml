@@ -1,0 +1,185 @@
+services:
+  n8n-test:
+    image: docker.n8n.io/n8nio/n8n:2.27.4
+    container_name: n8n-test
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - N8N_HOST=${N8N_TEST_HOST:-n8n-test.cloudit.lk}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - N8N_EDITOR_BASE_URL=https://${N8N_TEST_HOST:-n8n-test.cloudit.lk}/
+      - WEBHOOK_URL=https://${N8N_TEST_HOST:-n8n-test.cloudit.lk}/
+      - N8N_PROXY_HOPS=1
+      - NODE_ENV=production
+      - TZ=${GENERIC_TIMEZONE:-Asia/Colombo}
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Asia/Colombo}
+      - N8N_ENCRYPTION_KEY=${N8N_TEST_ENCRYPTION_KEY:?Set N8N_TEST_ENCRYPTION_KEY in infra/n8n-test/.env}
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=n8n-test-postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n_test
+      - DB_POSTGRESDB_USER=n8n_test
+      - DB_POSTGRESDB_PASSWORD=${N8N_TEST_POSTGRES_PASSWORD:?Set N8N_TEST_POSTGRES_PASSWORD in infra/n8n-test/.env}
+      - EXECUTIONS_MODE=regular
+      - QUEUE_BULL_REDIS_HOST=n8n-test-redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_BULL_REDIS_PASSWORD=${N8N_TEST_REDIS_PASSWORD:?Set N8N_TEST_REDIS_PASSWORD in infra/n8n-test/.env}
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=${EXECUTIONS_DATA_MAX_AGE:-168}
+      - EXECUTIONS_DATA_PRUNE_MAX_COUNT=${EXECUTIONS_DATA_PRUNE_MAX_COUNT:-10000}
+    expose:
+      - "5678"
+    volumes:
+      - n8n_test_data:/home/node/.n8n
+    networks:
+      - cloudit
+      - n8n-test-internal
+    depends_on:
+      n8n-test-postgres:
+        condition: service_healthy
+      n8n-test-redis:
+        condition: service_healthy
+      n8n-test-gotenberg:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=cloudit"
+      - "traefik.http.routers.n8n-test.rule=Host(`${N8N_TEST_HOST:-n8n-test.cloudit.lk}`)"
+      - "traefik.http.routers.n8n-test.entrypoints=websecure"
+      - "traefik.http.routers.n8n-test.tls.certresolver=cloudflare"
+      - "traefik.http.routers.n8n-test.middlewares=security-headers@file"
+      - "traefik.http.services.n8n-test.loadbalancer.server.port=5678"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:5678/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          cpus: "0.10"
+          memory: 256M
+
+  n8n-test-postgres:
+    image: pgvector/pgvector:pg16
+    container_name: n8n-test-postgres
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    shm_size: 128mb
+    environment:
+      - POSTGRES_DB=n8n_test
+      - POSTGRES_USER=n8n_test
+      - POSTGRES_PASSWORD=${N8N_TEST_POSTGRES_PASSWORD:?Set N8N_TEST_POSTGRES_PASSWORD in infra/n8n-test/.env}
+    volumes:
+      - n8n_test_postgres_data:/var/lib/postgresql/data
+    networks:
+      - n8n-test-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n_test -d n8n_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+
+  n8n-test-redis:
+    image: redis:7-alpine
+    container_name: n8n-test-redis
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${N8N_TEST_REDIS_PASSWORD:?Set N8N_TEST_REDIS_PASSWORD in infra/n8n-test/.env}
+    environment:
+      - REDIS_PASSWORD=${N8N_TEST_REDIS_PASSWORD:?Set N8N_TEST_REDIS_PASSWORD in infra/n8n-test/.env}
+    volumes:
+      - n8n_test_redis_data:/data
+    networks:
+      - n8n-test-internal
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" --raw incr ping >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+
+  n8n-test-gotenberg:
+    image: gotenberg/gotenberg:8.34.0-chromium
+    container_name: n8n-test-gotenberg
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      n8n-test-internal:
+        aliases:
+          - gotenberg
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 768M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+
+volumes:
+  n8n_test_data:
+    name: n8n_test_data
+  n8n_test_postgres_data:
+    name: n8n_test_postgres_data
+  n8n_test_redis_data:
+    name: n8n_test_redis_data
+
+networks:
+  cloudit:
+    external: true
+  n8n-test-internal:
+    name: n8n-test-internal
+    internal: true

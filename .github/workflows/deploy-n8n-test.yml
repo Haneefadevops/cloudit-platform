@@ -1,0 +1,110 @@
+name: Deploy n8n Test
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-n8n-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${SERVER_IP}" >> ~/.ssh/known_hosts
+
+      - name: Deploy isolated n8n test stack
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          DOMAIN: ${{ vars.DOMAIN }}
+        run: |
+          ssh "${SERVER_USER}@${SERVER_IP}" "DOMAIN='${DOMAIN}' bash -s" <<'REMOTE'
+            set -euo pipefail
+
+            cd /opt/cloudit/cloudit-platform
+            git fetch origin
+            git reset --hard origin/master
+
+            compose_file="infra/n8n-test/docker-compose.yml"
+            env_file="infra/n8n-test/.env"
+            test_host="n8n-test.${DOMAIN:-cloudit.lk}"
+
+            if [ ! -f "$compose_file" ]; then
+              echo "[n8n-test] ERROR: $compose_file is missing"
+              exit 1
+            fi
+
+            if [ ! -f "$env_file" ]; then
+              umask 077
+              {
+                printf 'N8N_TEST_HOST=%s\n' "$test_host"
+                printf 'N8N_TEST_ENCRYPTION_KEY=%s\n' "$(openssl rand -hex 32)"
+                printf 'N8N_TEST_POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)"
+                printf 'N8N_TEST_REDIS_PASSWORD=%s\n' "$(openssl rand -hex 32)"
+                printf 'GENERIC_TIMEZONE=Asia/Colombo\n'
+                printf 'EXECUTIONS_DATA_MAX_AGE=168\n'
+                printf 'EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000\n'
+              } > "$env_file"
+              echo "[n8n-test] Created persistent test-only secrets"
+            fi
+            chmod 600 "$env_file"
+
+            production_started_at="$(docker inspect --format='{{.State.StartedAt}}' n8n)"
+
+            docker compose \
+              --env-file "$env_file" \
+              --project-name n8n-test \
+              --file "$compose_file" \
+              config --quiet
+
+            docker compose \
+              --env-file "$env_file" \
+              --project-name n8n-test \
+              --file "$compose_file" \
+              up -d
+
+            elapsed=0
+            until [ "$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' n8n-test 2>/dev/null || true)" = "healthy" ]; do
+              if [ "$elapsed" -ge 180 ]; then
+                echo "[n8n-test] ERROR: n8n-test did not become healthy"
+                docker compose \
+                  --env-file "$env_file" \
+                  --project-name n8n-test \
+                  --file "$compose_file" \
+                  ps
+                docker logs --tail 100 n8n-test || true
+                exit 1
+              fi
+              sleep 5
+              elapsed=$((elapsed + 5))
+            done
+
+            production_started_after="$(docker inspect --format='{{.State.StartedAt}}' n8n)"
+            if [ "$production_started_at" != "$production_started_after" ]; then
+              echo "[n8n-test] ERROR: production n8n restart timestamp changed"
+              exit 1
+            fi
+
+            docker compose \
+              --env-file "$env_file" \
+              --project-name n8n-test \
+              --file "$compose_file" \
+              ps
+
+            curl -fsS --retry 12 --retry-delay 5 --retry-all-errors \
+              "https://${test_host}/healthz"
+
+            echo "[n8n-test] Deployment successful; production n8n was not restarted"
+          REMOTE
