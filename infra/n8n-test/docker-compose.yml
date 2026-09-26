@@ -55,7 +55,6 @@ services:
       - "traefik.http.routers.n8n-test.rule=Host(`${N8N_TEST_HOST:-n8n-test.cloudit.lk}`)"
       - "traefik.http.routers.n8n-test.entrypoints=websecure"
       - "traefik.http.routers.n8n-test.tls.certresolver=cloudflare"
-      - "traefik.http.routers.n8n-test.middlewares=security-headers@file"
       - "traefik.http.services.n8n-test.loadbalancer.server.port=5678"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:5678/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
